@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { load } from '../state.js';
+import { loadGame, gameState } from '../game/store.js';
 import { MONSTERS } from '../data/monsters.js';
 
 export default class BootScene extends Phaser.Scene {
@@ -13,7 +13,7 @@ export default class BootScene extends Phaser.Scene {
   }
 
   create() {
-    load();
-    this.scene.start('Title');
+    loadGame();
+    gameState().setPhase('title'); // 메뉴는 React가 렌더
   }
 }
