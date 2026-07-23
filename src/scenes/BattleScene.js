@@ -61,11 +61,15 @@ export default class BattleScene extends Phaser.Scene {
     // Hud/Rhythm 중지는 App 디렉터가 담당 (shutdown 중 형제 씬 stop은 신뢰 불가)
     this.events.once('shutdown', () => bus.off('rhythm:result', this.onRhythm));
 
-    // 입력: 마우스 소환 + 숫자키 종류 선택 (DFJK는 RhythmScene)
+    // 입력: 마우스 소환 + 숫자키 = 선택 + 랜덤 위치 즉시 소환 (DFJK는 RhythmScene)
     this.input.on('pointerdown', (p) => this.trySummon(p));
     this.input.keyboard.on('keydown', (e) => {
       const digit = parseInt(e.key, 10);
-      if (digit >= 1 && digit <= this.available.length) this.selectType(this.available[digit - 1]);
+      if (digit >= 1 && digit <= this.available.length) {
+        const t = this.available[digit - 1];
+        this.selectType(t);
+        this.summonRandom(t);
+      }
     });
 
     this.pushChat('시스템', this.isFinal ? '최종화 — 마왕이 직접 나선다!' : `${S.episode}화 방송이 시작되었습니다.`, '#888888');
@@ -107,10 +111,27 @@ export default class BattleScene extends Phaser.Scene {
       this.floatText(p.x, p.y, '용사와 너무 가까움!', '#ff6666');
       return;
     }
+    this.doSummon(t, p.x, p.y);
+  }
+
+  // 숫자키: 용사 반경 150px 밖 랜덤 지점에 즉시 소환
+  summonRandom(t) {
+    if (this.over) return;
+    const def = MONSTERS[t];
+    if (this.mp < def.mp || this.summonCd[t] > 0) return;
+    for (let i = 0; i < 10; i++) { // ponytail: 아레나가 넓어 몇 번 안에 성공, 실패 시 이번 입력 무시
+      const x = Phaser.Math.Between(ARENA.x + 20, ARENA.x + ARENA.w - 20);
+      const y = Phaser.Math.Between(ARENA.y + 20, SUMMON_Y - 20);
+      if (Phaser.Math.Distance.Between(x, y, this.hero.x, this.hero.y) >= 150) return this.doSummon(t, x, y);
+    }
+  }
+
+  doSummon(t, x, y) {
+    const def = MONSTERS[t];
     this.mp -= def.mp;
     this.summonCd[t] = 1.5;
-    const spr = this.add.image(p.x, p.y, `m_${t}`).setScale(def.size / 16);
-    this.monsters.push({ type: t, def, hp: def.hp, x: p.x, y: p.y, atkCd: 0, spr });
+    const spr = this.add.image(x, y, `m_${t}`).setScale(def.size / 16);
+    this.monsters.push({ type: t, def, hp: def.hp, x, y, atkCd: 0, spr });
   }
 
   // ── 도네이션 → 리듬 (RhythmScene에 시퀀스 요청) ──
