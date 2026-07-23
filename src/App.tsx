@@ -6,6 +6,7 @@ import { gameStore } from './game/store.ts';
 import ChatPanel from './ui/ChatPanel.tsx';
 import DonationToast from './ui/DonationToast.tsx';
 import MenuOverlay from './ui/MenuOverlay.tsx';
+import ShopPanel from './ui/ShopPanel.tsx';
 
 export default function App() {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -30,7 +31,7 @@ export default function App() {
     <div className="stage">
       <div ref={parentRef} className="canvas-layer" />
       <div className="ui-layer">
-        {phase === 'broadcast' && <><ChatPanel /><DonationToast /></>}
+        {phase === 'broadcast' && <><ChatPanel /><DonationToast /><ShopPanel /></>}
         <MenuOverlay />
       </div>
     </div>

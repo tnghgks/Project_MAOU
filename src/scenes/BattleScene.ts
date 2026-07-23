@@ -3,6 +3,7 @@ import { clamp, danger, hypeTier, donationInterval, donationAmount, type HypeTie
 import { gameState } from '../game/store.ts';
 import { bus } from '../game/events.ts';
 import { MONSTERS, type MonsterDef, type MonsterId } from '../data/monsters.ts';
+import { UPGRADES, type UpgradeKey } from '../data/upgrades.ts';
 import { SKILLS } from '../data/skills.ts';
 import { FINAL_EP } from '../data/progression.ts';
 import type RhythmScene from './RhythmScene.ts';
@@ -106,8 +107,14 @@ export default class BattleScene extends Phaser.Scene {
     // 리듬 결과 → 스킬 발동 (스킬 effect는 monsters/hero에 접근하므로 여기 소유)
     this.onRhythm = (res) => this.fireSkill(res);
     bus.on('rhythm:result', this.onRhythm);
+    // 상점 구매 → 씬 로컬 hero 동기화 + 임팩트
+    const onUpgrade = ({ key }: { key: UpgradeKey }) => this.applyLiveUpgrade(key);
+    bus.on('hero:upgraded', onUpgrade);
     // Hud/Rhythm 중지는 App 디렉터가 담당 (shutdown 중 형제 씬 stop은 신뢰 불가)
-    this.events.once('shutdown', () => bus.off('rhythm:result', this.onRhythm));
+    this.events.once('shutdown', () => {
+      bus.off('rhythm:result', this.onRhythm);
+      bus.off('hero:upgraded', onUpgrade);
+    });
 
     // 입력: 마우스 소환 + 숫자키 = 선택 + 랜덤 위치 즉시 소환 (DFJK는 RhythmScene)
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.trySummon(p));
@@ -214,6 +221,26 @@ export default class BattleScene extends Phaser.Scene {
     this.time.delayedCall(300, () => {
       this.children.list.filter((c) => (c as Phaser.GameObjects.Arc).fillColor === 0xffffaa).forEach((c) => c.destroy());
     });
+  }
+
+  // ── 실시간 강화: store는 이미 갱신됨(applyUpgrade) — 씬 로컬 hero에 반영 + 연출 ──
+  applyLiveUpgrade(key: UpgradeKey) {
+    const u = UPGRADES[key];
+    const H = this.hero;
+    const stats = gameState().hero;
+    if (u.stat === 'maxHp') {
+      H.maxHp = stats.maxHp;
+      H.hp = Math.min(H.maxHp, H.hp + u.delta); // 최대치 증가분만큼 즉시 회복
+    } else {
+      H[u.stat] = stats[u.stat];
+    }
+    // 임팩트: 확산 링 + 상승 숫자
+    const ring = this.add.circle(H.x, H.y, 20, 0x44ddff, 0).setStrokeStyle(3, 0x44ddff, 1).setDepth(9);
+    this.tweens.add({ targets: ring, radius: 60, alpha: 0, duration: 450, onComplete: () => ring.destroy() });
+    this.heroSpr.setTint(0x88ffff);
+    this.time.delayedCall(200, () => this.heroSpr.clearTint());
+    this.floatText(H.x, H.y - 40, `▲ ${u.name} +${u.delta}`, '#44ddff');
+    this.pushChat('시스템', `마왕의 투자! ${u.name} 강화`, '#44ddff');
   }
 
   hitFx(m: MonsterEntity, dmg: number) {
