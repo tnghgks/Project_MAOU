@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { loadGame, gameState } from '../game/store.js';
-import { MONSTERS } from '../data/monsters.js';
+import { loadGame, gameState } from '../game/store.ts';
+import { MONSTERS } from '../data/monsters.ts';
 
 export default class BootScene extends Phaser.Scene {
   constructor() { super('Boot'); }

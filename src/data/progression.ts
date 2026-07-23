@@ -1,5 +1,11 @@
 // GDD 6장 진행 구조. 1-based (index 0 미사용). 최종화(6)는 별도.
-export const EPISODES = [
+export interface EpisodeDef {
+  ep: number;
+  targetViewers: number;
+  recHp: number;
+}
+
+export const EPISODES: (EpisodeDef | null)[] = [
   null,
   { ep: 1, targetViewers: 300, recHp: 100 },
   { ep: 2, targetViewers: 1200, recHp: 260 },

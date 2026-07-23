@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { danger, hypeTier, donationInterval, donationAmount, judge, skillResult } from '../src/formulas.js';
+import { danger, hypeTier, donationInterval, donationAmount, judge, skillResult } from '../src/formulas.ts';
 
 // 위험도: 풀피+몹0 = 0, 빈사+몹10 = 1
 assert.strictEqual(danger(1, 0), 0);

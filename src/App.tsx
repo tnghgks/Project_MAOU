@@ -1,19 +1,20 @@
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
-import { createGame } from './game/config.js';
-import { gameStore } from './game/store.js';
-import ChatPanel from './ui/ChatPanel.jsx';
-import DonationToast from './ui/DonationToast.jsx';
-import MenuOverlay from './ui/MenuOverlay.jsx';
+import type Phaser from 'phaser';
+import { createGame } from './game/config.ts';
+import { gameStore } from './game/store.ts';
+import ChatPanel from './ui/ChatPanel.tsx';
+import DonationToast from './ui/DonationToast.tsx';
+import MenuOverlay from './ui/MenuOverlay.tsx';
 
 export default function App() {
-  const parentRef = useRef(null);
-  const gameRef = useRef(null);
+  const parentRef = useRef<HTMLDivElement>(null);
+  const gameRef = useRef<Phaser.Game | null>(null);
   const phase = useStore(gameStore, (s) => s.phase);
 
   useEffect(() => {
     if (gameRef.current) return;
-    gameRef.current = createGame(parentRef.current);
+    gameRef.current = createGame(parentRef.current!);
     return () => { gameRef.current?.destroy(true); gameRef.current = null; };
   }, []);
 

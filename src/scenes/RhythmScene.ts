@@ -1,16 +1,28 @@
 import Phaser from 'phaser';
-import { judge, skillResult } from '../formulas.js';
-import { bus } from '../game/events.js';
+import { judge, skillResult, type Judgement } from '../formulas.ts';
+import { bus } from '../game/events.ts';
 
 const LANE_Y = 640;
 const HIT_X = 140;
 const NOTE_SPEED = 400; // px/s
 const BEAT = 60 / 128; // 128 BPM
 const KEYS = ['D', 'F', 'J', 'K'];
-const KEY_COLORS = { D: 0xff5555, F: 0x55ff88, J: 0x5599ff, K: 0xffcc44 };
+const KEY_COLORS: Record<string, number> = { D: 0xff5555, F: 0x55ff88, J: 0x5599ff, K: 0xffcc44 };
+
+interface Note {
+  key: string;
+  hitTime: number;
+  spr: Phaser.GameObjects.Arc;
+  txt: Phaser.GameObjects.Text;
+  done: boolean;
+}
 
 // 도네이션 시 하단 레인에 노트 생성 → DFJK 판정 → 결과를 bus로 BattleScene에 전달.
 export default class RhythmScene extends Phaser.Scene {
+  notes!: Note[];
+  noteResults!: Judgement[];
+  judgeText!: Phaser.GameObjects.Text;
+
   constructor() { super('Rhythm'); }
 
   create() {
@@ -23,7 +35,7 @@ export default class RhythmScene extends Phaser.Scene {
     add.text(20, LANE_Y + 30, 'DFJK▶', { fontSize: '16px', color: '#555566' }).setDepth(6);
     this.judgeText = add.text(HIT_X, LANE_Y + 8, '', { fontSize: '16px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5).setDepth(8);
 
-    this.input.keyboard.on('keydown', (e) => {
+    this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
       const k = e.key.toUpperCase();
       if (KEYS.includes(k)) this.hitNote(k);
     });
@@ -45,7 +57,7 @@ export default class RhythmScene extends Phaser.Scene {
     }
   }
 
-  hitNote(key) {
+  hitNote(key: string) {
     const now = this.audioClock();
     const note = this.notes.find((n) => !n.done && Math.abs(now - n.hitTime) <= 0.2);
     if (!note) return;
@@ -53,12 +65,12 @@ export default class RhythmScene extends Phaser.Scene {
     this.resolveNote(note, result);
   }
 
-  resolveNote(note, result) {
+  resolveNote(note: Note, result: Judgement) {
     note.done = true;
     note.spr.destroy();
     note.txt.destroy();
     this.noteResults.push(result);
-    const colors = { perfect: '#ffee44', good: '#66ff88', miss: '#ff5555' };
+    const colors: Record<Judgement, string> = { perfect: '#ffee44', good: '#66ff88', miss: '#ff5555' };
     this.judgeText.setText(result.toUpperCase()).setColor(colors[result]);
     this.time.delayedCall(400, () => this.judgeText.setText(''));
     if (this.noteResults.length === 4) {

@@ -1,11 +1,11 @@
 import Phaser from 'phaser';
-import BootScene from '../scenes/BootScene.js';
-import BattleScene from '../scenes/BattleScene.js';
-import HudScene from '../scenes/HudScene.js';
-import RhythmScene from '../scenes/RhythmScene.js';
+import BootScene from '../scenes/BootScene.ts';
+import BattleScene from '../scenes/BattleScene.ts';
+import HudScene from '../scenes/HudScene.ts';
+import RhythmScene from '../scenes/RhythmScene.ts';
 
 // 메뉴(타이틀/정산/육성/엔딩)는 React. Phaser는 캔버스 씬만: Battle + 병렬 Hud/Rhythm.
-export function createGame(parent) {
+export function createGame(parent: HTMLElement) {
   return new Phaser.Game({
     type: Phaser.AUTO,
     parent,

@@ -1,5 +1,5 @@
 import { useStore } from 'zustand';
-import { gameStore, gameState } from '../game/store.js';
+import { gameStore, gameState } from '../game/store.ts';
 
 export default function TitleView() {
   const records = useStore(gameStore, (s) => s.records);

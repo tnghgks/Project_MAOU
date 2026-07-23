@@ -1,17 +1,17 @@
 import { useStore } from 'zustand';
-import { gameStore, gameState } from '../game/store.js';
-import { UPGRADES, SKILL_COST, upgradeCost } from '../data/upgrades.js';
-import { SKILLS } from '../data/skills.js';
-import { FINAL_EP } from '../data/progression.js';
+import { gameStore, gameState } from '../game/store.ts';
+import { UPGRADES, SKILL_COST, upgradeCost, type UpgradeKey } from '../data/upgrades.ts';
+import { SKILLS, type SkillId } from '../data/skills.ts';
+import { FINAL_EP } from '../data/progression.ts';
 
 export default function UpgradeView() {
   const { gold, upgradeLevels, skills, episode } = useStore(gameStore, (s) => ({
     gold: s.gold, upgradeLevels: s.upgradeLevels, skills: s.skills, episode: s.episode,
   }));
-  const locked = Object.keys(SKILLS).filter((k) => !skills.includes(k));
+  const locked = (Object.keys(SKILLS) as SkillId[]).filter((k) => !skills.includes(k));
   const nextEp = episode + 1;
 
-  const buy = (key) => gameState().applyUpgrade(key);
+  const buy = (key: UpgradeKey) => gameState().applyUpgrade(key);
   const learn = () => {
     const pick = locked[Math.floor(Math.random() * locked.length)];
     gameState().learnSkill(pick, SKILL_COST);
@@ -23,7 +23,8 @@ export default function UpgradeView() {
       <h2>용사 강화</h2>
       <p className="gold">보유 골드 {Math.floor(gold).toLocaleString()}G</p>
       <ul className="shop">
-        {Object.entries(UPGRADES).map(([key, u]) => {
+        {(Object.keys(UPGRADES) as UpgradeKey[]).map((key) => {
+          const u = UPGRADES[key];
           const cost = upgradeCost(key, upgradeLevels[key]);
           const afford = gold >= cost;
           return (

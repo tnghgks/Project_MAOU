@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "node test/formulas.test.mjs && node test/store.test.mjs"
+    "test": "tsx test/formulas.test.ts && tsx test/store.test.ts"
   },
   "dependencies": {
     "phaser": "^3.80.1",
@@ -16,7 +16,12 @@
     "zustand": "^4.5.5"
   },
   "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.3.4",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
     "vite": "^5.4.0"
   }
 }

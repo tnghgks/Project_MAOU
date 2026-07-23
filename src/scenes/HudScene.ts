@@ -1,13 +1,24 @@
 import Phaser from 'phaser';
-import { clamp } from '../formulas.js';
-import { gameState } from '../game/store.js';
+import { clamp } from '../formulas.ts';
+import { gameState } from '../game/store.ts';
+import type BattleScene from './BattleScene.ts';
 
 // 캔버스 HUD: 매 프레임 BattleScene의 실시간 값을 읽어 렌더 (store 아님 — React 리렌더 방지).
 export default class HudScene extends Phaser.Scene {
+  battle!: BattleScene;
+  viewerText!: Phaser.GameObjects.Text;
+  goldText!: Phaser.GameObjects.Text;
+  timerText!: Phaser.GameObjects.Text;
+  hypeBar!: Phaser.GameObjects.Rectangle;
+  hypeLabel!: Phaser.GameObjects.Text;
+  mpText!: Phaser.GameObjects.Text;
+  mpBar!: Phaser.GameObjects.Rectangle;
+  vignette!: Phaser.GameObjects.Rectangle;
+
   constructor() { super('Hud'); }
 
   create() {
-    this.battle = this.scene.get('Battle');
+    this.battle = this.scene.get('Battle') as BattleScene;
     const add = this.add;
 
     add.rectangle(640, 20, 1280, 40, 0x1a1a24).setDepth(5); // 상단바 bg

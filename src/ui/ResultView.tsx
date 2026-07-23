@@ -1,5 +1,5 @@
 import { useStore } from 'zustand';
-import { gameStore, gameState } from '../game/store.js';
+import { gameStore, gameState } from '../game/store.ts';
 
 export default function ResultView() {
   const { lastRun, gold, episode } = useStore(gameStore, (s) => ({ lastRun: s.lastRun, gold: s.gold, episode: s.episode }));

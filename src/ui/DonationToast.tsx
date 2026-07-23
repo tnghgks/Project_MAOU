@@ -1,19 +1,21 @@
 import { useEffect, useState } from 'react';
-import { bus } from '../game/events.js';
+import { bus, type Donation } from '../game/events.ts';
+
+type Toast = Donation & { id: number };
 
 export default function DonationToast() {
-  const [toasts, setToasts] = useState([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
   useEffect(() => {
     let id = 0;
-    const onDonation = ({ amount, donor }) => {
+    const onDonation = ({ amount, donor }: Donation) => {
       const t = { id: id++, amount, donor };
       setToasts((prev) => [...prev, t]);
       // CSS 애니메이션(2.2s) 후 제거
       setTimeout(() => setToasts((prev) => prev.filter((x) => x.id !== t.id)), 2200);
     };
     bus.on('donation:arrive', onDonation);
-    return () => bus.off('donation:arrive', onDonation);
+    return () => { bus.off('donation:arrive', onDonation); };
   }, []);
 
   return (

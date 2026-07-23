@@ -1,10 +1,11 @@
 import Phaser from 'phaser';
-import { clamp, danger, hypeTier, donationInterval, donationAmount } from '../formulas.js';
-import { gameState } from '../game/store.js';
-import { bus } from '../game/events.js';
-import { MONSTERS } from '../data/monsters.js';
-import { SKILLS } from '../data/skills.js';
-import { FINAL_EP } from '../data/progression.js';
+import { clamp, danger, hypeTier, donationInterval, donationAmount, type HypeTier, type SkillOutcome } from '../formulas.ts';
+import { gameState } from '../game/store.ts';
+import { bus } from '../game/events.ts';
+import { MONSTERS, type MonsterDef, type MonsterId } from '../data/monsters.ts';
+import { SKILLS } from '../data/skills.ts';
+import { FINAL_EP } from '../data/progression.ts';
+import type RhythmScene from './RhythmScene.ts';
 
 // 레이아웃 (GDD 5-1)
 export const ARENA = { x: 0, y: 40, w: 940, h: 520 };
@@ -20,7 +21,54 @@ const CHAT_POOLS = {
 };
 const DONOR_NAMES = ['익명의마족', '고인물시청자', '용사팬클럽', '지나가던슬라임', '마왕성경비병', '전생용사'];
 
+export interface HeroEntity {
+  x: number; y: number;
+  hp: number; maxHp: number;
+  atk: number; atkSpd: number; speed: number; range: number;
+  atkCd: number; retreatT: number; retreatCd: number;
+}
+export interface MonsterEntity {
+  type: MonsterId;
+  def: MonsterDef;
+  hp: number;
+  x: number; y: number;
+  atkCd: number;
+  spr: Phaser.GameObjects.Image;
+  dead?: boolean;
+}
+interface Arrow {
+  x: number; y: number;
+  tx: number; ty: number;
+  spr: Phaser.GameObjects.Image;
+  dmg: number;
+}
+
 export default class BattleScene extends Phaser.Scene {
+  isFinal!: boolean;
+  hero!: HeroEntity;
+  monsters!: MonsterEntity[];
+  arrows!: Arrow[];
+  mp!: number;
+  viewers!: number;
+  peakViewers!: number;
+  viewerSyncT!: number;
+  totalDonated!: number;
+  kills!: number;
+  timeLeft!: number;
+  donateT!: number;
+  freezeUntil!: number; // 시간 정지 스킬
+  D!: number;
+  tier!: HypeTier; // HudScene가 읽음
+  over!: boolean;
+  available!: MonsterId[];
+  selectedType!: MonsterId;
+  summonCd!: Record<string, number>;
+  summonBtns!: Record<string, Phaser.GameObjects.Rectangle>;
+  heroSpr!: Phaser.GameObjects.Image;
+  heroHpBar!: Phaser.GameObjects.Graphics;
+  onRhythm!: (res: SkillOutcome) => void;
+  chatT = 0;
+
   constructor() { super('Battle'); }
 
   create() {
@@ -39,11 +87,11 @@ export default class BattleScene extends Phaser.Scene {
     this.kills = 0;
     this.timeLeft = this.isFinal ? FINAL_TIME : RUN_TIME;
     this.donateT = donationInterval(this.viewers);
-    this.freezeUntil = 0; // 시간 정지 스킬
-    this.D = 0; this.tier = hypeTier(0); // HudScene가 읽음
+    this.freezeUntil = 0;
+    this.D = 0; this.tier = hypeTier(0);
     this.over = false;
 
-    this.available = Object.keys(MONSTERS).filter((k) => MONSTERS[k].unlock <= S.episode);
+    this.available = (Object.keys(MONSTERS) as MonsterId[]).filter((k) => MONSTERS[k].unlock <= S.episode);
     this.selectedType = this.available[0];
     this.summonCd = Object.fromEntries(this.available.map((k) => [k, 0]));
 
@@ -62,8 +110,8 @@ export default class BattleScene extends Phaser.Scene {
     this.events.once('shutdown', () => bus.off('rhythm:result', this.onRhythm));
 
     // 입력: 마우스 소환 + 숫자키 = 선택 + 랜덤 위치 즉시 소환 (DFJK는 RhythmScene)
-    this.input.on('pointerdown', (p) => this.trySummon(p));
-    this.input.keyboard.on('keydown', (e) => {
+    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.trySummon(p));
+    this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
       const digit = parseInt(e.key, 10);
       if (digit >= 1 && digit <= this.available.length) {
         const t = this.available[digit - 1];
@@ -88,20 +136,23 @@ export default class BattleScene extends Phaser.Scene {
       const m = MONSTERS[k];
       const btn = add.rectangle(bx, SUMMON_Y + 14, 150, 30, 0x2a2a3a).setOrigin(0).setDepth(6).setInteractive();
       add.text(bx + 6, SUMMON_Y + 20, `${i + 1}.${m.name} ${m.mp}`, { fontSize: '12px', color: '#ffffff' }).setDepth(7);
-      btn.on('pointerdown', (p, lx, ly, ev) => { ev.stopPropagation(); this.selectType(k); });
+      btn.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => {
+        ev.stopPropagation();
+        this.selectType(k);
+      });
       this.summonBtns[k] = btn;
       bx += 158;
     });
     this.selectType(this.selectedType);
   }
 
-  selectType(k) {
+  selectType(k: MonsterId) {
     this.selectedType = k;
     for (const [t, btn] of Object.entries(this.summonBtns)) btn.setFillStyle(t === k ? 0x555577 : 0x2a2a3a);
   }
 
   // ── 소환 ──
-  trySummon(p) {
+  trySummon(p: Phaser.Input.Pointer) {
     if (this.over) return;
     if (p.x < ARENA.x || p.x > ARENA.x + ARENA.w || p.y < ARENA.y || p.y > SUMMON_Y) return;
     const t = this.selectedType;
@@ -115,7 +166,7 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   // 숫자키: 용사 반경 150px 밖 랜덤 지점에 즉시 소환
-  summonRandom(t) {
+  summonRandom(t: MonsterId) {
     if (this.over) return;
     const def = MONSTERS[t];
     if (this.mp < def.mp || this.summonCd[t] > 0) return;
@@ -126,7 +177,7 @@ export default class BattleScene extends Phaser.Scene {
     }
   }
 
-  doSummon(t, x, y) {
+  doSummon(t: MonsterId, x: number, y: number) {
     const def = MONSTERS[t];
     this.mp -= def.mp;
     this.summonCd[t] = 1.5;
@@ -142,11 +193,11 @@ export default class BattleScene extends Phaser.Scene {
     const name = Phaser.Utils.Array.GetRandom(DONOR_NAMES);
     this.pushChat('🎁 후원', `${name}님 ${amt.toLocaleString()}G!`, '#ffdd44');
     bus.emit('donation:arrive', { amount: amt, donor: name });
-    this.scene.get('Rhythm').spawnSeq(); // 진행 중이면 Rhythm이 무시
+    (this.scene.get('Rhythm') as RhythmScene).spawnSeq(); // 진행 중이면 Rhythm이 무시
   }
 
   // ── 스킬: 보유 스킬 중 랜덤 1개가 리듬 배율로 발동 (GDD 4장) ──
-  fireSkill(res) {
+  fireSkill(res: SkillOutcome) {
     if (res.penalty) {
       this.viewers = Math.max(5, this.viewers * 0.95);
       this.pushChat('시스템', '스킬 불발... 시청자가 실망했다', '#ff6666');
@@ -161,16 +212,16 @@ export default class BattleScene extends Phaser.Scene {
       for (const line of CHAT_POOLS.allperfect) this.pushChat('시청자', line, '#ffee44');
     }
     this.time.delayedCall(300, () => {
-      this.children.list.filter((c) => c.fillColor === 0xffffaa).forEach((c) => c.destroy());
+      this.children.list.filter((c) => (c as Phaser.GameObjects.Arc).fillColor === 0xffffaa).forEach((c) => c.destroy());
     });
   }
 
-  hitFx(m, dmg) {
+  hitFx(m: MonsterEntity, dmg: number) {
     this.damageMonster(m, dmg);
     this.add.circle(m.x, m.y, 14, 0xffffaa, 0.8).setDepth(3);
   }
 
-  damageMonster(m, dmg) {
+  damageMonster(m: MonsterEntity, dmg: number) {
     m.hp -= dmg;
     m.spr.setAlpha(0.5);
     this.time.delayedCall(80, () => { if (m.spr.active) m.spr.setAlpha(1); });
@@ -182,15 +233,15 @@ export default class BattleScene extends Phaser.Scene {
     }
   }
 
-  pushChat(who, msg, color = '#cccccc') { bus.emit('chat:line', { who, msg, color }); }
+  pushChat(who: string, msg: string, color = '#cccccc') { bus.emit('chat:line', { who, msg, color }); }
 
-  floatText(x, y, msg, color) {
+  floatText(x: number, y: number, msg: string, color: string) {
     const t = this.add.text(x, y, msg, { fontSize: '16px', fontStyle: 'bold', color }).setOrigin(0.5).setDepth(9);
     this.tweens.add({ targets: t, y: y - 30, alpha: 0, duration: 900, onComplete: () => t.destroy() });
   }
 
   // ── 메인 루프 ──
-  update(_, deltaMs) {
+  update(_: number, deltaMs: number) {
     if (this.over) return;
     const dt = Math.min(deltaMs / 1000, 0.05);
     const H = this.hero;
@@ -224,7 +275,7 @@ export default class BattleScene extends Phaser.Scene {
     if (H.hp <= 0) return this.endRun(true);
   }
 
-  updateHero(dt, nearCount) {
+  updateHero(dt: number, nearCount: number) {
     const H = this.hero;
     const alive = this.monsters.filter((m) => !m.dead);
     H.atkCd = Math.max(0, H.atkCd - dt);
@@ -241,7 +292,7 @@ export default class BattleScene extends Phaser.Scene {
       const len = Math.hypot(sx, sy) || 1;
       vx = (sx / len) * H.speed; vy = (sy / len) * H.speed;
     } else {
-      let target = null, best = 300;
+      let target: MonsterEntity | null = null, best = 300;
       for (const m of alive) {
         const d = Phaser.Math.Distance.Between(m.x, m.y, H.x, H.y);
         if (d < best) { best = d; target = m; }
@@ -271,7 +322,7 @@ export default class BattleScene extends Phaser.Scene {
     this.heroHpBar.fillStyle(H.hp / H.maxHp > 0.25 ? 0x44ff66 : 0xff4444).fillRect(H.x - 15, H.y - 21, 30 * (H.hp / H.maxHp), 3);
   }
 
-  updateMonsters(dt) {
+  updateMonsters(dt: number) {
     const H = this.hero;
     this.monsters = this.monsters.filter((m) => !m.dead);
     if (this.time.now < this.freezeUntil) return; // 시간 정지
@@ -297,7 +348,7 @@ export default class BattleScene extends Phaser.Scene {
     }
   }
 
-  updateArrows(dt) {
+  updateArrows(dt: number) {
     const H = this.hero;
     this.arrows = this.arrows.filter((a) => {
       const d = Phaser.Math.Distance.Between(a.x, a.y, a.tx, a.ty);
@@ -313,8 +364,8 @@ export default class BattleScene extends Phaser.Scene {
     });
   }
 
-  updateChat(dt, D) {
-    this.chatT = (this.chatT || 0) - dt;
+  updateChat(dt: number, D: number) {
+    this.chatT -= dt;
     if (this.chatT > 0) return;
     const lps = clamp(1 + (this.viewers / 5000) * 7, 1, 8);
     this.chatT = 1 / lps;
@@ -323,7 +374,7 @@ export default class BattleScene extends Phaser.Scene {
     this.pushChat(`시청자${Phaser.Math.Between(1, 999)}`, Phaser.Utils.Array.GetRandom(pool), color);
   }
 
-  endRun(died) {
+  endRun(died: boolean) {
     this.over = true;
     gameState().recordRun({ died, peakViewers: this.peakViewers, totalDonated: this.totalDonated, kills: this.kills });
     if (died) {

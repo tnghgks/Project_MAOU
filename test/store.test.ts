@@ -1,14 +1,14 @@
 import assert from 'node:assert';
 
 // localStorage 스텁 (Node엔 없음)
-const store = {};
+const store: Record<string, string> = {};
 globalThis.localStorage = {
-  getItem: (k) => (k in store ? store[k] : null),
-  setItem: (k, v) => { store[k] = String(v); },
-  removeItem: (k) => { delete store[k]; },
-};
+  getItem: (k: string) => (k in store ? store[k] : null),
+  setItem: (k: string, v: string) => { store[k] = String(v); },
+  removeItem: (k: string) => { delete store[k]; },
+} as Storage;
 
-const { gameStore, gameState, saveGame, loadGame } = await import('../src/game/store.js');
+const { gameStore, gameState, saveGame, loadGame } = await import('../src/game/store.ts');
 
 // save → 오염 → load 라운드트립: 해금·기록만 복원
 gameStore.setState({ skills: ['낙뢰', '화염참격'], records: { bestViewers: 5000, bestGold: 12000 } });

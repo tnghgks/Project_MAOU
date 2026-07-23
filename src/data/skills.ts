@@ -1,7 +1,15 @@
 import Phaser from 'phaser';
+import type BattleScene from '../scenes/BattleScene.ts';
+
 // GDD 4장 스킬 4종. 신규 스킬 = 여기에 { name, effect } 한 항목 추가.
 // effect(scene, mult): scene 헬퍼(hitFx/hero/monsters/freezeUntil)로 동작. mult = 리듬 판정 배율.
-const dist = (a, b) => Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
+export interface Skill {
+  name: string;
+  effect(s: BattleScene, mult: number): void;
+}
+
+const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+  Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
 
 export const SKILLS = {
   화염참격: {
@@ -32,4 +40,6 @@ export const SKILLS = {
       s.freezeUntil = s.time.now + 3000; // 3초간 몬스터 정지
     },
   },
-};
+} satisfies Record<string, Skill>;
+
+export type SkillId = keyof typeof SKILLS;

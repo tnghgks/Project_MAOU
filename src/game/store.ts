@@ -1,11 +1,54 @@
 import { createStore } from 'zustand/vanilla';
-import { UPGRADES, upgradeCost } from '../data/upgrades.js';
+import { UPGRADES, upgradeCost, type UpgradeKey } from '../data/upgrades.ts';
+import type { SkillId } from '../data/skills.ts';
+import type { MonsterId } from '../data/monsters.ts';
 
 // 단일 스토어: Phaser는 gameState()로 읽고 액션으로 사건 단위 쓰기, React는 useStore(gameStore, sel)로 구독.
 // 매 프레임 값(viewers 실시간/hype/mp/timer)은 여기 안 넣는다 — 씬 로컬에서 HudScene가 렌더. viewers는 스로틀 반영만.
 
+export interface HeroStats {
+  maxHp: number;
+  atk: number;
+  atkSpd: number;
+  speed: number;
+  range: number;
+}
+export type Phase = 'boot' | 'title' | 'broadcast' | 'result' | 'upgrade' | 'ending';
+export interface RunSummary {
+  died: boolean;
+  peakViewers: number;
+  totalDonated: number;
+  kills: number;
+}
+export interface Records {
+  bestViewers: number;
+  bestGold: number;
+}
+
+export interface GameState {
+  phase: Phase;
+  gold: number;
+  episode: number;
+  hero: HeroStats;
+  upgradeLevels: Record<UpgradeKey, number>;
+  skills: SkillId[]; // 해금으로 누적 (영구)
+  unlockedMonsters: MonsterId[];
+  records: Records;
+  viewers: number; // React 채팅 헤더용 (스로틀 반영)
+  lastRun: RunSummary;
+
+  setPhase: (phase: Phase) => void;
+  setViewers: (viewers: number) => void;
+  addGold: (n: number) => void;
+  nextEpisode: () => void;
+  resetRun: () => void;
+  applyUpgrade: (key: UpgradeKey) => boolean;
+  learnSkill: (id: SkillId, cost: number) => boolean;
+  recordRun: (run: RunSummary) => void;
+}
+
 const SAVE_KEY = 'maou.save';
-const BASE_HERO = { maxHp: 100, atk: 10, atkSpd: 1.0, speed: 100, range: 60 }; // GDD 3-6 1화 시작값
+const BASE_HERO: HeroStats = { maxHp: 100, atk: 10, atkSpd: 1.0, speed: 100, range: 60 }; // GDD 3-6 1화 시작값
 const freshRun = () => ({
   gold: 0,
   episode: 1,
@@ -13,16 +56,15 @@ const freshRun = () => ({
   upgradeLevels: { hp: 0, atk: 0, atkSpd: 0, speed: 0, range: 0 },
 });
 
-export const gameStore = createStore((set, get) => ({
-  phase: 'boot', // boot | title | broadcast | result | upgrade | ending
+export const gameStore = createStore<GameState>()((set, get) => ({
+  phase: 'boot',
   ...freshRun(),
-  skills: ['낙뢰'], // 해금으로 누적 (영구)
+  skills: ['낙뢰'],
   unlockedMonsters: ['slime', 'archer', 'golem'],
   records: { bestViewers: 0, bestGold: 0 },
-  viewers: 0, // React 채팅 헤더용 (스로틀 반영)
+  viewers: 0,
   lastRun: { died: false, peakViewers: 0, totalDonated: 0, kills: 0 },
 
-  set,
   setPhase: (phase) => set({ phase }),
   setViewers: (viewers) => set({ viewers }),
   addGold: (n) => set({ gold: get().gold + n }),
@@ -81,7 +123,7 @@ export function loadGame() {
     const raw = ls.getItem(SAVE_KEY);
     if (!raw) return;
     const d = JSON.parse(raw);
-    const patch = {};
+    const patch: Partial<GameState> = {};
     if (Array.isArray(d.skills)) patch.skills = d.skills;
     if (Array.isArray(d.unlockedMonsters)) patch.unlockedMonsters = d.unlockedMonsters;
     if (d.records) patch.records = d.records;

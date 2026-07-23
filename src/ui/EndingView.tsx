@@ -1,6 +1,6 @@
 import { useStore } from 'zustand';
-import { gameStore, gameState } from '../game/store.js';
-import { HERO_TARGET_HP } from '../data/progression.js';
+import { gameStore, gameState } from '../game/store.ts';
+import { HERO_TARGET_HP } from '../data/progression.ts';
 
 // ponytail: 스텁 — 스탯비율(GDD 7장) 근사 판정. 전용 연출·사운드 보류.
 const ENDINGS = {
