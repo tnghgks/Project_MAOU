@@ -56,10 +56,9 @@ export default class BroadcastScene extends Phaser.Scene {
     this.selectedType = this.available[0];
     this.summonCd = Object.fromEntries(this.available.map((k) => [k, 0]));
 
-    this.makeTextures();
     this.buildUI();
 
-    this.heroSpr = this.add.image(this.hero.x, this.hero.y, 'hero');
+    this.heroSpr = this.add.image(this.hero.x, this.hero.y, 'hero').setScale(1.3);
     this.heroHpBar = this.add.graphics();
 
     // 입력
@@ -71,17 +70,6 @@ export default class BroadcastScene extends Phaser.Scene {
     });
 
     this.pushChat('시스템', this.isFinal ? '최종화 — 마왕이 직접 나선다!' : `${GameState.episode}화 방송이 시작되었습니다.`, '#888888');
-  }
-
-  makeTextures() {
-    const g = this.make.graphics({ add: false });
-    const rect = (key, w, h, color) => {
-      g.clear(); g.fillStyle(color); g.fillRect(0, 0, w, h); g.generateTexture(key, w, h);
-    };
-    rect('hero', 20, 20, 0x66aaff);
-    for (const [k, m] of Object.entries(MONSTERS)) rect(`m_${k}`, m.size, m.size, m.color);
-    rect('arrow', 8, 3, 0xffee88);
-    g.destroy();
   }
 
   buildUI() {
@@ -148,7 +136,7 @@ export default class BroadcastScene extends Phaser.Scene {
     }
     this.mp -= def.mp;
     this.summonCd[t] = 1.5;
-    const spr = this.add.image(p.x, p.y, `m_${t}`);
+    const spr = this.add.image(p.x, p.y, `m_${t}`).setScale(def.size / 16); // 스프라이트 16px 기준 스케일
     this.monsters.push({ type: t, def, hp: def.hp, x: p.x, y: p.y, atkCd: 0, spr });
   }
 
@@ -329,6 +317,7 @@ export default class BroadcastScene extends Phaser.Scene {
     H.x = clamp(H.x + vx * dt, ARENA.x + 20, ARENA.x + ARENA.w - 20);
     H.y = clamp(H.y + vy * dt, ARENA.y + 20, SUMMON_Y - 20);
     this.heroSpr.setPosition(H.x, H.y);
+    if (vx) this.heroSpr.setFlipX(vx < 0); // 진행 방향으로 좌우 반전
 
     this.heroHpBar.clear();
     this.heroHpBar.fillStyle(0x000000).fillRect(H.x - 16, H.y - 22, 32, 5);
@@ -346,11 +335,12 @@ export default class BroadcastScene extends Phaser.Scene {
         m.x += ((H.x - m.x) / d) * m.def.speed * dt;
         m.y += ((H.y - m.y) / d) * m.def.speed * dt;
         m.spr.setPosition(m.x, m.y);
+        m.spr.setFlipX(H.x < m.x); // 용사 쪽을 바라봄
       } else if (m.atkCd <= 0) {
         m.atkCd = m.def.atkCd;
         if (m.def.ranged) {
-          const spr = this.add.image(m.x, m.y, 'arrow').setDepth(2);
-          spr.setRotation(Math.atan2(H.y - m.y, H.x - m.x));
+          const spr = this.add.image(m.x, m.y, 'arrow').setDepth(2).setScale(0.7);
+          spr.setRotation(Math.atan2(H.y - m.y, H.x - m.x) + Math.PI / 2); // 세로 단검을 진행 방향으로
           this.arrows.push({ x: m.x, y: m.y, tx: H.x, ty: H.y, spr, dmg: m.def.dmg });
         } else {
           H.hp -= m.def.dmg;
