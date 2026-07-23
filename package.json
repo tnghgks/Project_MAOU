@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node test/formulas.test.mjs"
+    "test": "node test/formulas.test.mjs && node test/state.test.mjs"
   },
   "dependencies": {
     "phaser": "^3.80.1"
