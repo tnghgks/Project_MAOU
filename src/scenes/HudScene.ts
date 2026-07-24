@@ -11,8 +11,6 @@ export default class HudScene extends Phaser.Scene {
   timerText!: Phaser.GameObjects.Text;
   hypeBar!: Phaser.GameObjects.Rectangle;
   hypeLabel!: Phaser.GameObjects.Text;
-  mpText!: Phaser.GameObjects.Text;
-  mpBar!: Phaser.GameObjects.Rectangle;
   vignette!: Phaser.GameObjects.Rectangle;
 
   constructor() { super('Hud'); }
@@ -30,11 +28,6 @@ export default class HudScene extends Phaser.Scene {
     this.hypeBar = add.rectangle(452, 20, 0, 12, 0xff8822).setOrigin(0, 0.5).setDepth(7);
     this.hypeLabel = add.text(670, 10, '', { fontSize: '16px', color: '#ffffff' }).setDepth(6);
 
-    // MP (소환 바 영역)
-    this.mpText = add.text(20, 612, '', { fontSize: '15px', color: '#88aaff' }).setDepth(6);
-    add.rectangle(120, 620, 300, 12, 0x000000).setOrigin(0, 0.5).setDepth(6);
-    this.mpBar = add.rectangle(122, 620, 0, 8, 0x5588ff).setOrigin(0, 0.5).setDepth(7);
-
     // 벼랑끝 비네팅
     this.vignette = add.rectangle(470, 300, 940, 520, 0xff0000, 0).setDepth(4);
   }
@@ -49,8 +42,6 @@ export default class HudScene extends Phaser.Scene {
     this.hypeBar.width = 200 * clamp(b.D, 0, 1);
     this.hypeBar.fillColor = b.tier.color;
     this.hypeLabel.setText(b.tier.label);
-    this.mpText.setText(`MP ${Math.floor(b.mp)}/100`);
-    this.mpBar.width = 296 * (b.mp / 100);
     this.vignette.fillAlpha = b.D >= 0.75 ? (b.D - 0.75) * 0.8 : 0;
   }
 }

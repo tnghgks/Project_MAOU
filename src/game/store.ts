@@ -4,7 +4,7 @@ import type { SkillId } from '../data/skills.ts';
 import type { MonsterId } from '../data/monsters.ts';
 
 // 단일 스토어: Phaser는 gameState()로 읽고 액션으로 사건 단위 쓰기, React는 useStore(gameStore, sel)로 구독.
-// 매 프레임 값(viewers 실시간/hype/mp/timer)은 여기 안 넣는다 — 씬 로컬에서 HudScene가 렌더. viewers는 스로틀 반영만.
+// 매 프레임 값(viewers 실시간/hype/timer)은 여기 안 넣는다 — 씬 로컬에서 HudScene가 렌더. viewers는 스로틀 반영만.
 
 export interface HeroStats {
   maxHp: number;

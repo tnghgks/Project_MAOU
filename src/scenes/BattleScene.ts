@@ -13,6 +13,7 @@ export const ARENA = { x: 0, y: 40, w: 940, h: 520 };
 export const SUMMON_Y = 560; // 소환 바
 const RUN_TIME = 180; // 방송 1화 = 3분
 const FINAL_TIME = 60; // 최종화 축약 (GDD 7장)
+const AUTO_INTERVAL = 0.6; // ponytail: 자동 소환 간격 — 체감 밀도 조절 knob
 
 const CHAT_POOLS = {
   boring: ['노잼이네요', '다른 방 갑니다', '매니저 뭐하냐', 'ㅡㅡ', '숙제 방송인가...'],
@@ -49,7 +50,6 @@ export default class BattleScene extends Phaser.Scene {
   hero!: HeroEntity;
   monsters!: MonsterEntity[];
   arrows!: Arrow[];
-  mp!: number;
   viewers!: number;
   peakViewers!: number;
   viewerSyncT!: number;
@@ -63,8 +63,11 @@ export default class BattleScene extends Phaser.Scene {
   over!: boolean;
   available!: MonsterId[];
   selectedType!: MonsterId;
-  summonCd!: Record<string, number>;
   summonBtns!: Record<string, Phaser.GameObjects.Rectangle>;
+  autoOn = false;
+  autoT = 0;
+  autoBtn!: Phaser.GameObjects.Rectangle;
+  autoLabel!: Phaser.GameObjects.Text;
   heroSpr!: Phaser.GameObjects.Image;
   heroHpBar!: Phaser.GameObjects.Graphics;
   onRhythm!: (res: SkillOutcome) => void;
@@ -80,7 +83,6 @@ export default class BattleScene extends Phaser.Scene {
     this.hero = { x: 470, y: 300, hp: b.maxHp, maxHp: b.maxHp, atk: b.atk, atkSpd: b.atkSpd, speed: b.speed, range: b.range, atkCd: 0, retreatT: 0, retreatCd: 0 };
     this.monsters = [];
     this.arrows = [];
-    this.mp = 100;
     this.viewers = 12;
     this.peakViewers = 12;
     this.viewerSyncT = 0;
@@ -94,7 +96,8 @@ export default class BattleScene extends Phaser.Scene {
 
     this.available = (Object.keys(MONSTERS) as MonsterId[]).filter((k) => MONSTERS[k].unlock <= S.episode);
     this.selectedType = this.available[0];
-    this.summonCd = Object.fromEntries(this.available.map((k) => [k, 0]));
+    this.autoOn = false;
+    this.autoT = 0;
 
     this.buildUI();
     this.heroSpr = this.add.image(this.hero.x, this.hero.y, 'hero').setScale(1.3);
@@ -116,15 +119,11 @@ export default class BattleScene extends Phaser.Scene {
       bus.off('hero:upgraded', onUpgrade);
     });
 
-    // 입력: 마우스 소환 + 숫자키 = 선택 + 랜덤 위치 즉시 소환 (DFJK는 RhythmScene)
+    // 입력: 마우스 소환 + 숫자키 = 해당 종류를 랜덤 위치에 즉시 소환 (버튼 선택은 그대로 유지)
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.trySummon(p));
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
       const digit = parseInt(e.key, 10);
-      if (digit >= 1 && digit <= this.available.length) {
-        const t = this.available[digit - 1];
-        this.selectType(t);
-        this.summonRandom(t);
-      }
+      if (digit >= 1 && digit <= this.available.length) this.summonRandom(this.available[digit - 1]);
     });
 
     this.pushChat('시스템', this.isFinal ? '최종화 — 마왕이 직접 나선다!' : `${S.episode}화 방송이 시작되었습니다.`, '#888888');
@@ -142,7 +141,7 @@ export default class BattleScene extends Phaser.Scene {
     this.available.forEach((k, i) => {
       const m = MONSTERS[k];
       const btn = add.rectangle(bx, SUMMON_Y + 14, 150, 30, 0x2a2a3a).setOrigin(0).setDepth(6).setInteractive();
-      add.text(bx + 6, SUMMON_Y + 20, `${i + 1}.${m.name} ${m.mp}`, { fontSize: '12px', color: '#ffffff' }).setDepth(7);
+      add.text(bx + 6, SUMMON_Y + 20, `${i + 1}.${m.name}`, { fontSize: '12px', color: '#ffffff' }).setDepth(7);
       btn.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => {
         ev.stopPropagation();
         this.selectType(k);
@@ -151,6 +150,26 @@ export default class BattleScene extends Phaser.Scene {
       bx += 158;
     });
     this.selectType(this.selectedType);
+
+    // 자동 소환 토글: 선택된 종류를 AUTO_INTERVAL 간격으로 랜덤 위치에 소환
+    this.autoBtn = add.rectangle(bx, SUMMON_Y + 14, 110, 30, 0x2a2a3a).setOrigin(0).setDepth(6).setInteractive();
+    this.autoLabel = add.text(bx + 8, SUMMON_Y + 20, '', { fontSize: '12px', color: '#ffffff' }).setDepth(7);
+    this.autoBtn.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => {
+      ev.stopPropagation();
+      this.toggleAuto();
+    });
+    this.renderAutoBtn();
+  }
+
+  toggleAuto() {
+    this.autoOn = !this.autoOn;
+    this.autoT = 0; // 켜자마자 1마리
+    this.renderAutoBtn();
+  }
+
+  renderAutoBtn() {
+    this.autoBtn.setFillStyle(this.autoOn ? 0xcc6633 : 0x2a2a3a);
+    this.autoLabel.setText(this.autoOn ? '⏸ 자동 ON' : '▶ 자동소환');
   }
 
   selectType(k: MonsterId) {
@@ -162,21 +181,16 @@ export default class BattleScene extends Phaser.Scene {
   trySummon(p: Phaser.Input.Pointer) {
     if (this.over) return;
     if (p.x < ARENA.x || p.x > ARENA.x + ARENA.w || p.y < ARENA.y || p.y > SUMMON_Y) return;
-    const t = this.selectedType;
-    const def = MONSTERS[t];
-    if (this.mp < def.mp || this.summonCd[t] > 0) return;
     if (Phaser.Math.Distance.Between(p.x, p.y, this.hero.x, this.hero.y) < 150) {
       this.floatText(p.x, p.y, '용사와 너무 가까움!', '#ff6666');
       return;
     }
-    this.doSummon(t, p.x, p.y);
+    this.doSummon(this.selectedType, p.x, p.y);
   }
 
-  // 숫자키: 용사 반경 150px 밖 랜덤 지점에 즉시 소환
+  // 숫자키/자동: 용사 반경 150px 밖 랜덤 지점에 즉시 소환
   summonRandom(t: MonsterId) {
     if (this.over) return;
-    const def = MONSTERS[t];
-    if (this.mp < def.mp || this.summonCd[t] > 0) return;
     for (let i = 0; i < 10; i++) { // ponytail: 아레나가 넓어 몇 번 안에 성공, 실패 시 이번 입력 무시
       const x = Phaser.Math.Between(ARENA.x + 20, ARENA.x + ARENA.w - 20);
       const y = Phaser.Math.Between(ARENA.y + 20, SUMMON_Y - 20);
@@ -186,8 +200,6 @@ export default class BattleScene extends Phaser.Scene {
 
   doSummon(t: MonsterId, x: number, y: number) {
     const def = MONSTERS[t];
-    this.mp -= def.mp;
-    this.summonCd[t] = 1.5;
     const spr = this.add.image(x, y, `m_${t}`).setScale(def.size / 16);
     this.monsters.push({ type: t, def, hp: def.hp, x, y, atkCd: 0, spr });
   }
@@ -276,8 +288,10 @@ export default class BattleScene extends Phaser.Scene {
     this.timeLeft -= dt;
     if (this.timeLeft <= 0) return this.endRun(false);
 
-    this.mp = clamp(this.mp + 5 * dt, 0, 100);
-    for (const k in this.summonCd) this.summonCd[k] = Math.max(0, this.summonCd[k] - dt);
+    if (this.autoOn) {
+      this.autoT -= dt;
+      if (this.autoT <= 0) { this.summonRandom(this.selectedType); this.autoT = AUTO_INTERVAL; }
+    }
 
     const near = this.monsters.filter((m) => !m.dead && Phaser.Math.Distance.Between(m.x, m.y, H.x, H.y) < 200).length;
     this.D = danger(H.hp / H.maxHp, near);
