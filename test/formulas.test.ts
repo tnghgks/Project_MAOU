@@ -1,5 +1,8 @@
 import assert from 'node:assert';
-import { danger, hypeTier, donationBase, donationInterval, donationAmount, judge, skillResult } from '../src/formulas.ts';
+import {
+  danger, hypeTier, donationBase, donationInterval, donationAmount, judge, skillResult,
+  viewerDrift, DRIFT_MAX,
+} from '../src/formulas.ts';
 
 // 위험도: 풀피+몹0 = 0, 빈사+몹10 = 1
 assert.strictEqual(danger(1, 0), 0);
@@ -39,6 +42,44 @@ assert.ok(amt > 30 && amt < 60, `amt=${amt}`);
   let i = 0;
   const big = donationAmount(12, () => seq[i++]);
   assert.ok(Math.abs(big - amt * 5) <= 1, `big=${big} amt=${amt}`);
+}
+
+// ── 시청자 증감 흔들림 ──
+const dt = 1 / 60;
+{
+  // 상한 안에 머문다 (난수가 계속 한쪽으로 쏠려도)
+  let d = 0;
+  for (let i = 0; i < 60 * 300; i++) d = viewerDrift(d, dt, () => 1);
+  assert.ok(Math.abs(d) <= DRIFT_MAX + 1e-9, `상한 이탈: ${d}`);
+  let u = 0;
+  for (let i = 0; i < 60 * 300; i++) u = viewerDrift(u, dt, () => 0);
+  assert.ok(Math.abs(u) <= DRIFT_MAX + 1e-9, `하한 이탈: ${u}`);
+}
+{
+  // 충격이 없으면 0으로 되돌아온다
+  let d = DRIFT_MAX;
+  for (let i = 0; i < 60 * 30; i++) d = viewerDrift(d, dt, () => 0.5);
+  assert.ok(Math.abs(d) < DRIFT_MAX * 0.1, `0으로 수렴하지 않음: ${d}`);
+}
+{
+  // 핵심: 프레임 간에는 이어지되(진동 아님), 수십 초 단위로는 크게 방황해야 자연스럽다
+  let d = 0;
+  let maxJump = 0;
+  let lo = Infinity, hi = -Infinity;
+  for (let i = 0; i < 60 * 60; i++) {
+    const prev = d;
+    d = viewerDrift(d, dt);
+    maxJump = Math.max(maxJump, Math.abs(d - prev));
+    lo = Math.min(lo, d); hi = Math.max(hi, d);
+  }
+  assert.ok(maxJump < DRIFT_MAX * 0.2, `프레임 간 튐 — 진동으로 보인다 (${maxJump})`);
+  assert.ok(hi - lo > DRIFT_MAX, `방황 폭이 좁다 — 여전히 기계적 (${hi - lo})`);
+}
+{
+  // 안전장치: 흔들림이 최대로 유리하게 쏠려도 위기 10초를 공짜로 넘길 수 없다
+  const boring = hypeTier(0.1).rate; // 노잼
+  const best = Math.exp((boring + DRIFT_MAX) * 10); // 1명에서 10초간 최대 상승
+  assert.ok(best < 2, `운만으로 탈출 가능해진다 (배율 ${best})`);
 }
 
 // 판정 창

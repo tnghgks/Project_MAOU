@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
 import {
-  clamp, danger, hypeTier, donationInterval, donationAmount, criticalStep, viewerAlert,
+  clamp, danger, hypeTier, donationInterval, donationAmount, criticalStep, viewerAlert, viewerDrift,
   MIN_VIEWERS, CRIT_TIME, type HypeTier, type SkillOutcome, type ViewerAlert,
 } from '../formulas.ts';
 import { gameState } from '../game/store.ts';
 import { bus } from '../game/events.ts';
 import { MONSTERS, type MonsterDef, type MonsterId } from '../data/monsters.ts';
+import { syncRoster } from '../data/nicknames.ts';
 import { UPGRADES, type UpgradeKey } from '../data/upgrades.ts';
 import { SKILLS } from '../data/skills.ts';
 import { FINAL_EP, targetDonation } from '../data/progression.ts';
@@ -24,7 +25,6 @@ const CHAT_POOLS = {
   hot: ['개꿀잼ㅋㅋㅋ', '뒤에!! 뒤에!!', '헐', '죽는다죽는다', '도네 쏜다', '!!!!!!!!'],
   allperfect: ['ㅁㅊ', '이게 사람이야?', '클립 따간다', '레전드'],
 };
-const DONOR_NAMES = ['익명의마족', '고인물시청자', '용사팬클럽', '지나가던슬라임', '마왕성경비병', '전생용사'];
 
 export interface HeroEntity {
   x: number; y: number;
@@ -62,6 +62,8 @@ export default class BattleScene extends Phaser.Scene {
   critical = false; // 시청자 바닥 위기 (카운트다운 진행 중)
   critT = 0;
   alert: ViewerAlert = 'normal'; // HudScene가 읽어 시청자 수 색을 바꾼다
+  audience: string[] = []; // 현재 접속 중인 시청자 닉네임 — 채팅·후원자가 여기서만 나온다
+  drift = 0; // 시청자 증감률에 얹히는 흔들림 (기계적인 지수곡선 방지)
   donateT!: number;
   freezeUntil!: number; // 시간 정지 스킬
   D!: number;
@@ -98,6 +100,8 @@ export default class BattleScene extends Phaser.Scene {
     this.critical = false;
     this.critT = 0;
     this.alert = 'normal';
+    this.audience = syncRoster([], this.viewers);
+    this.drift = 0;
     this.donateT = donationInterval(this.viewers);
     this.freezeUntil = 0;
     this.D = 0; this.tier = hypeTier(0);
@@ -218,7 +222,7 @@ export default class BattleScene extends Phaser.Scene {
     const amt = donationAmount(this.viewers);
     gameState().addGold(amt);
     this.totalDonated += amt;
-    const name = Phaser.Utils.Array.GetRandom(DONOR_NAMES);
+    const name = this.randomViewer() ?? '익명';
     this.pushChat('🎁 후원', `${name}님 ${amt.toLocaleString()}G!`, '#ffdd44');
     bus.emit('donation:arrive', { amount: amt, donor: name });
     (this.scene.get('Rhythm') as RhythmScene).spawnSeq(); // 진행 중이면 Rhythm이 무시
@@ -237,7 +241,10 @@ export default class BattleScene extends Phaser.Scene {
     this.floatText(this.hero.x, this.hero.y - 40, `⚡ ${skill.name} ${res.grade} ×${res.mult}`, '#ffee44');
     if (res.clear) {
       for (const m of this.monsters) this.hitFx(m, 9999);
-      for (const line of CHAT_POOLS.allperfect) this.pushChat('시청자', line, '#ffee44');
+      for (const line of CHAT_POOLS.allperfect) {
+        const who = this.randomViewer();
+        if (who) this.pushChat(who, line, '#ffee44');
+      }
     }
     this.time.delayedCall(300, () => {
       this.children.list.filter((c) => (c as Phaser.GameObjects.Arc).fillColor === 0xffffaa).forEach((c) => c.destroy());
@@ -283,6 +290,10 @@ export default class BattleScene extends Phaser.Scene {
 
   pushChat(who: string, msg: string, color = '#cccccc') { bus.emit('chat:line', { who, msg, color }); }
 
+  randomViewer(): string | null {
+    return this.audience.length ? Phaser.Utils.Array.GetRandom(this.audience) : null;
+  }
+
   floatText(x: number, y: number, msg: string, color: string) {
     const t = this.add.text(x, y, msg, { fontSize: '16px', fontStyle: 'bold', color }).setOrigin(0.5).setDepth(9);
     this.tweens.add({ targets: t, y: y - 30, alpha: 0, duration: 900, onComplete: () => t.destroy() });
@@ -304,7 +315,8 @@ export default class BattleScene extends Phaser.Scene {
     const near = this.monsters.filter((m) => !m.dead && Phaser.Math.Distance.Between(m.x, m.y, H.x, H.y) < 200).length;
     this.D = danger(H.hp / H.maxHp, near);
     this.tier = hypeTier(this.D);
-    this.viewers = Math.max(MIN_VIEWERS, this.viewers * (1 + this.tier.rate * dt));
+    this.drift = viewerDrift(this.drift, dt);
+    this.viewers = Math.max(MIN_VIEWERS, this.viewers * (1 + (this.tier.rate + this.drift) * dt));
     this.peakViewers = Math.max(this.peakViewers, this.viewers);
     this.updateCritical(dt);
     if (this.over) return;
@@ -321,7 +333,11 @@ export default class BattleScene extends Phaser.Scene {
     this.updateChat(dt, this.D);
 
     this.viewerSyncT -= dt;
-    if (this.viewerSyncT <= 0) { gameState().setViewers(Math.floor(this.viewers)); this.viewerSyncT = 0.25; }
+    if (this.viewerSyncT <= 0) {
+      gameState().setViewers(Math.floor(this.viewers));
+      this.audience = syncRoster(this.audience, this.viewers);
+      this.viewerSyncT = 0.25;
+    }
 
     if (H.hp <= 0) return this.endRun('death');
   }
@@ -454,9 +470,11 @@ export default class BattleScene extends Phaser.Scene {
     if (this.chatT > 0) return;
     const lps = clamp(1 + (this.viewers / 5000) * 7, 1, 8);
     this.chatT = 1 / lps;
+    const who = this.randomViewer();
+    if (!who) return; // 아무도 없으면 채팅도 없다
     const pool = D < 0.2 ? CHAT_POOLS.boring : D < 0.75 ? CHAT_POOLS.normal : CHAT_POOLS.hot;
     const color = D >= 0.75 ? '#ff9966' : D < 0.2 ? '#7777aa' : '#cccccc';
-    this.pushChat(`시청자${Phaser.Math.Between(1, 999)}`, Phaser.Utils.Array.GetRandom(pool), color);
+    this.pushChat(who, Phaser.Utils.Array.GetRandom(pool), color);
   }
 
   endRun(outcome: RunOutcome) {
@@ -465,7 +483,8 @@ export default class BattleScene extends Phaser.Scene {
     gameState().recordRun({ outcome, peakViewers: this.peakViewers, totalDonated: this.totalDonated, kills: this.kills });
     const cleared = outcome === 'clear';
     if (outcome === 'death') {
-      this.pushChat('시청자', '...', '#666666');
+      const who = this.randomViewer();
+      if (who) this.pushChat(who, '...', '#666666');
       this.pushChat('시스템', '용사가 죽었다. 방송 종료', '#ff4444');
       this.cameras.main.shake(500, 0.01);
     } else if (outcome === 'abandoned') {

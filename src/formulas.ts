@@ -19,6 +19,18 @@ export function hypeTier(d: number): HypeTier {
   return { rate: 0.09, label: '💀 벼랑끝', color: 0xff3333 };
 }
 
+// 시청자 증감 흔들림 — tier.rate에 더해지는 보정치.
+// 프레임마다 독립 난수를 쓰면 미세 진동으로만 보인다. 0으로 천천히 되돌아오는 랜덤워크라야
+// "한참 잘 늘다가 갑자기 빠지는" 실제 방송처럼 보인다.
+const DRIFT_KICK = 0.04; // 무작위 충격 세기
+const DRIFT_REVERT = 0.5; // 0으로 복귀하는 속도 (클수록 빨리 진정)
+export const DRIFT_MAX = 0.05; // ponytail: 흔들림 상한 — tier.rate와 비슷한 크기라 체감이 크다
+export function viewerDrift(drift: number, dt: number, rnd: () => number = Math.random): number {
+  const revert = -drift * DRIFT_REVERT * dt;
+  const kick = (rnd() * 2 - 1) * DRIFT_KICK * Math.sqrt(dt);
+  return clamp(drift + revert + kick, -DRIFT_MAX, DRIFT_MAX);
+}
+
 // 도네이션 (GDD 3-3)
 // 평균 간격은 시청자 수로 결정, 실제 발생은 지수분포 = 무작위 도착 (정박자 느낌 제거)
 export function donationBase(viewers: number): number {
