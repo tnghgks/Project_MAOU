@@ -385,7 +385,7 @@ export default class BattleScene extends Phaser.Scene {
     H.retreatT = Math.max(0, H.retreatT - dt);
     H.retreatCd = Math.max(0, H.retreatCd - dt);
 
-    if (nearCount === 0 && alive.length === 0) H.hp = Math.min(H.maxHp, H.hp + H.maxHp * 0.005 * dt);
+    if (nearCount === 0) H.hp = Math.min(H.maxHp, H.hp + H.maxHp * 0.1 * dt);
     if (H.hp / H.maxHp <= 0.25 && H.retreatCd <= 0) { H.retreatT = 2; H.retreatCd = 6; }
 
     let vx = 0, vy = 0;
