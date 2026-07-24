@@ -1,19 +1,22 @@
 import Phaser from 'phaser';
-import { clamp, danger, hypeTier, donationInterval, donationAmount, type HypeTier, type SkillOutcome } from '../formulas.ts';
+import {
+  clamp, danger, hypeTier, donationInterval, donationAmount, criticalStep, viewerAlert,
+  MIN_VIEWERS, CRIT_TIME, type HypeTier, type SkillOutcome, type ViewerAlert,
+} from '../formulas.ts';
 import { gameState } from '../game/store.ts';
 import { bus } from '../game/events.ts';
 import { MONSTERS, type MonsterDef, type MonsterId } from '../data/monsters.ts';
 import { UPGRADES, type UpgradeKey } from '../data/upgrades.ts';
 import { SKILLS } from '../data/skills.ts';
-import { FINAL_EP } from '../data/progression.ts';
+import { FINAL_EP, targetDonation } from '../data/progression.ts';
+import type { RunOutcome } from '../game/store.ts';
 import type RhythmScene from './RhythmScene.ts';
 
 // 레이아웃 (GDD 5-1)
 export const ARENA = { x: 0, y: 40, w: 940, h: 520 };
 export const SUMMON_Y = 560; // 소환 바
-const RUN_TIME = 180; // 방송 1화 = 3분
-const FINAL_TIME = 60; // 최종화 축약 (GDD 7장)
 const AUTO_INTERVAL = 0.6; // ponytail: 자동 소환 간격 — 체감 밀도 조절 knob
+const SHAKE_HOLD = 999_999; // 경보 흔들림은 단계가 바뀔 때까지 유지 (reset으로 끈다)
 
 const CHAT_POOLS = {
   boring: ['노잼이네요', '다른 방 갑니다', '매니저 뭐하냐', 'ㅡㅡ', '숙제 방송인가...'],
@@ -55,7 +58,10 @@ export default class BattleScene extends Phaser.Scene {
   viewerSyncT!: number;
   totalDonated!: number;
   kills!: number;
-  timeLeft!: number;
+  target!: number; // 승리 조건: 누적 후원 목표
+  critical = false; // 시청자 바닥 위기 (카운트다운 진행 중)
+  critT = 0;
+  alert: ViewerAlert = 'normal'; // HudScene가 읽어 시청자 수 색을 바꾼다
   donateT!: number;
   freezeUntil!: number; // 시간 정지 스킬
   D!: number;
@@ -88,7 +94,10 @@ export default class BattleScene extends Phaser.Scene {
     this.viewerSyncT = 0;
     this.totalDonated = 0;
     this.kills = 0;
-    this.timeLeft = this.isFinal ? FINAL_TIME : RUN_TIME;
+    this.target = targetDonation(S.episode);
+    this.critical = false;
+    this.critT = 0;
+    this.alert = 'normal';
     this.donateT = donationInterval(this.viewers);
     this.freezeUntil = 0;
     this.D = 0; this.tier = hypeTier(0);
@@ -218,7 +227,7 @@ export default class BattleScene extends Phaser.Scene {
   // ── 스킬: 보유 스킬 중 랜덤 1개가 리듬 배율로 발동 (GDD 4장) ──
   fireSkill(res: SkillOutcome) {
     if (res.penalty) {
-      this.viewers = Math.max(5, this.viewers * 0.95);
+      this.viewers = Math.max(MIN_VIEWERS, this.viewers * 0.95);
       this.pushChat('시스템', '스킬 불발... 시청자가 실망했다', '#ff6666');
       return;
     }
@@ -285,8 +294,7 @@ export default class BattleScene extends Phaser.Scene {
     const dt = Math.min(deltaMs / 1000, 0.05);
     const H = this.hero;
 
-    this.timeLeft -= dt;
-    if (this.timeLeft <= 0) return this.endRun(false);
+    if (this.totalDonated >= this.target) return this.endRun('clear');
 
     if (this.autoOn) {
       this.autoT -= dt;
@@ -296,8 +304,10 @@ export default class BattleScene extends Phaser.Scene {
     const near = this.monsters.filter((m) => !m.dead && Phaser.Math.Distance.Between(m.x, m.y, H.x, H.y) < 200).length;
     this.D = danger(H.hp / H.maxHp, near);
     this.tier = hypeTier(this.D);
-    this.viewers = Math.max(5, this.viewers * (1 + this.tier.rate * dt));
+    this.viewers = Math.max(MIN_VIEWERS, this.viewers * (1 + this.tier.rate * dt));
     this.peakViewers = Math.max(this.peakViewers, this.viewers);
+    this.updateCritical(dt);
+    if (this.over) return;
 
     this.donateT -= dt;
     if (this.donateT <= 0) {
@@ -313,7 +323,41 @@ export default class BattleScene extends Phaser.Scene {
     this.viewerSyncT -= dt;
     if (this.viewerSyncT <= 0) { gameState().setViewers(Math.floor(this.viewers)); this.viewerSyncT = 0.25; }
 
-    if (H.hp <= 0) return this.endRun(true);
+    if (H.hp <= 0) return this.endRun('death');
+  }
+
+  // ── 시청자 바닥 위기: 화면 흔들림 + 카운트다운, 회복 못 하면 방송 종료 (판정은 formulas.criticalStep) ──
+  updateCritical(dt: number) {
+    if (this.critical) this.critT -= dt;
+    switch (criticalStep(this.viewers, this.critical, this.critT)) {
+      case 'enter':
+        this.critical = true;
+        this.critT = CRIT_TIME;
+        this.pushChat('시스템', `⚠ 시청자가 다 나갔다! ${CRIT_TIME}초 안에 판을 키워라`, '#ff4444');
+        break;
+      case 'exit':
+        this.critical = false;
+        this.critT = 0;
+        this.pushChat('시스템', '시청자가 돌아오기 시작했다', '#44ddff');
+        break;
+      case 'fail':
+        return this.endRun('abandoned');
+    }
+    this.syncAlert();
+  }
+
+  // 경보 단계가 바뀔 때만 흔들림을 갈아끼운다 (매 프레임 shake 재호출은 진동이 튄다)
+  syncAlert() {
+    const next = viewerAlert(this.viewers, this.critical);
+    if (next === this.alert) return;
+    this.alert = next;
+    this.cameras.main.shakeEffect.reset();
+    if (next === 'warn') {
+      this.cameras.main.shake(SHAKE_HOLD, 0.002);
+      this.pushChat('시스템', '시청자가 빠지고 있다...', '#ff9933');
+    } else if (next === 'critical') {
+      this.cameras.main.shake(SHAKE_HOLD, 0.006);
+    }
   }
 
   updateHero(dt: number, nearCount: number) {
@@ -415,16 +459,22 @@ export default class BattleScene extends Phaser.Scene {
     this.pushChat(`시청자${Phaser.Math.Between(1, 999)}`, Phaser.Utils.Array.GetRandom(pool), color);
   }
 
-  endRun(died: boolean) {
+  endRun(outcome: RunOutcome) {
     this.over = true;
-    gameState().recordRun({ died, peakViewers: this.peakViewers, totalDonated: this.totalDonated, kills: this.kills });
-    if (died) {
+    this.cameras.main.shakeEffect.reset();
+    gameState().recordRun({ outcome, peakViewers: this.peakViewers, totalDonated: this.totalDonated, kills: this.kills });
+    const cleared = outcome === 'clear';
+    if (outcome === 'death') {
       this.pushChat('시청자', '...', '#666666');
-      this.pushChat('시스템', '방송이 종료되었습니다', '#ff4444');
+      this.pushChat('시스템', '용사가 죽었다. 방송 종료', '#ff4444');
       this.cameras.main.shake(500, 0.01);
+    } else if (outcome === 'abandoned') {
+      this.pushChat('시스템', '아무도 보지 않는다. 채널 폐지', '#ff4444');
+    } else {
+      this.pushChat('시스템', `🎯 목표 후원 ${this.target.toLocaleString()}G 달성!`, '#ffdd44');
     }
-    this.time.delayedCall(died ? 1500 : 500, () => {
-      gameState().setPhase(!died && this.isFinal ? 'ending' : 'result');
+    this.time.delayedCall(cleared ? 800 : 1500, () => {
+      gameState().setPhase(cleared && this.isFinal ? 'ending' : 'result');
     });
   }
 }

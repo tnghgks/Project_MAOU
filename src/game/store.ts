@@ -14,8 +14,10 @@ export interface HeroStats {
   range: number;
 }
 export type Phase = 'boot' | 'title' | 'broadcast' | 'result' | 'upgrade' | 'ending';
+// clear = 목표 후원 달성 · death = 용사 사망 · abandoned = 시청자 이탈로 방송 종료
+export type RunOutcome = 'clear' | 'death' | 'abandoned';
 export interface RunSummary {
-  died: boolean;
+  outcome: RunOutcome;
   peakViewers: number;
   totalDonated: number;
   kills: number;
@@ -63,7 +65,7 @@ export const gameStore = createStore<GameState>()((set, get) => ({
   unlockedMonsters: ['slime', 'archer', 'golem'],
   records: { bestViewers: 0, bestGold: 0 },
   viewers: 0,
-  lastRun: { died: false, peakViewers: 0, totalDonated: 0, kills: 0 },
+  lastRun: { outcome: 'clear', peakViewers: 0, totalDonated: 0, kills: 0 },
 
   setPhase: (phase) => set({ phase }),
   setViewers: (viewers) => set({ viewers }),
@@ -93,10 +95,10 @@ export const gameStore = createStore<GameState>()((set, get) => ({
   },
 
   // 방송 종료 정산 (기존 endRun의 records/save 흡수)
-  recordRun: ({ died, peakViewers, totalDonated, kills }) => {
+  recordRun: ({ outcome, peakViewers, totalDonated, kills }) => {
     const r = get().records;
     set({
-      lastRun: { died, peakViewers: Math.floor(peakViewers), totalDonated, kills },
+      lastRun: { outcome, peakViewers: Math.floor(peakViewers), totalDonated, kills },
       records: {
         bestViewers: Math.max(r.bestViewers, Math.floor(peakViewers)),
         bestGold: Math.max(r.bestGold, Math.floor(get().gold)),

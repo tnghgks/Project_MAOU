@@ -11,6 +11,7 @@ export default function TitleView() {
       <div className="howto">
         <p>마우스 클릭: 선택한 몬스터 소환 · 숫자키: 해당 몬스터 즉시 소환</p>
         <p>D F J K: 도네이션 리듬 판정</p>
+        <p>목표 후원 금액을 채우면 방송 성공 · 시청자가 다 나가면 채널 폐지</p>
         <p>용사를 죽이지 마라. 단, 죽기 직전까지 몰아붙여라.</p>
       </div>
       {(records.bestViewers || records.bestGold) > 0 && (
