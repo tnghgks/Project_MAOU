@@ -18,7 +18,7 @@ import type RhythmScene from './RhythmScene.ts';
 export const ARENA = { x: 0, y: 40, w: 1280, h: 520 };
 export const SUMMON_Y = 560; // 소환 바
 const CX = ARENA.x + ARENA.w / 2; // 용사 스폰 · 무적 시 복귀 지점
-const AUTO_INTERVAL = 0.6; // ponytail: 자동 소환 간격 — 체감 밀도 조절 knob
+const AUTO_INTERVAL = 3; // ponytail: 자동 소환 간격 — 체감 밀도 조절 knob
 const SHAKE_HOLD = 999_999; // 경보 흔들림은 단계가 바뀔 때까지 유지 (reset으로 끈다)
 
 const CHAT_POOLS = {
