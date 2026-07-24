@@ -3,7 +3,7 @@ import { useStore } from 'zustand';
 import type Phaser from 'phaser';
 import { createGame } from './game/config.ts';
 import { gameStore } from './game/store.ts';
-import ChatPanel from './ui/ChatPanel.tsx';
+import BroadcastFrame from './ui/BroadcastFrame.tsx';
 import DonationToast from './ui/DonationToast.tsx';
 import MenuOverlay from './ui/MenuOverlay.tsx';
 import ShopPanel from './ui/ShopPanel.tsx';
@@ -27,13 +27,14 @@ export default function App() {
     else for (const k of ['Battle', 'Hud', 'Rhythm']) if (game.scene.isActive(k)) game.scene.stop(k);
   }, [phase]);
 
+  // 캔버스와 오버레이는 플레이어 영역(.screen) 안 — 채팅/사이드바는 BroadcastFrame가 소유
   return (
-    <div className="stage">
+    <BroadcastFrame>
       <div ref={parentRef} className="canvas-layer" />
       <div className="ui-layer">
-        {phase === 'broadcast' && <><ChatPanel /><DonationToast /><ShopPanel /></>}
+        {phase === 'broadcast' && <><DonationToast /><ShopPanel /></>}
         <MenuOverlay />
       </div>
-    </div>
+    </BroadcastFrame>
   );
 }

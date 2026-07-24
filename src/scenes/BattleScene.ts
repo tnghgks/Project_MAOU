@@ -14,8 +14,10 @@ import type { RunOutcome } from '../game/store.ts';
 import type RhythmScene from './RhythmScene.ts';
 
 // 레이아웃 (GDD 5-1)
-export const ARENA = { x: 0, y: 40, w: 940, h: 520 };
+// 채팅이 React 채팅 컬럼(캔버스 밖)으로 빠지면서 아레나가 캔버스 전폭을 쓴다
+export const ARENA = { x: 0, y: 40, w: 1280, h: 520 };
 export const SUMMON_Y = 560; // 소환 바
+const CX = ARENA.x + ARENA.w / 2; // 용사 스폰 · 무적 시 복귀 지점
 const AUTO_INTERVAL = 0.6; // ponytail: 자동 소환 간격 — 체감 밀도 조절 knob
 const SHAKE_HOLD = 999_999; // 경보 흔들림은 단계가 바뀔 때까지 유지 (reset으로 끈다)
 
@@ -88,7 +90,7 @@ export default class BattleScene extends Phaser.Scene {
     this.isFinal = S.episode >= FINAL_EP;
 
     const b = S.hero;
-    this.hero = { x: 470, y: 300, hp: b.maxHp, maxHp: b.maxHp, atk: b.atk, atkSpd: b.atkSpd, speed: b.speed, range: b.range, atkCd: 0, retreatT: 0, retreatCd: 0 };
+    this.hero = { x: CX, y: 300, hp: b.maxHp, maxHp: b.maxHp, atk: b.atk, atkSpd: b.atkSpd, speed: b.speed, range: b.range, atkCd: 0, retreatT: 0, retreatCd: 0 };
     this.monsters = [];
     this.arrows = [];
     this.viewers = 12;
@@ -145,8 +147,8 @@ export default class BattleScene extends Phaser.Scene {
   buildUI() {
     const add = this.add;
     // 전투 영역 chrome (상단바=Hud, 리듬레인=Rhythm)
-    add.rectangle(470, (SUMMON_Y + 640) / 2, 940, 640 - SUMMON_Y, 0x1a1a24).setDepth(5); // 소환 바
-    add.line(0, 0, ARENA.x, SUMMON_Y, 940, SUMMON_Y, 0x333344).setOrigin(0).setDepth(5);
+    add.rectangle(CX, (SUMMON_Y + 640) / 2, ARENA.w, 640 - SUMMON_Y, 0x1a1a24).setDepth(5); // 소환 바
+    add.line(0, 0, ARENA.x, SUMMON_Y, ARENA.w, SUMMON_Y, 0x333344).setOrigin(0).setDepth(5);
 
     // 소환 버튼 (해금된 몬스터만)
     this.summonBtns = {};
@@ -407,9 +409,9 @@ export default class BattleScene extends Phaser.Scene {
           H.atkCd = 1 / H.atkSpd;
           this.damageMonster(target, H.atk);
         }
-      } else if (Phaser.Math.Distance.Between(H.x, H.y, 470, 300) > 20) {
-        const d = Phaser.Math.Distance.Between(H.x, H.y, 470, 300);
-        vx = ((470 - H.x) / d) * H.speed * 0.5;
+      } else if (Phaser.Math.Distance.Between(H.x, H.y, CX, 300) > 20) {
+        const d = Phaser.Math.Distance.Between(H.x, H.y, CX, 300);
+        vx = ((CX - H.x) / d) * H.speed * 0.5;
         vy = ((300 - H.y) / d) * H.speed * 0.5;
       }
     }

@@ -30,7 +30,7 @@ export default class RhythmScene extends Phaser.Scene {
     this.noteResults = [];
 
     const add = this.add;
-    add.rectangle(470, (LANE_Y + 720) / 2, 940, 720 - LANE_Y, 0x0d0d14).setDepth(5);
+    add.rectangle(640, (LANE_Y + 720) / 2, 1280, 720 - LANE_Y, 0x0d0d14).setDepth(5);
     add.circle(HIT_X, LANE_Y + 40, 24).setStrokeStyle(3, 0xffffff).setDepth(6);
     add.text(20, LANE_Y + 30, 'DFJK▶', { fontSize: '16px', color: '#555566' }).setDepth(6);
     this.judgeText = add.text(HIT_X, LANE_Y + 8, '', { fontSize: '16px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5).setDepth(8);

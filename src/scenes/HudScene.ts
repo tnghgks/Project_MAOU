@@ -25,7 +25,7 @@ export default class HudScene extends Phaser.Scene {
     add.rectangle(640, 20, 1280, 40, 0x1a1a24).setDepth(5); // 상단바 bg
     this.viewerText = add.text(16, 10, '', { fontSize: '18px', color: '#ffffff' }).setDepth(6);
     this.goldText = add.text(220, 10, '', { fontSize: '18px', color: '#ffdd44' }).setDepth(6);
-    this.targetText = add.text(790, 10, '', { fontSize: '18px', color: '#ffffff' }).setDepth(6);
+    this.targetText = add.text(1000, 10, '', { fontSize: '18px', color: '#ffffff' }).setDepth(6);
     // 시청자 바닥 위기 카운트다운 (좌상단, 상단바 바로 아래)
     this.critText = add.text(16, 50, '', { fontSize: '26px', fontStyle: 'bold', color: '#ff4444' }).setDepth(9).setVisible(false);
     add.text(420, 10, '🔥', { fontSize: '18px' }).setDepth(6);
@@ -34,7 +34,7 @@ export default class HudScene extends Phaser.Scene {
     this.hypeLabel = add.text(670, 10, '', { fontSize: '16px', color: '#ffffff' }).setDepth(6);
 
     // 벼랑끝 비네팅
-    this.vignette = add.rectangle(470, 300, 940, 520, 0xff0000, 0).setDepth(4);
+    this.vignette = add.rectangle(640, 300, 1280, 520, 0xff0000, 0).setDepth(4);
   }
 
   update() {
