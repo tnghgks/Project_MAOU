@@ -4,8 +4,12 @@ import assert from 'node:assert';
 const store: Record<string, string> = {};
 globalThis.localStorage = {
   getItem: (k: string) => (k in store ? store[k] : null),
-  setItem: (k: string, v: string) => { store[k] = String(v); },
-  removeItem: (k: string) => { delete store[k]; },
+  setItem: (k: string, v: string) => {
+    store[k] = String(v);
+  },
+  removeItem: (k: string) => {
+    delete store[k];
+  },
 } as Storage;
 
 const { gameStore, gameState, saveGame, loadGame } = await import('../src/game/store.ts');

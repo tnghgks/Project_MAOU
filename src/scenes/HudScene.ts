@@ -16,7 +16,9 @@ export default class HudScene extends Phaser.Scene {
   hypeLabel!: Phaser.GameObjects.Text;
   vignette!: Phaser.GameObjects.Rectangle;
 
-  constructor() { super('Hud'); }
+  constructor() {
+    super('Hud');
+  }
 
   create() {
     this.battle = this.scene.get('Battle') as BattleScene;
@@ -27,7 +29,10 @@ export default class HudScene extends Phaser.Scene {
     this.goldText = add.text(220, 10, '', { fontSize: '18px', color: '#ffdd44' }).setDepth(6);
     this.targetText = add.text(1000, 10, '', { fontSize: '18px', color: '#ffffff' }).setDepth(6);
     // 시청자 바닥 위기 카운트다운 (좌상단, 상단바 바로 아래)
-    this.critText = add.text(16, 50, '', { fontSize: '26px', fontStyle: 'bold', color: '#ff4444' }).setDepth(9).setVisible(false);
+    this.critText = add
+      .text(16, 50, '', { fontSize: '26px', fontStyle: 'bold', color: '#ff4444' })
+      .setDepth(9)
+      .setVisible(false);
     add.text(420, 10, '🔥', { fontSize: '18px' }).setDepth(6);
     add.rectangle(450, 20, 204, 16, 0x000000).setOrigin(0, 0.5).setDepth(6);
     this.hypeBar = add.rectangle(452, 20, 0, 12, 0xff8822).setOrigin(0, 0.5).setDepth(7);

@@ -115,7 +115,11 @@ export function saveGame() {
   const ls = globalThis.localStorage;
   if (!ls) return;
   const { skills, unlockedMonsters, records } = gameStore.getState();
-  try { ls.setItem(SAVE_KEY, JSON.stringify({ skills, unlockedMonsters, records })); } catch { /* 프라이빗 모드 등 */ }
+  try {
+    ls.setItem(SAVE_KEY, JSON.stringify({ skills, unlockedMonsters, records }));
+  } catch {
+    /* 프라이빗 모드 등 */
+  }
 }
 
 export function loadGame() {
@@ -130,5 +134,7 @@ export function loadGame() {
     if (Array.isArray(d.unlockedMonsters)) patch.unlockedMonsters = d.unlockedMonsters;
     if (d.records) patch.records = d.records;
     gameStore.setState(patch);
-  } catch { /* 손상된 세이브 무시 */ }
+  } catch {
+    /* 손상된 세이브 무시 */
+  }
 }

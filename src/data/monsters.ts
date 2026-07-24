@@ -14,6 +14,8 @@ export interface MonsterDef {
   suicide?: boolean;
 }
 
+// 한 몬스터 = 한 줄, 컬럼 정렬로 밸런스 비교가 쉽다
+// prettier-ignore
 export const MONSTERS = {
   slime:  { name: '슬라임', hp: 20, dmg: 3, atkCd: 1.0, speed: 60, range: 24, gold: 5, size: 16, sprite: 'slime.png', unlock: 1 },
   archer: { name: '고블린 궁수', hp: 15, dmg: 4, atkCd: 2.0, speed: 70, range: 240, gold: 8, size: 15, sprite: 'archer.png', unlock: 1, ranged: true },

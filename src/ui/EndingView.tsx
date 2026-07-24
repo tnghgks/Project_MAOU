@@ -13,13 +13,18 @@ export default function EndingView() {
   const { hero, lastRun } = useStore(gameStore, (s) => ({ hero: s.hero, lastRun: s.lastRun }));
   const ratio = hero.maxHp / HERO_TARGET_HP;
   const e = ratio < 0.6 ? ENDINGS.bad : ratio > 1.2 ? ENDINGS.hidden : ENDINGS.best;
-  const back = () => { gameState().resetRun(); gameState().setPhase('title'); };
+  const back = () => {
+    gameState().resetRun();
+    gameState().setPhase('title');
+  };
   return (
     <div className="menu">
       <h2 className={`ending-title ${e.cls}`}>{e.title}</h2>
       <p className="subtitle">{e.desc}</p>
       <p className="records">최종 동접 {lastRun.peakViewers.toLocaleString()}명</p>
-      <button className="cta" onClick={back}>↺ 타이틀로</button>
+      <button className="cta" onClick={back}>
+        ↺ 타이틀로
+      </button>
     </div>
   );
 }

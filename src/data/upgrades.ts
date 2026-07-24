@@ -9,6 +9,8 @@ export interface UpgradeDef {
   mult: number;
 }
 
+// 한 강화 = 한 줄, 컬럼 정렬로 밸런스 비교가 쉽다
+// prettier-ignore
 export const UPGRADES = {
   hp:     { name: '체력 단련', stat: 'maxHp', delta: 80, baseCost: 200, mult: 1.5 },
   atk:    { name: '검술 수련', stat: 'atk', delta: 12, baseCost: 250, mult: 1.5 },

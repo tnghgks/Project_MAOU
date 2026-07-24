@@ -26,7 +26,9 @@ export default function BroadcastFrame({ children }: { children: ReactNode }) {
   return (
     <div className="site">
       <header className="topbar">
-        <span className="logo">마왕채널<sup>beta</sup></span>
+        <span className="logo">
+          마왕채널<sup>beta</sup>
+        </span>
         <input className="search" placeholder="스트리머, 게임 영상 검색" disabled />
         {/* 채팅을 숨겨도 버튼은 남아야 하므로 헤더에 고정 */}
         <button className="chat-toggle" onClick={() => setShowChat((v) => !v)}>
@@ -38,18 +40,22 @@ export default function BroadcastFrame({ children }: { children: ReactNode }) {
         <p className="nav-title">추천 채널</p>
         <ul className="nav-list">
           <li className="me">
-            <span className="ico">👑</span>마왕<span className="live-dot" />
+            <span className="ico">👑</span>마왕
+            <span className="live-dot" />
           </li>
           {CHANNELS.map((c) => (
             <li key={c.name}>
-              <span className="ico">{c.icon}</span>{c.name}
+              <span className="ico">{c.icon}</span>
+              {c.name}
               {c.live && <span className="live-dot" />}
             </li>
           ))}
         </ul>
         <p className="nav-title">서비스 바로가기</p>
         <ul className="nav-list">
-          {SHORTCUTS.map((s) => <li key={s}>{s}</li>)}
+          {SHORTCUTS.map((s) => (
+            <li key={s}>{s}</li>
+          ))}
         </ul>
       </nav>
 
@@ -74,7 +80,9 @@ export default function BroadcastFrame({ children }: { children: ReactNode }) {
             <button className={following ? 'follow on' : 'follow'} onClick={() => setFollowing((f) => !f)}>
               {following ? '✓ 팔로잉' : '＋ 팔로우'}
             </button>
-            <button className="sub" disabled>구독</button>
+            <button className="sub" disabled>
+              구독
+            </button>
           </div>
         </div>
       </main>
