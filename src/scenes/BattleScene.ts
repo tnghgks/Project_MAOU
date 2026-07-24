@@ -1,54 +1,33 @@
 import Phaser from 'phaser';
 import {
-  clamp, danger, hypeTier, donationInterval, donationAmount, criticalStep, viewerAlert, viewerDrift,
-  MIN_VIEWERS, CRIT_TIME, type HypeTier, type SkillOutcome, type ViewerAlert,
+  clamp,
+  hypeTier,
+  donationInterval,
+  donationAmount,
+  stepCritical,
+  viewerAlert,
+  MIN_VIEWERS,
+  CRIT_TIME,
+  type HypeTier,
+  type SkillOutcome,
+  type ViewerAlert,
 } from '../formulas.ts';
 import { gameState } from '../game/store.ts';
 import { bus } from '../game/events.ts';
-import { MONSTERS, type MonsterDef, type MonsterId } from '../data/monsters.ts';
+import { ARENA, SUMMON_Y, CX, arenaBounds } from '../game/layout.ts';
+import { spawnHero, type HeroEntity, type MonsterEntity, type Arrow, type SkillContext } from '../game/entities.ts';
+import { stepHero, stepMonster, stepArrow, stepViewers, countNear, SUMMON_MIN_RADIUS } from '../game/battleSim.ts';
+import { MONSTERS, type MonsterId } from '../data/monsters.ts';
 import { syncRoster } from '../data/nicknames.ts';
 import { UPGRADES, type UpgradeKey } from '../data/upgrades.ts';
 import { SKILLS } from '../data/skills.ts';
+import { CHAT_POOLS, pickChatMood } from '../data/chat.ts';
 import { FINAL_EP, targetDonation } from '../data/progression.ts';
 import type { RunOutcome } from '../game/store.ts';
 import type RhythmScene from './RhythmScene.ts';
 
-// 레이아웃 (GDD 5-1)
-// 채팅이 React 채팅 컬럼(캔버스 밖)으로 빠지면서 아레나가 캔버스 전폭을 쓴다
-export const ARENA = { x: 0, y: 40, w: 1280, h: 520 };
-export const SUMMON_Y = 560; // 소환 바
-const CX = ARENA.x + ARENA.w / 2; // 용사 스폰 · 무적 시 복귀 지점
 const AUTO_INTERVAL = 3; // ponytail: 자동 소환 간격 — 체감 밀도 조절 knob
 const SHAKE_HOLD = 999_999; // 경보 흔들림은 단계가 바뀔 때까지 유지 (reset으로 끈다)
-
-const CHAT_POOLS = {
-  boring: ['노잼', '개노잼 ㅋㅋ', '매니저 뭐하냐 똑바로 안하냐', 'ㅡㅡ', '숙제 방송이야?', '용사 왜 안움직여', '똑같은 몬스터만 나오네 지루하다', '이거 뭐야'],
-  normal: ['ㅋㅋㅋ', '용사 화이팅', '오 슬라임 나왔다', '응원합니다', '용사 좀 치네'],
-  hot: ['개꿀잼ㅋㅋㅋ', '뒤에!! 뒤에!!', '헐', '죽는다죽는다죽는다', '엌ㅋㅋㅋㅋㅋㅋ', '!!!!!!!!', 'ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ', '와아아아아아아', '와우'],
-  allperfect: ['ㅁㅊㅋㅋㅋㅋㅋㅋㅋㅋ', 'ㅁㅊ ㅋㅋㅋㅋ', '헐 ㅋㅋㅋ 미친 레전드 ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ', '클립 ㄱㄱㄱㄱㄱㄱ', '매드무비 각이다', '레전드 ㄷㄷ', 'ㅁㅊㅁㅊㅁㅊㅁㅊㅁㅊ', '그는 신이야', '신들렸다', '와아아아', '와우우우', '와아아', '와우우', '와아', '와우'],
-};
-
-export interface HeroEntity {
-  x: number; y: number;
-  hp: number; maxHp: number;
-  atk: number; atkSpd: number; speed: number; range: number;
-  atkCd: number; retreatT: number; retreatCd: number;
-}
-export interface MonsterEntity {
-  type: MonsterId;
-  def: MonsterDef;
-  hp: number;
-  x: number; y: number;
-  atkCd: number;
-  spr: Phaser.GameObjects.Image;
-  dead?: boolean;
-}
-interface Arrow {
-  x: number; y: number;
-  tx: number; ty: number;
-  spr: Phaser.GameObjects.Image;
-  dmg: number;
-}
 
 export default class BattleScene extends Phaser.Scene {
   isFinal!: boolean;
@@ -83,14 +62,15 @@ export default class BattleScene extends Phaser.Scene {
   onRhythm!: (res: SkillOutcome) => void;
   chatT = 0;
 
-  constructor() { super('Battle'); }
+  constructor() {
+    super('Battle');
+  }
 
   create() {
     const S = gameState();
     this.isFinal = S.episode >= FINAL_EP;
 
-    const b = S.hero;
-    this.hero = { x: CX, y: 300, hp: b.maxHp, maxHp: b.maxHp, atk: b.atk, atkSpd: b.atkSpd, speed: b.speed, range: b.range, atkCd: 0, retreatT: 0, retreatCd: 0 };
+    this.hero = spawnHero(S.hero, { x: CX, y: 300 });
     this.monsters = [];
     this.arrows = [];
     this.viewers = 12;
@@ -106,7 +86,8 @@ export default class BattleScene extends Phaser.Scene {
     this.drift = 0;
     this.donateT = donationInterval(this.viewers);
     this.freezeUntil = 0;
-    this.D = 0; this.tier = hypeTier(0);
+    this.D = 0;
+    this.tier = hypeTier(0);
     this.over = false;
 
     this.available = (Object.keys(MONSTERS) as MonsterId[]).filter((k) => MONSTERS[k].unlock <= S.episode);
@@ -141,7 +122,11 @@ export default class BattleScene extends Phaser.Scene {
       if (digit >= 1 && digit <= this.available.length) this.summonRandom(this.available[digit - 1]);
     });
 
-    this.pushChat('시스템', this.isFinal ? '최종화 — 마왕이 직접 나선다!' : `${S.episode}화 방송이 시작되었습니다.`, '#888888');
+    this.pushChat(
+      '시스템',
+      this.isFinal ? '최종화 — 마왕이 직접 나선다!' : `${S.episode}화 방송이 시작되었습니다.`,
+      '#888888',
+    );
   }
 
   buildUI() {
@@ -155,7 +140,11 @@ export default class BattleScene extends Phaser.Scene {
     let bx = 20;
     this.available.forEach((k, i) => {
       const m = MONSTERS[k];
-      const btn = add.rectangle(bx, SUMMON_Y + 14, 150, 30, 0x2a2a3a).setOrigin(0).setDepth(6).setInteractive();
+      const btn = add
+        .rectangle(bx, SUMMON_Y + 14, 150, 30, 0x2a2a3a)
+        .setOrigin(0)
+        .setDepth(6)
+        .setInteractive();
       add.text(bx + 6, SUMMON_Y + 20, `${i + 1}.${m.name}`, { fontSize: '12px', color: '#ffffff' }).setDepth(7);
       btn.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => {
         ev.stopPropagation();
@@ -167,12 +156,19 @@ export default class BattleScene extends Phaser.Scene {
     this.selectType(this.selectedType);
 
     // 자동 소환 토글: 선택된 종류를 AUTO_INTERVAL 간격으로 랜덤 위치에 소환
-    this.autoBtn = add.rectangle(bx, SUMMON_Y + 14, 110, 30, 0x2a2a3a).setOrigin(0).setDepth(6).setInteractive();
+    this.autoBtn = add
+      .rectangle(bx, SUMMON_Y + 14, 110, 30, 0x2a2a3a)
+      .setOrigin(0)
+      .setDepth(6)
+      .setInteractive();
     this.autoLabel = add.text(bx + 8, SUMMON_Y + 20, '', { fontSize: '12px', color: '#ffffff' }).setDepth(7);
-    this.autoBtn.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => {
-      ev.stopPropagation();
-      this.toggleAuto();
-    });
+    this.autoBtn.on(
+      'pointerdown',
+      (_p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => {
+        ev.stopPropagation();
+        this.toggleAuto();
+      },
+    );
     this.renderAutoBtn();
   }
 
@@ -196,20 +192,23 @@ export default class BattleScene extends Phaser.Scene {
   trySummon(p: Phaser.Input.Pointer) {
     if (this.over) return;
     if (p.x < ARENA.x || p.x > ARENA.x + ARENA.w || p.y < ARENA.y || p.y > SUMMON_Y) return;
-    if (Phaser.Math.Distance.Between(p.x, p.y, this.hero.x, this.hero.y) < 150) {
+    if (Phaser.Math.Distance.Between(p.x, p.y, this.hero.x, this.hero.y) < SUMMON_MIN_RADIUS) {
       this.floatText(p.x, p.y, '용사와 너무 가까움!', '#ff6666');
       return;
     }
     this.doSummon(this.selectedType, p.x, p.y);
   }
 
-  // 숫자키/자동: 용사 반경 150px 밖 랜덤 지점에 즉시 소환
+  // 숫자키/자동: 용사 반경(SUMMON_MIN_RADIUS) 밖 랜덤 지점에 즉시 소환
   summonRandom(t: MonsterId) {
     if (this.over) return;
-    for (let i = 0; i < 10; i++) { // ponytail: 아레나가 넓어 몇 번 안에 성공, 실패 시 이번 입력 무시
+    for (let i = 0; i < 10; i++) {
+      // ponytail: 아레나가 넓어 몇 번 안에 성공, 실패 시 이번 입력 무시
       const x = Phaser.Math.Between(ARENA.x + 20, ARENA.x + ARENA.w - 20);
       const y = Phaser.Math.Between(ARENA.y + 20, SUMMON_Y - 20);
-      if (Phaser.Math.Distance.Between(x, y, this.hero.x, this.hero.y) >= 150) return this.doSummon(t, x, y);
+      if (Phaser.Math.Distance.Between(x, y, this.hero.x, this.hero.y) >= SUMMON_MIN_RADIUS) {
+        return this.doSummon(t, x, y);
+      }
     }
   }
 
@@ -238,7 +237,7 @@ export default class BattleScene extends Phaser.Scene {
       return;
     }
     const skill = SKILLS[Phaser.Utils.Array.GetRandom(gameState().skills)];
-    skill.effect(this, res.mult);
+    skill.effect(this.skillContext(), res.mult);
     this.cameras.main.flash(res.clear ? 400 : 150, 255, 255, 200);
     this.floatText(this.hero.x, this.hero.y - 40, `⚡ ${skill.name} ${res.grade} ×${res.mult}`, '#ffee44');
     if (res.clear) {
@@ -249,7 +248,9 @@ export default class BattleScene extends Phaser.Scene {
       }
     }
     this.time.delayedCall(300, () => {
-      this.children.list.filter((c) => (c as Phaser.GameObjects.Arc).fillColor === 0xffffaa).forEach((c) => c.destroy());
+      this.children.list
+        .filter((c) => (c as Phaser.GameObjects.Arc).fillColor === 0xffffaa)
+        .forEach((c) => c.destroy());
     });
   }
 
@@ -273,6 +274,26 @@ export default class BattleScene extends Phaser.Scene {
     this.pushChat('시스템', `마왕의 투자! ${u.name} 강화`, '#44ddff');
   }
 
+  // 스킬이 쓰는 좁은 표면. 씬 헬퍼를 SkillContext로 감싸 skills.ts가 BattleScene에 의존하지 않게 한다.
+  skillContext(): SkillContext {
+    return {
+      hero: this.hero,
+      monsters: this.monsters,
+      hit: (m, dmg) => this.hitFx(m, dmg),
+      fxCircle: (x, y, r) => {
+        this.add.circle(x, y, r, 0xffffaa, 0.8).setDepth(3);
+      },
+      heal: (ratio) => {
+        this.hero.hp = Math.min(this.hero.maxHp, this.hero.hp + this.hero.maxHp * ratio);
+      },
+      freeze: (ms) => {
+        this.freezeUntil = this.time.now + ms;
+      },
+      now: () => this.time.now,
+      randBetween: (a, b) => Phaser.Math.Between(a, b),
+    };
+  }
+
   hitFx(m: MonsterEntity, dmg: number) {
     this.damageMonster(m, dmg);
     this.add.circle(m.x, m.y, 14, 0xffffaa, 0.8).setDepth(3);
@@ -281,7 +302,9 @@ export default class BattleScene extends Phaser.Scene {
   damageMonster(m: MonsterEntity, dmg: number) {
     m.hp -= dmg;
     m.spr.setAlpha(0.5);
-    this.time.delayedCall(80, () => { if (m.spr.active) m.spr.setAlpha(1); });
+    this.time.delayedCall(80, () => {
+      if (m.spr.active) m.spr.setAlpha(1);
+    });
     if (m.hp <= 0 && !m.dead) {
       m.dead = true;
       gameState().addGold(m.def.gold);
@@ -290,7 +313,9 @@ export default class BattleScene extends Phaser.Scene {
     }
   }
 
-  pushChat(who: string, msg: string, color = '#cccccc') { bus.emit('chat:line', { who, msg, color }); }
+  pushChat(who: string, msg: string, color = '#cccccc') {
+    bus.emit('chat:line', { who, msg, color });
+  }
 
   randomViewer(): string | null {
     return this.audience.length ? Phaser.Utils.Array.GetRandom(this.audience) : null;
@@ -311,15 +336,17 @@ export default class BattleScene extends Phaser.Scene {
 
     if (this.autoOn) {
       this.autoT -= dt;
-      if (this.autoT <= 0) { this.summonRandom(this.selectedType); this.autoT = AUTO_INTERVAL; }
+      if (this.autoT <= 0) {
+        this.summonRandom(this.selectedType);
+        this.autoT = AUTO_INTERVAL;
+      }
     }
 
-    const near = this.monsters.filter((m) => !m.dead && Phaser.Math.Distance.Between(m.x, m.y, H.x, H.y) < 200).length;
-    this.D = danger(H.hp / H.maxHp, near);
-    this.tier = hypeTier(this.D);
-    this.drift = viewerDrift(this.drift, dt);
-    this.viewers = Math.max(MIN_VIEWERS, this.viewers * (1 + (this.tier.rate + this.drift) * dt));
-    this.peakViewers = Math.max(this.peakViewers, this.viewers);
+    const near = countNear(this.monsters, H);
+    // this는 { viewers, peakViewers, drift } 필드를 가져 ViewerState로 그대로 넘긴다.
+    const step = stepViewers(this, H.hp / H.maxHp, near, dt);
+    this.D = step.D;
+    this.tier = step.tier;
     this.updateCritical(dt);
     if (this.over) return;
 
@@ -346,16 +373,13 @@ export default class BattleScene extends Phaser.Scene {
 
   // ── 시청자 바닥 위기: 화면 흔들림 + 카운트다운, 회복 못 하면 방송 종료 (판정은 formulas.criticalStep) ──
   updateCritical(dt: number) {
-    if (this.critical) this.critT -= dt;
-    switch (criticalStep(this.viewers, this.critical, this.critT)) {
+    // 전이 적용(감소→분류→상태 반영)은 formulas.stepCritical이 담당. 여기선 연출만 반응.
+    // this는 { critical, critT } 필드를 가져 CritState로 그대로 넘긴다.
+    switch (stepCritical(this, this.viewers, dt)) {
       case 'enter':
-        this.critical = true;
-        this.critT = CRIT_TIME;
         this.pushChat('시스템', `⚠ 시청자가 다 나갔다! ${CRIT_TIME}초 안에 판을 키워라`, '#ff4444');
         break;
       case 'exit':
-        this.critical = false;
-        this.critT = 0;
         this.pushChat('시스템', '시청자가 돌아오기 시작했다', '#44ddff');
         break;
       case 'fail':
@@ -380,49 +404,17 @@ export default class BattleScene extends Phaser.Scene {
 
   updateHero(dt: number, nearCount: number) {
     const H = this.hero;
-    const alive = this.monsters.filter((m) => !m.dead);
-    H.atkCd = Math.max(0, H.atkCd - dt);
-    H.retreatT = Math.max(0, H.retreatT - dt);
-    H.retreatCd = Math.max(0, H.retreatCd - dt);
-
-    if (nearCount === 0) H.hp = Math.min(H.maxHp, H.hp + H.maxHp * 0.1 * dt);
-    if (H.hp / H.maxHp <= 0.25 && H.retreatCd <= 0) { H.retreatT = 2; H.retreatCd = 6; }
-
-    let vx = 0, vy = 0;
-    if (H.retreatT > 0 && alive.length) {
-      let sx = 0, sy = 0;
-      for (const m of alive) { sx += H.x - m.x; sy += H.y - m.y; }
-      const len = Math.hypot(sx, sy) || 1;
-      vx = (sx / len) * H.speed; vy = (sy / len) * H.speed;
-    } else {
-      let target: MonsterEntity | null = null, best = 300;
-      for (const m of alive) {
-        const d = Phaser.Math.Distance.Between(m.x, m.y, H.x, H.y);
-        if (d < best) { best = d; target = m; }
-      }
-      if (target) {
-        const d = best;
-        if (d > H.range) {
-          vx = ((target.x - H.x) / d) * H.speed;
-          vy = ((target.y - H.y) / d) * H.speed;
-        } else if (H.atkCd <= 0) {
-          H.atkCd = 1 / H.atkSpd;
-          this.damageMonster(target, H.atk);
-        }
-      } else if (Phaser.Math.Distance.Between(H.x, H.y, CX, 300) > 20) {
-        const d = Phaser.Math.Distance.Between(H.x, H.y, CX, 300);
-        vx = ((CX - H.x) / d) * H.speed * 0.5;
-        vy = ((300 - H.y) / d) * H.speed * 0.5;
-      }
-    }
-    H.x = clamp(H.x + vx * dt, ARENA.x + 20, ARENA.x + ARENA.w - 20);
-    H.y = clamp(H.y + vy * dt, ARENA.y + 20, SUMMON_Y - 20);
+    // 결정 로직은 battleSim.stepHero(순수). 씬은 결과를 스프라이트에 반영 + 공격만 처리.
+    const intent = stepHero(H, this.monsters, nearCount, dt, { x: CX, y: 300 }, arenaBounds);
+    if (intent.attack) this.damageMonster(intent.attack, H.atk);
     this.heroSpr.setPosition(H.x, H.y);
-    if (vx) this.heroSpr.setFlipX(vx < 0);
+    if (intent.moved) this.heroSpr.setFlipX(intent.movingLeft);
 
     this.heroHpBar.clear();
     this.heroHpBar.fillStyle(0x000000).fillRect(H.x - 16, H.y - 22, 32, 5);
-    this.heroHpBar.fillStyle(H.hp / H.maxHp > 0.25 ? 0x44ff66 : 0xff4444).fillRect(H.x - 15, H.y - 21, 30 * (H.hp / H.maxHp), 3);
+    this.heroHpBar
+      .fillStyle(H.hp / H.maxHp > 0.25 ? 0x44ff66 : 0xff4444)
+      .fillRect(H.x - 15, H.y - 21, 30 * (H.hp / H.maxHp), 3);
   }
 
   updateMonsters(dt: number) {
@@ -430,23 +422,25 @@ export default class BattleScene extends Phaser.Scene {
     this.monsters = this.monsters.filter((m) => !m.dead);
     if (this.time.now < this.freezeUntil) return; // 시간 정지
     for (const m of this.monsters) {
-      m.atkCd = Math.max(0, m.atkCd - dt);
-      const d = Phaser.Math.Distance.Between(m.x, m.y, H.x, H.y);
-      if (d > m.def.range) {
-        m.x += ((H.x - m.x) / d) * m.def.speed * dt;
-        m.y += ((H.y - m.y) / d) * m.def.speed * dt;
-        m.spr.setPosition(m.x, m.y);
-        m.spr.setFlipX(H.x < m.x);
-      } else if (m.atkCd <= 0) {
-        m.atkCd = m.def.atkCd;
-        if (m.def.ranged) {
-          const spr = this.add.image(m.x, m.y, 'arrow').setDepth(2).setScale(0.7);
-          spr.setRotation(Math.atan2(H.y - m.y, H.x - m.x) + Math.PI / 2);
-          this.arrows.push({ x: m.x, y: m.y, tx: H.x, ty: H.y, spr, dmg: m.def.dmg });
-        } else {
-          H.hp -= m.def.dmg;
-          if (m.def.suicide) { m.dead = true; m.spr.destroy(); }
+      const intent = stepMonster(m, H, dt); // 결정은 순수, 씬은 스프라이트/피격만 적용
+      switch (intent.kind) {
+        case 'move':
+          m.spr.setPosition(m.x, m.y);
+          m.spr.setFlipX(intent.flipLeft);
+          break;
+        case 'arrow': {
+          const spr = this.add.image(intent.x, intent.y, 'arrow').setDepth(2).setScale(0.7);
+          spr.setRotation(Math.atan2(intent.ty - intent.y, intent.tx - intent.x) + Math.PI / 2);
+          this.arrows.push({ x: intent.x, y: intent.y, tx: intent.tx, ty: intent.ty, spr, dmg: intent.dmg });
+          break;
         }
+        case 'melee':
+          H.hp -= intent.dmg;
+          if (intent.suicide) {
+            m.dead = true;
+            m.spr.destroy();
+          }
+          break;
       }
     }
   }
@@ -454,16 +448,14 @@ export default class BattleScene extends Phaser.Scene {
   updateArrows(dt: number) {
     const H = this.hero;
     this.arrows = this.arrows.filter((a) => {
-      const d = Phaser.Math.Distance.Between(a.x, a.y, a.tx, a.ty);
-      if (d < 8) {
-        if (Phaser.Math.Distance.Between(a.tx, a.ty, H.x, H.y) < 30) H.hp -= a.dmg;
-        a.spr.destroy();
-        return false;
+      const res = stepArrow(a, H, dt);
+      if (res === 'travel') {
+        a.spr.setPosition(a.x, a.y);
+        return true;
       }
-      a.x += ((a.tx - a.x) / d) * 300 * dt;
-      a.y += ((a.ty - a.y) / d) * 300 * dt;
-      a.spr.setPosition(a.x, a.y);
-      return true;
+      if (res !== 'expire') H.hp -= res.hit; // 명중이면 용사 피격
+      a.spr.destroy();
+      return false;
     });
   }
 
@@ -474,15 +466,19 @@ export default class BattleScene extends Phaser.Scene {
     this.chatT = 1 / lps;
     const who = this.randomViewer();
     if (!who) return; // 아무도 없으면 채팅도 없다
-    const pool = D < 0.2 ? CHAT_POOLS.boring : D < 0.75 ? CHAT_POOLS.normal : CHAT_POOLS.hot;
-    const color = D >= 0.75 ? '#ff9966' : D < 0.2 ? '#7777aa' : '#cccccc';
-    this.pushChat(who, Phaser.Utils.Array.GetRandom(pool), color);
+    const { pool, color } = pickChatMood(D);
+    this.pushChat(who, Phaser.Utils.Array.GetRandom(pool as string[]), color);
   }
 
   endRun(outcome: RunOutcome) {
     this.over = true;
     this.cameras.main.shakeEffect.reset();
-    gameState().recordRun({ outcome, peakViewers: this.peakViewers, totalDonated: this.totalDonated, kills: this.kills });
+    gameState().recordRun({
+      outcome,
+      peakViewers: this.peakViewers,
+      totalDonated: this.totalDonated,
+      kills: this.kills,
+    });
     const cleared = outcome === 'clear';
     if (outcome === 'death') {
       const who = this.randomViewer();

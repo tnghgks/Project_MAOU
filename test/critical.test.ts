@@ -1,16 +1,19 @@
 import assert from 'node:assert';
-import { criticalStep, viewerAlert, MIN_VIEWERS, WARN_VIEWERS, CRIT_TIME, CRIT_ESCAPE } from '../src/formulas.ts';
+import {
+  criticalStep,
+  stepCritical,
+  viewerAlert,
+  MIN_VIEWERS,
+  WARN_VIEWERS,
+  CRIT_TIME,
+  CRIT_ESCAPE,
+} from '../src/formulas.ts';
 
 // 시청자 바닥 위기 상태머신 — 게임 오버를 유발하는 분기라 브라우저 없이도 돌려볼 수 있어야 한다.
-// BattleScene.updateCritical과 동일한 순서(감소 → 판정)로 한 프레임을 재현.
+// 전이 로직은 BattleScene.updateCritical과 동일한 formulas.stepCritical을 공유한다(재구현 금지).
 type Sim = { viewers: number; critical: boolean; critT: number; ended: boolean };
 function tick(s: Sim, dt: number) {
-  if (s.critical) s.critT -= dt;
-  switch (criticalStep(s.viewers, s.critical, s.critT)) {
-    case 'enter': s.critical = true; s.critT = CRIT_TIME; break;
-    case 'exit': s.critical = false; s.critT = 0; break;
-    case 'fail': s.ended = true; break;
-  }
+  if (stepCritical(s, s.viewers, dt) === 'fail') s.ended = true;
 }
 const make = (viewers: number): Sim => ({ viewers, critical: false, critT: 0, ended: false });
 
@@ -99,8 +102,14 @@ assert.strictEqual(viewerAlert(WARN_VIEWERS + 10, true), 'critical');
     if (a === 'warn' && warnedAt === null) warnedAt = s.viewers;
     if (a === 'critical' && critAt === null) critAt = s.viewers;
   }
-  assert.ok(warnedAt !== null && Math.floor(warnedAt) === WARN_VIEWERS, `경고는 표시 ${WARN_VIEWERS}명에서 (실제 ${warnedAt})`);
-  assert.ok(critAt !== null && Math.floor(critAt) === MIN_VIEWERS, `카운트다운은 표시 ${MIN_VIEWERS}명에서 (실제 ${critAt})`);
+  assert.ok(
+    warnedAt !== null && Math.floor(warnedAt) === WARN_VIEWERS,
+    `경고는 표시 ${WARN_VIEWERS}명에서 (실제 ${warnedAt})`,
+  );
+  assert.ok(
+    critAt !== null && Math.floor(critAt) === MIN_VIEWERS,
+    `카운트다운은 표시 ${MIN_VIEWERS}명에서 (실제 ${critAt})`,
+  );
   assert.strictEqual(s.ended, true, '회복 없으면 결국 방송 종료');
 }
 

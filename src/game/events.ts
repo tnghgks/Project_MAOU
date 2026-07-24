@@ -15,7 +15,7 @@ export interface Donation {
   donor: string;
 }
 
-interface BusEvents {
+export interface BusEvents {
   'chat:line': ChatLine;
   'donation:arrive': Donation;
   'rhythm:result': SkillOutcome;

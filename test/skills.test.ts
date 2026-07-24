@@ -1,0 +1,96 @@
+import assert from 'node:assert';
+import { SKILLS } from '../src/data/skills.ts';
+import { spawnHero, type HeroEntity, type MonsterEntity, type SkillContext } from '../src/game/entities.ts';
+import { MONSTERS } from '../src/data/monsters.ts';
+import { arenaBounds } from '../src/game/layout.ts';
+
+// 스킬 effect는 이제 SkillContext 표면만 쓴다 → 라이브 Phaser 씬 없이 가짜 ctx로 검증 가능.
+type Calls = {
+  hit: Array<{ m: MonsterEntity; dmg: number }>;
+  fxCircle: Array<{ x: number; y: number; r: number }>;
+  heal: number[];
+  freeze: number[];
+  rand: Array<{ a: number; b: number }>;
+};
+
+// spr은 스킬 로직이 건드리지 않으므로 빈 객체로 스텁.
+const mon = (x: number, y: number, hp = 50): MonsterEntity => ({
+  type: 'slime',
+  def: MONSTERS.slime,
+  hp,
+  x,
+  y,
+  atkCd: 0,
+  spr: {} as MonsterEntity['spr'],
+});
+
+function makeCtx(hero: HeroEntity, monsters: MonsterEntity[], randValue = 100) {
+  const calls: Calls = { hit: [], fxCircle: [], heal: [], freeze: [], rand: [] };
+  const ctx: SkillContext = {
+    hero,
+    monsters,
+    hit: (m, dmg) => calls.hit.push({ m, dmg }),
+    fxCircle: (x, y, r) => calls.fxCircle.push({ x, y, r }),
+    heal: (ratio) => {
+      calls.heal.push(ratio);
+      hero.hp = Math.min(hero.maxHp, hero.hp + hero.maxHp * ratio); // 씬 impl과 동일한 clamp 계약
+    },
+    freeze: (ms) => calls.freeze.push(ms),
+    now: () => 0,
+    randBetween: (a, b) => {
+      calls.rand.push({ a, b });
+      return randValue;
+    },
+  };
+  return { ctx, calls };
+}
+
+// 화염참격: hero 반경 180 이내만 40*mult로 타격
+{
+  const hero = spawnHero({ maxHp: 100, atk: 10, atkSpd: 1, speed: 100, range: 60 }, { x: 0, y: 0 });
+  const inRange = mon(100, 0); // 거리 100 ≤ 180
+  const outRange = mon(300, 0); // 거리 300 > 180
+  const { ctx, calls } = makeCtx(hero, [inRange, outRange]);
+  SKILLS.화염참격.effect(ctx, 2);
+  assert.strictEqual(calls.hit.length, 1, '반경 내 1마리만 타격');
+  assert.strictEqual(calls.hit[0].m, inRange);
+  assert.strictEqual(calls.hit[0].dmg, 80, '40 * mult(2)');
+}
+
+// 낙뢰: 5개 지점 강타 → fxCircle 5회, 경계는 arenaBounds. randBetween를 몬스터 좌표로 고정하면 5회 명중
+{
+  const hero = spawnHero({ maxHp: 100, atk: 10, atkSpd: 1, speed: 100, range: 60 }, { x: 0, y: 0 });
+  const target = mon(100, 100);
+  const { ctx, calls } = makeCtx(hero, [target], 100); // 모든 강타가 (100,100)
+  SKILLS.낙뢰.effect(ctx, 1);
+  assert.strictEqual(calls.fxCircle.length, 5, '5개 지점 연출');
+  assert.strictEqual(calls.hit.length, 5, '(100,100)에 있는 몬스터가 5회 피격');
+  assert.strictEqual(calls.hit[0].dmg, 35, '35 * mult(1)');
+  // 아레나 경계로 난수를 뽑는다 (버그 수정: 우측 1/3까지 커버)
+  assert.deepStrictEqual(calls.rand[0], { a: arenaBounds.minX, b: arenaBounds.maxX });
+  assert.deepStrictEqual(calls.rand[1], { a: arenaBounds.minY, b: arenaBounds.maxY });
+}
+
+// 회복의성가: heal(0.3) — maxHp의 30% 회복, 상한 clamp
+{
+  const hero = spawnHero({ maxHp: 100, atk: 10, atkSpd: 1, speed: 100, range: 60 }, { x: 0, y: 0 });
+  hero.hp = 10;
+  const { ctx, calls } = makeCtx(hero, []);
+  SKILLS.회복의성가.effect(ctx); // mult 무시하는 스킬
+  assert.deepStrictEqual(calls.heal, [0.3]);
+  assert.strictEqual(hero.hp, 40, '10 + 100*0.3');
+
+  hero.hp = 90;
+  SKILLS.회복의성가.effect(ctx);
+  assert.strictEqual(hero.hp, 100, 'maxHp에서 clamp');
+}
+
+// 시간정지: freeze(3000)
+{
+  const hero = spawnHero({ maxHp: 100, atk: 10, atkSpd: 1, speed: 100, range: 60 }, { x: 0, y: 0 });
+  const { ctx, calls } = makeCtx(hero, []);
+  SKILLS.시간정지.effect(ctx); // mult 무시하는 스킬
+  assert.deepStrictEqual(calls.freeze, [3000]);
+}
+
+console.log('skills OK');
