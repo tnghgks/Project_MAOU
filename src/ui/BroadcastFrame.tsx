@@ -3,18 +3,9 @@ import { useStore } from 'zustand';
 import { gameStore } from '../game/store.ts';
 import ChatPanel from './ChatPanel.tsx';
 
-// 실제 스트리밍 플랫폼 레이아웃(상단바 / 추천채널 / 플레이어 / 방송정보 / 채팅)을 흉내낸 껍데기.
+// 실제 스트리밍 플랫폼 레이아웃(상단바 / 플레이어 / 방송정보 / 채팅)을 흉내낸 껍데기.
 // 게임 캔버스와 오버레이는 children으로 .screen 안에 들어간다 — 좌표계(1280x720 %)는 그대로 유지.
-// ponytail: 사이드바 채널·검색창은 분위기용 정적 장식 — 게임 로직 없음
-const CHANNELS = [
-  { icon: '🗡', name: '용사길드 공식', live: true },
-  { icon: '🧪', name: '슬라임연구소', live: true },
-  { icon: '🛡', name: '기사단 훈련소', live: true },
-  { icon: '💰', name: '던전 시세방송', live: false },
-  { icon: '🎵', name: '음유시인 라디오', live: false },
-];
-const SHORTCUTS = ['🎮 마족 게임', '🏆 e스포츠', '📺 오리지널', '💻 PC방'];
-
+// ponytail: 검색창은 분위기용 정적 장식 — 게임 로직 없음
 export default function BroadcastFrame({ children }: { children: ReactNode }) {
   const phase = useStore(gameStore, (s) => s.phase);
   const episode = useStore(gameStore, (s) => s.episode);
@@ -35,29 +26,6 @@ export default function BroadcastFrame({ children }: { children: ReactNode }) {
           {showChat ? '💬 채팅 숨기기' : '💬 채팅 보기'}
         </button>
       </header>
-
-      <nav className="nav">
-        <p className="nav-title">추천 채널</p>
-        <ul className="nav-list">
-          <li className="me">
-            <span className="ico">👑</span>마왕
-            <span className="live-dot" />
-          </li>
-          {CHANNELS.map((c) => (
-            <li key={c.name}>
-              <span className="ico">{c.icon}</span>
-              {c.name}
-              {c.live && <span className="live-dot" />}
-            </li>
-          ))}
-        </ul>
-        <p className="nav-title">서비스 바로가기</p>
-        <ul className="nav-list">
-          {SHORTCUTS.map((s) => (
-            <li key={s}>{s}</li>
-          ))}
-        </ul>
-      </nav>
 
       <main className="player">
         <div className="stage">

@@ -49,13 +49,12 @@ button {
   font: inherit;
 }
 
-/* ── 방송 플랫폼 껍데기: 상단바 / 추천채널 / 플레이어 / 채팅 ── */
+/* ── 방송 플랫폼 껍데기: 상단바 / 플레이어 / 채팅 ── */
 .site {
   height: 100%;
   display: grid;
-  grid-template-columns: 200px 1fr;
   grid-template-rows: var(--top-h) 1fr;
-  grid-template-areas: 'top top' 'nav player';
+  grid-template-areas: 'top' 'player';
 }
 .site > * {
   min-width: 0;
@@ -111,56 +110,6 @@ button {
   color: var(--brand);
 }
 
-/* 좌측 채널 목록 */
-.nav {
-  grid-area: nav;
-  background: var(--panel);
-  border-right: 1px solid var(--line);
-  overflow-y: auto;
-  padding: 12px 0;
-}
-.nav-title {
-  padding: 10px 14px 6px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--muted);
-}
-.nav-list {
-  list-style: none;
-}
-.nav-list li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 14px;
-  font-size: 12.5px;
-  color: #c9cbcf;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.nav-list li:hover {
-  background: #26264a;
-}
-.nav-list .me {
-  color: var(--brand);
-  font-weight: 700;
-}
-.ico {
-  flex: 0 0 22px;
-  height: 22px;
-  background: #2b2d51;
-  display: grid;
-  place-items: center;
-  font-size: 12px;
-}
-.live-dot {
-  margin-left: auto;
-  width: 6px;
-  height: 6px;
-  background: #ff4d4d;
-}
-
 /* 플레이어 + 방송 정보 */
 .player {
   grid-area: player;
@@ -175,11 +124,12 @@ button {
   place-items: center;
   background: #000;
 }
-/* 16:9 유지 레터박스: 높이가 모자라면 폭이 먼저 줄어든다 */
+/* 남는 가로를 전부 쓴다 — 비율은 Phaser Scale.FIT이 잡는다.
+   캔버스 좌표계 폭이 창 비율을 따라가므로(game/layout.ts) 남는 레터박스는 타일 한 칸 이하 */
 .screen {
   position: relative;
-  width: min(100%, calc((100vh - var(--chrome-h)) * 16 / 9));
-  aspect-ratio: 16 / 9;
+  width: 100%;
+  height: calc(100vh - var(--chrome-h));
 }
 .canvas-layer {
   position: absolute;
@@ -187,9 +137,7 @@ button {
 }
 .canvas-layer canvas {
   display: block;
-  image-rendering: pixelated; /* CSS로 늘린 캔버스는 브라우저가 뭉갠다 — 여기서 막는다 */
-  width: 100% !important;
-  height: 100% !important;
+  image-rendering: pixelated; /* 정수배가 아닌 확대는 브라우저가 뭉갠다 — 여기서 막는다 */
 }
 
 .meta {
@@ -254,24 +202,6 @@ button {
   background: #22223a;
   color: var(--muted);
   cursor: default;
-}
-
-.nav::-webkit-scrollbar {
-  width: 6px;
-}
-.nav::-webkit-scrollbar-thumb {
-  background: #333;
-}
-
-/* 좁은 화면: 추천 채널부터 접는다 */
-@media (max-width: 1100px) {
-  .site {
-    grid-template-columns: 1fr;
-    grid-template-areas: 'top' 'player';
-  }
-  .nav {
-    display: none;
-  }
 }
 
 /* ── 오버레이 채팅: 방송 화면 위 반투명, 아래에서 위로 쌓인다 ── */

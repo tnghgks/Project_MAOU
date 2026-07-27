@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { clamp, type ViewerAlert } from '../formulas.ts';
 import { gameState } from '../game/store.ts';
-import { ARENA, CX } from '../game/layout.ts';
+import { ARENA, CANVAS, CX } from '../game/layout.ts';
 import type BattleScene from './BattleScene.ts';
 
 const ALERT_COLORS: Record<ViewerAlert, string> = { normal: '#ffffff', warn: '#ff9933', critical: '#ff4444' };
@@ -26,10 +26,13 @@ export default class HudScene extends Phaser.Scene {
     this.battle = this.scene.get('Battle') as BattleScene;
     const add = this.add;
 
-    add.rectangle(640, 20, 1280, 40, 0x1a1a24).setDepth(5); // 상단바 bg
+    add.rectangle(CX, 20, CANVAS.W, 40, 0x1a1a24).setDepth(5); // 상단바 bg
     this.viewerText = add.text(16, 10, '', { fontSize: '18px', color: '#ffffff' }).setDepth(6);
     this.goldText = add.text(220, 10, '', { fontSize: '18px', color: '#ffdd44' }).setDepth(6);
-    this.targetText = add.text(1264, 10, '', { fontSize: '18px', color: '#ffffff' }).setOrigin(1, 0).setDepth(6); // 우측 정렬 — 보스 이름 길이가 들쭉날쭉
+    this.targetText = add
+      .text(CANVAS.W - 16, 10, '', { fontSize: '18px', color: '#ffffff' })
+      .setOrigin(1, 0)
+      .setDepth(6); // 우측 정렬 — 보스 이름 길이가 들쭉날쭉
     // 시청자 바닥 위기 카운트다운 (좌상단, 상단바 바로 아래)
     this.critText = add
       .text(16, 50, '', { fontSize: '26px', fontStyle: 'bold', color: '#ff4444' })
