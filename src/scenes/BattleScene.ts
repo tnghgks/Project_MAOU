@@ -24,6 +24,18 @@ import { UPGRADES, type UpgradeKey } from '../data/upgrades.ts';
 import { RARITY, type Card } from '../data/cards.ts';
 import { SKILLS } from '../data/skills.ts';
 import { CHAT_POOLS, pickChatMood } from '../data/chat.ts';
+import {
+  pickRequest,
+  stepRequest,
+  reqProgress,
+  REQ_FIRST,
+  REQ_GAP,
+  REQ_WIN,
+  REQ_LOSE,
+  type ActiveRequest,
+  type ReqCtx,
+  type RequestDef,
+} from '../data/requests.ts';
 import { FINAL_EP, targetGold, bossOf } from '../data/progression.ts';
 import type { RunOutcome } from '../game/store.ts';
 
@@ -88,6 +100,10 @@ export default class BattleScene extends Phaser.Scene {
   heroHpBar!: Phaser.GameObjects.Graphics;
   pendingSkill: SkillOutcome | null = null; // 리액션 리듬 결과 — 전투 재개 시점에 발동
   chatT = 0;
+  req: ActiveRequest | null = null; // 진행 중인 시청자 요청 (HudScene가 읽어 배너 렌더)
+  reqPct = 0; // 요청 진행률 0~1 — HUD용 캐시
+  reqT!: number; // 다음 요청까지
+  lastReq: RequestDef | null = null; // 직전 요청 (연속 출제 방지)
 
   constructor() {
     super('Battle');
@@ -118,6 +134,10 @@ export default class BattleScene extends Phaser.Scene {
     this.D = 0;
     this.tier = hypeTier(0);
     this.over = false;
+    this.req = null;
+    this.reqPct = 0;
+    this.reqT = REQ_FIRST;
+    this.lastReq = null;
 
     this.available = (Object.keys(MONSTERS) as MonsterId[]).filter((k) => MONSTERS[k].unlock <= S.episode);
     this.dragging = null;
@@ -469,6 +489,7 @@ export default class BattleScene extends Phaser.Scene {
     const step = stepViewers(this, H.hp / H.maxHp, near, dt);
     this.D = step.D;
     this.tier = step.tier;
+    this.updateRequest(dt); // 위기 판정 전 — 요청 보상이 그 프레임의 시청자 수에 바로 반영된다
     this.updateCritical(dt);
     if (this.over) return;
 
@@ -594,6 +615,50 @@ export default class BattleScene extends Phaser.Scene {
     if (!who) return; // 아무도 없으면 채팅도 없다
     const { pool, color } = pickChatMood(D);
     this.pushChat(who, Phaser.Utils.Array.GetRandom(pool as string[]), color);
+  }
+
+  // ── 시청자 요청: 채팅으로 요구가 뜨고 제한시간 안에 조건을 채우면 시청자가 몰린다 ──
+  // 판정은 requests.stepRequest(순수). 씬은 출제 타이밍과 연출만 소유.
+  updateRequest(dt: number) {
+    if (this.req) {
+      const c = this.reqCtx(this.req);
+      this.reqPct = reqProgress(this.req, c);
+      const ev = stepRequest(this.req, c, dt);
+      if (ev) this.endRequest(ev === 'success');
+      return;
+    }
+    this.reqT -= dt;
+    if (this.reqT > 0) return;
+    const def = pickRequest(this.available, Math.random, this.lastReq ?? undefined);
+    if (!def) return;
+    this.req = { def, t: def.dur, kills0: this.kills };
+    this.reqPct = 0;
+    this.lastReq = def;
+    this.pushChat(this.randomViewer() ?? '시청자', `📢 ${def.text}`, '#66ddff');
+  }
+
+  reqCtx(r: ActiveRequest): ReqCtx {
+    const alive = this.monsters.filter((m) => !m.dead); // 같은 프레임에 죽은 몬스터는 아직 배열에 남아있다
+    return {
+      count: (t) => alive.filter((m) => m.type === t).length,
+      total: alive.length,
+      hpRatio: this.hero.hp / this.hero.maxHp,
+      killsSince: this.kills - r.kills0,
+    };
+  }
+
+  endRequest(ok: boolean) {
+    this.req = null;
+    this.reqT = REQ_GAP;
+    this.viewers = Math.max(MIN_VIEWERS, this.viewers * (ok ? REQ_WIN : REQ_LOSE));
+    if (ok) {
+      this.pushChat('시스템', '📢 요청 달성! 시청자가 몰려온다', '#66ddff');
+      this.floatText(this.hero.x, this.hero.y - 60, '📢 요청 달성!', '#66ddff');
+      const who = this.randomViewer();
+      if (who) this.pushChat(who, Phaser.Utils.Array.GetRandom(CHAT_POOLS.allperfect as string[]), '#66ddff');
+    } else {
+      this.pushChat('시스템', '📢 요청 실패... 시청자가 나간다', '#ff9933');
+    }
   }
 
   endRun(outcome: RunOutcome) {

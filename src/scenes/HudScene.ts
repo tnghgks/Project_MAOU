@@ -16,6 +16,7 @@ export default class HudScene extends Phaser.Scene {
   hypeBar!: Phaser.GameObjects.Rectangle;
   hypeLabel!: Phaser.GameObjects.Text;
   vignette!: Phaser.GameObjects.Rectangle;
+  reqText!: Phaser.GameObjects.Text;
 
   constructor() {
     super('Hud');
@@ -39,6 +40,19 @@ export default class HudScene extends Phaser.Scene {
     this.hypeBar = add.rectangle(452, 20, 0, 12, 0xff8822).setOrigin(0, 0.5).setDepth(7);
     this.hypeLabel = add.text(670, 10, '', { fontSize: '16px', color: '#ffffff' }).setDepth(6);
 
+    // 시청자 요청 배너 (아레나 상단 중앙 — critText는 좌측이라 안 겹친다)
+    this.reqText = add
+      .text(CX, 48, '', {
+        fontSize: '16px',
+        fontStyle: 'bold',
+        color: '#66ddff',
+        backgroundColor: '#0a1c26',
+        padding: { x: 10, y: 5 },
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(9)
+      .setVisible(false);
+
     // 벼랑끝 비네팅
     this.vignette = add.rectangle(CX, ARENA.y + ARENA.h / 2, ARENA.w, ARENA.h, 0xff0000, 0).setDepth(4);
   }
@@ -56,6 +70,13 @@ export default class HudScene extends Phaser.Scene {
           : `🎯 ${Math.floor(b.killGold).toLocaleString()} / ${b.target.toLocaleString()}G`,
       )
       .setColor(b.boss ? '#ff4444' : '#ffffff');
+    const r = b.req;
+    this.reqText.setVisible(!!r);
+    if (r) {
+      this.reqText
+        .setText(`📢 ${r.def.text}   ${Math.round(b.reqPct * 100)}%   ${Math.max(0, r.t).toFixed(1)}s`)
+        .setColor(r.t <= 5 ? '#ff9933' : '#66ddff'); // 5초 남으면 주황
+    }
     this.critText.setVisible(b.critical);
     if (b.critical) this.critText.setText(`⚠ 방송 폐지까지 ${Math.max(0, b.critT).toFixed(1)}초`);
     this.hypeBar.width = 200 * clamp(b.D, 0, 1);
