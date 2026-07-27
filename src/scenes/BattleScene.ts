@@ -81,8 +81,8 @@ export default class BattleScene extends Phaser.Scene {
   viewerSyncT!: number;
   totalDonated!: number;
   kills!: number;
-  killGold!: number; // 몬스터 처치로 번 골드 — 보스 등장 게이지 (후원은 안 들어간다)
-  target!: number; // 보스 등장 조건: killGold 목표
+  killGold!: number; // 몬스터 처치로 번 골드
+  target!: number; // 보스 등장 조건: stageGold 목표
   boss!: MonsterEntity | null; // 등장 후 유지 — 죽으면 스테이지 클리어
   critical = false; // 시청자 바닥 위기 (카운트다운 진행 중)
   critT = 0;
@@ -105,6 +105,11 @@ export default class BattleScene extends Phaser.Scene {
   reqPct = 0; // 요청 진행률 0~1 — HUD용 캐시
   reqT!: number; // 다음 요청까지
   lastReq: RequestDef | null = null; // 직전 요청 (연속 출제 방지)
+
+  // 보스 등장 게이지 = 처치 골드 + 후원 골드. 누적기를 따로 두면 어긋나므로 파생값으로만 읽는다.
+  get stageGold(): number {
+    return this.killGold + this.totalDonated;
+  }
 
   constructor() {
     super('Battle');
@@ -479,7 +484,7 @@ export default class BattleScene extends Phaser.Scene {
 
     if (this.boss) {
       if (this.boss.dead) return this.endRun('clear');
-    } else if (this.killGold >= this.target) {
+    } else if (this.stageGold >= this.target) {
       this.spawnBoss();
     }
 

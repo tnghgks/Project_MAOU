@@ -1,9 +1,8 @@
 import type { MonsterId } from './monsters.ts';
 
 // GDD 6장 진행 구조. 승리 조건 2단계 (시간 제한 없음):
-//   1) 몬스터 처치 골드가 targetGold 도달 → 보스 등장
+//   1) 몬스터 처치 골드 + 후원 골드가 targetGold 도달 → 보스 등장
 //   2) 보스 격파 → 스테이지 클리어
-// 후원 골드는 게이지에 안 들어간다 (강화 재화 전용).
 export interface EpisodeDef {
   targetGold: number;
   boss: MonsterId;

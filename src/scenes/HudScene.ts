@@ -62,12 +62,12 @@ export default class HudScene extends Phaser.Scene {
     if (!b || !b.hero) return;
     this.viewerText.setText(`👁 ${Math.floor(b.viewers).toLocaleString()}`).setColor(ALERT_COLORS[b.alert]);
     this.goldText.setText(`💰 ${Math.floor(gameState().gold).toLocaleString()}G`);
-    // 보스 등장 전엔 처치 골드 게이지, 등장 후엔 보스 HP
+    // 보스 등장 전엔 스테이지 골드(처치+후원) 게이지, 등장 후엔 보스 HP
     this.targetText
       .setText(
         b.boss
           ? `☠ ${b.boss.def.name} ${Math.max(0, Math.ceil(b.boss.hp)).toLocaleString()} / ${b.boss.def.hp.toLocaleString()}`
-          : `🎯 ${Math.floor(b.killGold).toLocaleString()} / ${b.target.toLocaleString()}G`,
+          : `🎯 ${Math.floor(b.stageGold).toLocaleString()} / ${b.target.toLocaleString()}G`,
       )
       .setColor(b.boss ? '#ff4444' : '#ffffff');
     const r = b.req;
