@@ -6,8 +6,8 @@ const LANE_Y = 640;
 const HIT_X = 140;
 const NOTE_SPEED = 400; // px/s
 const BEAT = 60 / 128; // 128 BPM
-const KEYS = ['D', 'F', 'J', 'K'];
-const KEY_COLORS: Record<string, number> = { D: 0xff5555, F: 0x55ff88, J: 0x5599ff, K: 0xffcc44 };
+const KEYS = ['Q', 'W', 'E', 'R'];
+const KEY_COLORS: Record<string, number> = { Q: 0xff5555, W: 0x55ff88, E: 0x5599ff, R: 0xffcc44 };
 
 interface Note {
   key: string;
@@ -17,7 +17,7 @@ interface Note {
   done: boolean;
 }
 
-// 도네이션 시 하단 레인에 노트 생성 → DFJK 판정 → 결과를 bus로 BattleScene에 전달.
+// 도네이션 시 하단 레인에 노트 생성 → QWER 판정 → 결과를 bus로 BattleScene에 전달.
 export default class RhythmScene extends Phaser.Scene {
   notes!: Note[];
   noteResults!: Judgement[];
@@ -32,7 +32,7 @@ export default class RhythmScene extends Phaser.Scene {
     const add = this.add;
     add.rectangle(640, (LANE_Y + 720) / 2, 1280, 720 - LANE_Y, 0x0d0d14).setDepth(5);
     add.circle(HIT_X, LANE_Y + 40, 24).setStrokeStyle(3, 0xffffff).setDepth(6);
-    add.text(20, LANE_Y + 30, 'DFJK▶', { fontSize: '16px', color: '#555566' }).setDepth(6);
+    add.text(20, LANE_Y + 30, 'QWER▶', { fontSize: '16px', color: '#555566' }).setDepth(6);
     this.judgeText = add.text(HIT_X, LANE_Y + 8, '', { fontSize: '16px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5).setDepth(8);
 
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
