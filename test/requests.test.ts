@@ -2,6 +2,7 @@ import assert from 'node:assert';
 import {
   REQUESTS,
   pickRequest,
+  startRequest,
   stepRequest,
   reqProgress,
   type ActiveRequest,
@@ -18,8 +19,8 @@ const ctx = (p: Partial<ReqCtx> & { alive?: Partial<Record<MonsterId, number>> }
   hpRatio: p.hpRatio ?? 1,
   killsSince: p.killsSince ?? 0,
 });
-const def: RequestDef = { text: '슬라임 3', dur: 10, need: 3, now: (c) => c.count('slime') };
-const active = (d = def): ActiveRequest => ({ def: d, t: d.dur, kills0: 0 });
+const def: RequestDef = { text: '슬라임 {n}', dur: 10, need: 3, now: (c) => c.count('slime') };
+const active = (d = def): ActiveRequest => startRequest(d, 1, 0); // 전투력 1.00 = 기준값 그대로
 
 // 조건 미달이면 시간만 흐른다
 {
@@ -41,8 +42,9 @@ const active = (d = def): ActiveRequest => ({ def: d, t: d.dur, kills0: 0 });
   for (let i = 0; i < 9; i++) assert.strictEqual(stepRequest(r, ctx(), 1), null);
   assert.strictEqual(stepRequest(r, ctx(), 1), 'fail');
 
-  const r2: ActiveRequest = { def, t: 0.01, kills0: 0 };
-  assert.strictEqual(stepRequest(r2, ctx({ alive: { slime: 5 } }), 1), 'success', '탈출이 만료보다 우선');
+  const r2 = active();
+  r2.t = 0.01;
+  assert.strictEqual(stepRequest(r2, ctx({ alive: { slime: 5 } }), 1), 'success', '달성이 만료보다 우선');
 }
 
 // 진행률은 0~1로 물린다 (초과 달성도 100%)
@@ -58,6 +60,39 @@ const active = (d = def): ActiveRequest => ({ def: d, t: d.dur, kills0: 0 });
   const hp = REQUESTS.find((r) => r.need === 0.7)!;
   assert.ok(hp.now(ctx({ hpRatio: 1 })) < hp.need);
   assert.ok(hp.now(ctx({ hpRatio: 0.3 })) >= hp.need, 'HP 30%면 달성');
+}
+
+// ── 전투력 스케일 (startRequest) ──
+{
+  // 전투력 1.00 = 기준값 그대로, {n}은 확정된 목표로 치환
+  const r1 = startRequest(def, 1, 0);
+  assert.strictEqual(r1.need, 3);
+  assert.strictEqual(r1.label, '슬라임 3');
+
+  // 2배당 +50% (로그) — 4배는 +100%
+  assert.strictEqual(startRequest({ ...def, need: 12 }, 2, 0).need, 18);
+  assert.strictEqual(startRequest({ ...def, need: 12 }, 4, 0).need, 24);
+
+  // 로그라 후반 강화에도 목표가 폭주하지 않는다
+  assert.ok(startRequest({ ...def, need: 12 }, 64, 0).need <= 48, '전투력 64배에도 4배 이내');
+
+  // max가 있으면 거기서 물린다 — 동시 생존 상한을 넘는 목표는 달성 자체가 불가능하다
+  assert.strictEqual(startRequest({ ...def, need: 25, max: 45 }, 1000, 0).need, 45);
+  const capped = REQUESTS.filter((r) => r.max);
+  assert.ok(capped.length > 0, '동시 생존 요청 중 상한이 걸린 게 있어야 함');
+  for (const r of capped) assert.ok(startRequest(r, 1e6, 0).need <= r.max!, `${r.text}가 상한을 넘음`);
+
+  // 전투력이 기준 미만이어도 목표가 1 밑으로 안 내려간다
+  assert.strictEqual(startRequest(def, 0.2, 0).need, 3);
+  assert.ok(startRequest({ ...def, need: 1 }, 0.01, 0).need >= 1);
+
+  // 비율 목표는 스케일 대상이 아니다 (HP 30%는 용사가 세져도 30%)
+  const hp = REQUESTS.find((r) => r.noScale)!;
+  assert.strictEqual(startRequest(hp, 8, 0).need, hp.need);
+  assert.ok(!startRequest(hp, 8, 0).label.includes('{n}'), '{n} 없는 문구는 그대로');
+
+  // kills0은 출제 시점 스냅샷
+  assert.strictEqual(startRequest(def, 1, 42).kills0, 42);
 }
 
 // ── 출제 게이트 ──
@@ -85,9 +120,11 @@ const active = (d = def): ActiveRequest => ({ def: d, t: d.dur, kills0: 0 });
 assert.strictEqual(pickRequest([], () => 0, undefined) !== null, true, '해금 무관 요청은 항상 남는다');
 
 // 모든 요청이 빈 상황에서도 숫자를 낸다 (now 오타 방지)
+// 개수 목표는 문구에 {n}이 있어야 한다 — 없으면 스케일된 목표와 표시가 어긋난다
 for (const r of REQUESTS) {
   assert.strictEqual(typeof r.now(ctx()), 'number', `${r.text}의 now가 숫자가 아님`);
   assert.ok(r.need > 0 && r.dur > 0, `${r.text}의 need/dur가 유효하지 않음`);
+  assert.strictEqual(r.text.includes('{n}'), !r.noScale, `${r.text}의 {n} 유무가 noScale과 안 맞음`);
 }
 
 console.log('requests OK');

@@ -74,7 +74,7 @@ export default class HudScene extends Phaser.Scene {
     this.reqText.setVisible(!!r);
     if (r) {
       this.reqText
-        .setText(`📢 ${r.def.text}   ${Math.round(b.reqPct * 100)}%   ${Math.max(0, r.t).toFixed(1)}s`)
+        .setText(`📢 ${r.label}   ${Math.round(b.reqPct * 100)}%   ${Math.max(0, r.t).toFixed(1)}s`)
         .setColor(r.t <= 5 ? '#ff9933' : '#66ddff'); // 5초 남으면 주황
     }
     this.critText.setVisible(b.critical);

@@ -12,7 +12,7 @@ import {
   type SkillOutcome,
   type ViewerAlert,
 } from '../formulas.ts';
-import { gameState } from '../game/store.ts';
+import { gameState, heroPower } from '../game/store.ts';
 import { bus, busBind } from '../game/events.ts';
 import { ARENA, SUMMON_Y, CX, arenaBounds } from '../game/layout.ts';
 import { buildArenaMap } from '../game/arenaMap.ts';
@@ -26,6 +26,7 @@ import { SKILLS } from '../data/skills.ts';
 import { CHAT_POOLS, pickChatMood } from '../data/chat.ts';
 import {
   pickRequest,
+  startRequest,
   stepRequest,
   reqProgress,
   REQ_FIRST,
@@ -631,10 +632,11 @@ export default class BattleScene extends Phaser.Scene {
     if (this.reqT > 0) return;
     const def = pickRequest(this.available, Math.random, this.lastReq ?? undefined);
     if (!def) return;
-    this.req = { def, t: def.dur, kills0: this.kills };
+    // 목표치는 출제 시점의 용사 전투력으로 확정 — 용사가 셀수록 시청자 요구도 커진다
+    this.req = startRequest(def, heroPower(gameState().hero), this.kills);
     this.reqPct = 0;
     this.lastReq = def;
-    this.pushChat(this.randomViewer() ?? '시청자', `📢 ${def.text}`, '#66ddff');
+    this.pushChat(this.randomViewer() ?? '시청자', `📢 ${this.req.label}`, '#66ddff');
   }
 
   reqCtx(r: ActiveRequest): ReqCtx {

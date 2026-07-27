@@ -1,16 +1,17 @@
 import { useStore } from 'zustand';
-import { gameStore, gameState } from '../game/store.ts';
+import { gameStore, gameState, heroPower } from '../game/store.ts';
 import { SKILL_COST, type UpgradeKey } from '../data/upgrades.ts';
 import { SKILLS, type SkillId } from '../data/skills.ts';
 import { FINAL_EP } from '../data/progression.ts';
 import UpgradeShopList from './UpgradeShopList.tsx';
 
 export default function UpgradeView() {
-  const { gold, upgradeLevels, skills, episode } = useStore(gameStore, (s) => ({
+  const { gold, upgradeLevels, skills, episode, hero } = useStore(gameStore, (s) => ({
     gold: s.gold,
     upgradeLevels: s.upgradeLevels,
     skills: s.skills,
     episode: s.episode,
+    hero: s.hero,
   }));
   const locked = (Object.keys(SKILLS) as SkillId[]).filter((k) => !skills.includes(k));
   const nextEp = episode + 1;
@@ -28,7 +29,10 @@ export default function UpgradeView() {
   return (
     <div className="menu upgrade">
       <h2>용사 강화</h2>
-      <p className="gold">보유 골드 {Math.floor(gold).toLocaleString()}G</p>
+      <p className="gold">
+        보유 골드 {Math.floor(gold).toLocaleString()}G · ⚔ 전투력 {heroPower(hero).toFixed(2)}
+      </p>
+      <p className="owned">전투력이 오를수록 시청자 요청의 목표치도 커진다</p>
       <ul className="shop">
         <UpgradeShopList gold={gold} upgradeLevels={upgradeLevels} onBuy={buy} />
         {locked.length > 0 && (
