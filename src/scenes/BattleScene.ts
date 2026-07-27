@@ -17,13 +17,13 @@ import { bus, busBind } from '../game/events.ts';
 import { ARENA, SUMMON_Y, CX, arenaBounds } from '../game/layout.ts';
 import { spawnHero, type HeroEntity, type MonsterEntity, type Arrow, type SkillContext } from '../game/entities.ts';
 import { stepHero, stepMonster, stepArrow, stepViewers, countNear, SUMMON_MIN_RADIUS } from '../game/battleSim.ts';
-import { MONSTERS, type MonsterId } from '../data/monsters.ts';
+import { MONSTERS, type MonsterId, type MonsterDef } from '../data/monsters.ts';
 import { syncRoster } from '../data/nicknames.ts';
 import { UPGRADES, type UpgradeKey } from '../data/upgrades.ts';
 import { RARITY, type Card } from '../data/cards.ts';
 import { SKILLS } from '../data/skills.ts';
 import { CHAT_POOLS, pickChatMood } from '../data/chat.ts';
-import { FINAL_EP, targetDonation } from '../data/progression.ts';
+import { FINAL_EP, targetGold, bossOf } from '../data/progression.ts';
 import type { RunOutcome } from '../game/store.ts';
 
 const AUTO_INTERVAL = 3; // ponytail: 자동 소환 간격 — 체감 밀도 조절 knob
@@ -39,7 +39,9 @@ export default class BattleScene extends Phaser.Scene {
   viewerSyncT!: number;
   totalDonated!: number;
   kills!: number;
-  target!: number; // 승리 조건: 누적 후원 목표
+  killGold!: number; // 몬스터 처치로 번 골드 — 보스 등장 게이지 (후원은 안 들어간다)
+  target!: number; // 보스 등장 조건: killGold 목표
+  boss!: MonsterEntity | null; // 등장 후 유지 — 죽으면 스테이지 클리어
   critical = false; // 시청자 바닥 위기 (카운트다운 진행 중)
   critT = 0;
   alert: ViewerAlert = 'normal'; // HudScene가 읽어 시청자 수 색을 바꾼다
@@ -78,7 +80,9 @@ export default class BattleScene extends Phaser.Scene {
     this.viewerSyncT = 0;
     this.totalDonated = 0;
     this.kills = 0;
-    this.target = targetDonation(S.episode);
+    this.killGold = 0;
+    this.target = targetGold(S.episode);
+    this.boss = null;
     this.critical = false;
     this.critT = 0;
     this.alert = 'normal';
@@ -107,8 +111,6 @@ export default class BattleScene extends Phaser.Scene {
     busBind(this, 'rhythm:result', (res) => {
       this.pendingSkill = res;
     });
-    // 상점 구매 → 씬 로컬 hero 동기화 + 임팩트
-    busBind(this, 'hero:upgraded', ({ key, delta }) => this.applyLiveUpgrade(key, delta, '마왕의 투자!'));
     busBind(this, 'donation:end', ({ card }) => this.endDonation(card));
     // Hud/Rhythm 중지는 App 디렉터가 담당 (shutdown 중 형제 씬 stop은 신뢰 불가)
 
@@ -209,10 +211,23 @@ export default class BattleScene extends Phaser.Scene {
     }
   }
 
-  doSummon(t: MonsterId, x: number, y: number) {
-    const def = MONSTERS[t];
+  doSummon(t: MonsterId, x: number, y: number): MonsterEntity {
+    const def: MonsterDef = MONSTERS[t];
     const spr = this.add.image(x, y, `m_${t}`).setScale(def.size / 16);
-    this.monsters.push({ type: t, def, hp: def.hp, x, y, atkCd: 0, spr });
+    if (def.tint) spr.setTint(def.tint);
+    const m: MonsterEntity = { type: t, def, hp: def.hp, x, y, atkCd: 0, spr };
+    this.monsters.push(m);
+    return m;
+  }
+
+  // ── 보스: 목표 골드 도달 시 용사 반대편에 등장. 격파 = 스테이지 클리어 ──
+  spawnBoss() {
+    const t = bossOf(gameState().episode);
+    const x = this.hero.x < CX ? arenaBounds.maxX - 40 : arenaBounds.minX + 40;
+    this.boss = this.doSummon(t, x, (ARENA.y + SUMMON_Y) / 2);
+    this.cameras.main.flash(600, 255, 80, 80);
+    this.floatText(this.boss.x, this.boss.y - 60, `☠ ${MONSTERS[t].name} 등장!`, '#ff4444');
+    this.pushChat('시스템', `☠ ${MONSTERS[t].name} 등장! 용사가 쓰러뜨리면 방송 성공`, '#ff4444');
   }
 
   // ── 도네이션: 전투를 멈추고 React(DonationEvent)에 넘긴다. 재개는 endDonation. ──
@@ -254,7 +269,7 @@ export default class BattleScene extends Phaser.Scene {
     this.cameras.main.flash(res.clear ? 400 : 150, 255, 255, 200);
     this.floatText(this.hero.x, this.hero.y - 40, `⚡ ${skill.name} ${res.grade} ×${res.mult}`, '#ffee44');
     if (res.clear) {
-      for (const m of this.monsters) this.hitFx(m, 9999);
+      for (const m of this.monsters) if (m !== this.boss) this.hitFx(m, 9999); // 보스는 전멸기 면역 — 클리어는 정공법으로
       for (const line of CHAT_POOLS.allperfect) {
         const who = this.randomViewer();
         if (who) this.pushChat(who, line, '#ffee44');
@@ -322,6 +337,7 @@ export default class BattleScene extends Phaser.Scene {
     if (m.hp <= 0 && !m.dead) {
       m.dead = true;
       gameState().addGold(m.def.gold);
+      this.killGold += m.def.gold;
       this.kills++;
       m.spr.destroy();
     }
@@ -346,7 +362,11 @@ export default class BattleScene extends Phaser.Scene {
     const dt = Math.min(deltaMs / 1000, 0.05);
     const H = this.hero;
 
-    if (this.totalDonated >= this.target) return this.endRun('clear');
+    if (this.boss) {
+      if (this.boss.dead) return this.endRun('clear');
+    } else if (this.killGold >= this.target) {
+      this.spawnBoss();
+    }
 
     if (this.autoOn) {
       this.autoT -= dt;
@@ -502,7 +522,7 @@ export default class BattleScene extends Phaser.Scene {
     } else if (outcome === 'abandoned') {
       this.pushChat('시스템', '아무도 보지 않는다. 채널 폐지', '#ff4444');
     } else {
-      this.pushChat('시스템', `🎯 목표 후원 ${this.target.toLocaleString()}G 달성!`, '#ffdd44');
+      this.pushChat('시스템', `🎯 ${this.boss!.def.name} 격파! 스테이지 클리어`, '#ffdd44');
     }
     this.time.delayedCall(cleared ? 800 : 1500, () => {
       gameState().setPhase(cleared && this.isFinal ? 'ending' : 'result');

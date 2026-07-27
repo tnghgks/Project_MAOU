@@ -7,7 +7,6 @@ import BroadcastFrame from './ui/BroadcastFrame.tsx';
 import DonationToast from './ui/DonationToast.tsx';
 import DonationEvent from './ui/DonationEvent.tsx';
 import MenuOverlay from './ui/MenuOverlay.tsx';
-import ShopPanel from './ui/ShopPanel.tsx';
 
 export default function App() {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -40,7 +39,6 @@ export default function App() {
         {phase === 'broadcast' && (
           <>
             <DonationToast />
-            <ShopPanel />
             <DonationEvent />
           </>
         )}

@@ -1,21 +1,25 @@
-// GDD 6장 진행 구조. 승리 조건 = targetDonation 누적 달성 (시간 제한 없음).
+import type { MonsterId } from './monsters.ts';
+
+// GDD 6장 진행 구조. 승리 조건 2단계 (시간 제한 없음):
+//   1) 몬스터 처치 골드가 targetGold 도달 → 보스 등장
+//   2) 보스 격파 → 스테이지 클리어
+// 후원 골드는 게이지에 안 들어간다 (강화 재화 전용).
 export interface EpisodeDef {
-  targetDonation: number;
-  targetViewers: number;
-  recHp: number;
+  targetGold: number;
+  boss: MonsterId;
 }
 
-export const FINAL_EP = 6;
+export const FINAL_EP = 3;
 
+// ponytail: 난이도 knob — 목표 골드와 보스는 여기만 만진다
 export const EPISODES: Record<number, EpisodeDef> = {
-  1: { targetDonation: 3_000, targetViewers: 300, recHp: 100 },
-  2: { targetDonation: 12_000, targetViewers: 1200, recHp: 260 },
-  3: { targetDonation: 40_000, targetViewers: 4000, recHp: 420 },
-  4: { targetDonation: 120_000, targetViewers: 12000, recHp: 620 },
-  5: { targetDonation: 350_000, targetViewers: 35000, recHp: 900 },
-  6: { targetDonation: 120_000, targetViewers: 50000, recHp: 900 }, // 최종화 — 축약 스테이지
+  1: { targetGold: 1_000, boss: 'boss_golem' },
+  2: { targetGold: 2_000, boss: 'boss_knight' },
+  3: { targetGold: 3_000, boss: 'boss_maou' }, // 최종화 — 마왕이 직접 나선다
 };
 
-export const targetDonation = (ep: number) => (EPISODES[ep] ?? EPISODES[FINAL_EP]).targetDonation;
+const episodeDef = (ep: number) => EPISODES[ep] ?? EPISODES[FINAL_EP];
+export const targetGold = (ep: number) => episodeDef(ep).targetGold;
+export const bossOf = (ep: number) => episodeDef(ep).boss;
 
 export const HERO_TARGET_HP = 900; // GDD 3-6 최종화 목표 HP — 엔딩 판정 기준선

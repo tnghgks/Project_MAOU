@@ -27,7 +27,7 @@ export default class HudScene extends Phaser.Scene {
     add.rectangle(640, 20, 1280, 40, 0x1a1a24).setDepth(5); // 상단바 bg
     this.viewerText = add.text(16, 10, '', { fontSize: '18px', color: '#ffffff' }).setDepth(6);
     this.goldText = add.text(220, 10, '', { fontSize: '18px', color: '#ffdd44' }).setDepth(6);
-    this.targetText = add.text(1000, 10, '', { fontSize: '18px', color: '#ffffff' }).setDepth(6);
+    this.targetText = add.text(1264, 10, '', { fontSize: '18px', color: '#ffffff' }).setOrigin(1, 0).setDepth(6); // 우측 정렬 — 보스 이름 길이가 들쭉날쭉
     // 시청자 바닥 위기 카운트다운 (좌상단, 상단바 바로 아래)
     this.critText = add
       .text(16, 50, '', { fontSize: '26px', fontStyle: 'bold', color: '#ff4444' })
@@ -47,7 +47,14 @@ export default class HudScene extends Phaser.Scene {
     if (!b || !b.hero) return;
     this.viewerText.setText(`👁 ${Math.floor(b.viewers).toLocaleString()}`).setColor(ALERT_COLORS[b.alert]);
     this.goldText.setText(`💰 ${Math.floor(gameState().gold).toLocaleString()}G`);
-    this.targetText.setText(`🎯 ${Math.floor(b.totalDonated).toLocaleString()} / ${b.target.toLocaleString()}G`);
+    // 보스 등장 전엔 처치 골드 게이지, 등장 후엔 보스 HP
+    this.targetText
+      .setText(
+        b.boss
+          ? `☠ ${b.boss.def.name} ${Math.max(0, Math.ceil(b.boss.hp)).toLocaleString()} / ${b.boss.def.hp.toLocaleString()}`
+          : `🎯 ${Math.floor(b.killGold).toLocaleString()} / ${b.target.toLocaleString()}G`,
+      )
+      .setColor(b.boss ? '#ff4444' : '#ffffff');
     this.critText.setVisible(b.critical);
     if (b.critical) this.critText.setText(`⚠ 방송 폐지까지 ${Math.max(0, b.critT).toFixed(1)}초`);
     this.hypeBar.width = 200 * clamp(b.D, 0, 1);

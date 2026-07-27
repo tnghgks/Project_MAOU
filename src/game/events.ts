@@ -1,6 +1,5 @@
 import Phaser from 'phaser';
 import type { SkillOutcome } from '../formulas.ts';
-import type { UpgradeKey } from '../data/upgrades.ts';
 import type { Card } from '../data/cards.ts';
 
 // 순간적으로 터지는 사건 버스 (지속값은 store). 이벤트 계약은 BusEvents가 강제.
@@ -26,7 +25,6 @@ export interface BusEvents {
   'donation:end': { card: Card };
   'rhythm:start': null;
   'rhythm:result': SkillOutcome;
-  'hero:upgraded': { key: UpgradeKey; delta: number }; // delta는 카드 등급 배율이 실린 값
 }
 
 // ponytail: Phaser EventEmitter는 제네릭이 없어 as로 타입만 씌움 — 런타임은 그대로

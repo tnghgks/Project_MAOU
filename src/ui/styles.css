@@ -469,38 +469,6 @@ button {
   color: #8888aa;
 }
 
-/* ── 실시간 상점 (전투 중, 아레나 좌상단) ── */
-.shop-toggle {
-  position: absolute;
-  top: 7%;
-  left: 1%;
-  padding: 5px 12px;
-  font-size: clamp(10px, 0.95vw, 14px);
-  font-weight: 700;
-  color: #2a1800;
-  background: linear-gradient(90deg, #ffcf3a, #ff9d2e);
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-}
-.shop-popup {
-  position: absolute;
-  top: 12.5%;
-  left: 1%;
-  width: clamp(200px, 22vw, 300px);
-  padding: 10px;
-  border-radius: 10px;
-  background: rgba(20, 20, 28, 0.92);
-  border: 1px solid #3a3a4c;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.shop-popup .gold {
-  color: #ffdd44;
-  font-size: clamp(11px, 1vw, 15px);
-  font-weight: 600;
-}
 .drag-bar {
   cursor: move;
   touch-action: none;
@@ -509,13 +477,6 @@ button {
 .grip {
   margin-right: 6px;
   color: var(--muted);
-}
-.shop-popup .shop {
-  width: 100%;
-}
-.shop-popup .shop button {
-  font-size: clamp(10px, 0.9vw, 13px);
-  padding: 6px 9px;
 }
 
 /* ── 도네 토스트 (화면 위쪽 중앙) ── */
