@@ -38,6 +38,7 @@ import {
   type RequestDef,
 } from '../data/requests.ts';
 import { FINAL_EP, targetGold, bossOf } from '../data/progression.ts';
+import { bossCut } from '../data/cutscenes.ts';
 import type { RunOutcome } from '../game/store.ts';
 
 const START_VIEWERS = 12; // 첫 방송 시청자 수
@@ -348,6 +349,13 @@ export default class BattleScene extends Phaser.Scene {
     this.cameras.main.flash(600, 255, 80, 80);
     this.floatText(this.boss.x, this.boss.y - 60, `☠ ${MONSTERS[t].name} 등장!`, '#ff4444');
     this.pushChat('시스템', `☠ ${MONSTERS[t].name} 등장! 용사가 쓰러뜨리면 방송 성공`, '#ff4444');
+    // 보스 등장 컷씬 — 도네이션과 같은 방식으로 전투를 멈추고 React에 넘긴다
+    this.scene.pause('Hud');
+    this.scene.pause();
+    gameState().playCuts(bossCut(gameState().episode), () => {
+      this.scene.resume();
+      this.scene.resume('Hud');
+    });
   }
 
   // ── 도네이션: 전투를 멈추고 React(DonationEvent)에 넘긴다. 재개는 endDonation. ──

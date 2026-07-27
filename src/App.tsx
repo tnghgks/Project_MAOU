@@ -7,6 +7,9 @@ import BroadcastFrame from './ui/BroadcastFrame.tsx';
 import DonationToast from './ui/DonationToast.tsx';
 import DonationEvent from './ui/DonationEvent.tsx';
 import MenuOverlay from './ui/MenuOverlay.tsx';
+import TitleView from './ui/TitleView.tsx';
+import HelpPopup from './ui/HelpPopup.tsx';
+import CutsceneView from './ui/CutsceneView.tsx';
 
 export default function App() {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -33,17 +36,23 @@ export default function App() {
 
   // 캔버스와 오버레이는 플레이어 영역(.screen) 안 — 채팅/사이드바는 BroadcastFrame가 소유
   return (
-    <BroadcastFrame>
-      <div ref={parentRef} className="canvas-layer" />
-      <div className="ui-layer">
-        {phase === 'broadcast' && (
-          <>
-            <DonationToast />
-            <DonationEvent />
-          </>
-        )}
-        <MenuOverlay />
-      </div>
-    </BroadcastFrame>
+    <>
+      <BroadcastFrame>
+        <div ref={parentRef} className="canvas-layer" />
+        <div className="ui-layer">
+          {phase === 'broadcast' && (
+            <>
+              <DonationToast />
+              <DonationEvent />
+              <HelpPopup />
+            </>
+          )}
+          <MenuOverlay />
+        </div>
+      </BroadcastFrame>
+      {/* 타이틀과 컷씬은 방송 프레임까지 덮는 전체화면 */}
+      {phase === 'title' && <TitleView />}
+      <CutsceneView />
+    </>
   );
 }

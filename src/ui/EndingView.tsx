@@ -1,6 +1,8 @@
+import { useEffect } from 'react';
 import { useStore } from 'zustand';
 import { gameStore, gameState } from '../game/store.ts';
 import { HERO_TARGET_HP } from '../data/progression.ts';
+import { endingCut } from '../data/cutscenes.ts';
 
 // ponytail: 스텁 — 스탯비율(GDD 7장) 근사 판정. 전용 연출·사운드 보류.
 const ENDINGS = {
@@ -13,6 +15,10 @@ export default function EndingView() {
   const { hero, lastRun } = useStore(gameStore, (s) => ({ hero: s.hero, lastRun: s.lastRun }));
   const ratio = hero.maxHp / HERO_TARGET_HP;
   const e = ratio < 0.6 ? ENDINGS.bad : ratio > 1.2 ? ENDINGS.hidden : ENDINGS.best;
+  // 엔딩 종류별 컷씬을 먼저 덮어씌운다 — 끝나면 아래 정산 화면이 드러난다
+  useEffect(() => {
+    gameState().playCuts(endingCut(e.cls));
+  }, [e.cls]);
   const back = () => {
     gameState().resetRun();
     gameState().setPhase('title');

@@ -39,8 +39,11 @@ export interface GameState {
   records: Records;
   viewers: number; // React 채팅 헤더용 (스로틀 반영)
   lastRun: RunSummary;
+  cuts: string[]; // 재생 대기 중인 컷씬 id 큐 (CutsceneView가 소비)
 
   setPhase: (phase: Phase) => void;
+  playCuts: (ids: string | string[], after?: () => void) => void;
+  advanceCut: () => void;
   setViewers: (viewers: number) => void;
   addGold: (n: number) => void;
   nextEpisode: () => void;
@@ -74,14 +77,32 @@ const freshRun = () => ({
   viewers: 0,
 });
 
+// 컷씬 큐가 다 비면 호출할 후속 동작 (씬 재개·페이즈 전환). 스토어엔 값만 남긴다.
+let afterCuts: (() => void) | null = null;
+
 export const gameStore = createStore<GameState>()((set, get) => ({
   phase: 'boot',
   ...freshRun(),
   unlockedMonsters: ['slime', 'archer', 'golem'],
   records: { bestViewers: 0, bestGold: 0 },
   lastRun: { outcome: 'clear', peakViewers: 0, totalDonated: 0, kills: 0 },
+  cuts: [],
 
   setPhase: (phase) => set({ phase }),
+
+  // 컷씬 재생 요청. after는 큐가 끝났을 때(스킵으로 끝나도) 정확히 한 번 실행된다.
+  playCuts: (ids, after) => {
+    afterCuts = after ?? null;
+    set({ cuts: typeof ids === 'string' ? [ids] : [...ids] });
+  },
+  advanceCut: () => {
+    const rest = get().cuts.slice(1);
+    set({ cuts: rest });
+    if (rest.length) return;
+    const f = afterCuts;
+    afterCuts = null;
+    f?.();
+  },
   setViewers: (viewers) => set({ viewers }),
   addGold: (n) => set({ gold: get().gold + n }),
   nextEpisode: () => set({ episode: get().episode + 1 }),
