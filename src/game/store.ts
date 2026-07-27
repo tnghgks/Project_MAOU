@@ -58,22 +58,25 @@ const freshRun = () => ({
   episode: 1,
   hero: { ...BASE_HERO },
   upgradeLevels: { hp: 0, atk: 0, atkSpd: 0, speed: 0, range: 0 },
+  skills: ['낙뢰'] as SkillId[], // 스킬은 런 한정 — 사망/타이틀 복귀 시 세이브에서도 지워진다
+  viewers: 0,
 });
 
 export const gameStore = createStore<GameState>()((set, get) => ({
   phase: 'boot',
   ...freshRun(),
-  skills: ['낙뢰'],
   unlockedMonsters: ['slime', 'archer', 'golem'],
   records: { bestViewers: 0, bestGold: 0 },
-  viewers: 0,
   lastRun: { outcome: 'clear', peakViewers: 0, totalDonated: 0, kills: 0 },
 
   setPhase: (phase) => set({ phase }),
   setViewers: (viewers) => set({ viewers }),
   addGold: (n) => set({ gold: get().gold + n }),
   nextEpisode: () => set({ episode: get().episode + 1 }),
-  resetRun: () => set({ ...freshRun() }),
+  resetRun: () => {
+    set({ ...freshRun() });
+    saveGame(); // 초기화된 스킬을 localStorage에도 반영
+  },
 
   // 강화 구매: 골드 차감 + 스탯 반영 (기존 UpgradeScene.buy 로직 흡수)
   applyUpgrade: (key) => {

@@ -23,13 +23,15 @@ assert.deepStrictEqual(gameState().skills, ['낙뢰', '화염참격']);
 assert.strictEqual(gameState().records.bestViewers, 5000);
 assert.strictEqual(gameState().records.bestGold, 12000);
 
-// resetRun: 스탯/골드/진행도 초기화, 해금·기록 유지
-gameStore.setState({ gold: 9999, episode: 4, hero: { ...gameState().hero, maxHp: 500 } });
+// resetRun: 스탯/골드/진행도/스킬/시청자 초기화, 기록 유지 + 세이브에도 반영
+gameStore.setState({ gold: 9999, episode: 4, hero: { ...gameState().hero, maxHp: 500 }, viewers: 3000 });
 gameState().resetRun();
 assert.strictEqual(gameState().gold, 0);
 assert.strictEqual(gameState().episode, 1);
 assert.strictEqual(gameState().hero.maxHp, 100);
-assert.deepStrictEqual(gameState().skills, ['낙뢰', '화염참격']); // 유지
+assert.strictEqual(gameState().viewers, 0);
+assert.deepStrictEqual(gameState().skills, ['낙뢰']);
+assert.deepStrictEqual(JSON.parse(store['maou.save']).skills, ['낙뢰']); // localStorage에서도 제거
 assert.strictEqual(gameState().records.bestViewers, 5000); // 유지
 
 // applyUpgrade: 골드 부족 시 실패, 충분 시 스탯 반영

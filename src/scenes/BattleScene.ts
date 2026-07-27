@@ -27,6 +27,9 @@ import { FINAL_EP, targetGold, bossOf } from '../data/progression.ts';
 import type { RunOutcome } from '../game/store.ts';
 
 const AUTO_INTERVAL = 3; // ponytail: 자동 소환 간격 — 체감 밀도 조절 knob
+const START_VIEWERS = 12; // 첫 방송 시청자 수
+const HP_BAR_W = 48; // ponytail: 체력바 크기 knob
+const HP_BAR_H = 8;
 const SHAKE_HOLD = 999_999; // 경보 흔들림은 단계가 바뀔 때까지 유지 (reset으로 끈다)
 
 export default class BattleScene extends Phaser.Scene {
@@ -75,8 +78,8 @@ export default class BattleScene extends Phaser.Scene {
     this.hero = spawnHero(S.hero, { x: CX, y: 300 });
     this.monsters = [];
     this.arrows = [];
-    this.viewers = 12;
-    this.peakViewers = 12;
+    this.viewers = S.viewers || START_VIEWERS; // 다음 화는 지난 화 시청자 수를 이어받는다 (resetRun이 0으로 비운다)
+    this.peakViewers = this.viewers;
     this.viewerSyncT = 0;
     this.totalDonated = 0;
     this.kills = 0;
@@ -101,7 +104,7 @@ export default class BattleScene extends Phaser.Scene {
 
     this.buildUI();
     this.heroSpr = this.add.image(this.hero.x, this.hero.y, 'hero').setScale(1.3);
-    this.heroHpBar = this.add.graphics();
+    this.heroHpBar = this.add.graphics().setDepth(3); // 몬스터·화살 위로
 
     // 병렬 씬: HUD(캔버스 수치) + Rhythm(리듬 판정)
     this.scene.launch('Hud');
@@ -444,11 +447,15 @@ export default class BattleScene extends Phaser.Scene {
     this.heroSpr.setPosition(H.x, H.y);
     if (intent.moved) this.heroSpr.setFlipX(intent.movingLeft);
 
-    this.heroHpBar.clear();
-    this.heroHpBar.fillStyle(0x000000).fillRect(H.x - 16, H.y - 22, 32, 5);
+    const ratio = clamp(H.hp / H.maxHp, 0, 1);
     this.heroHpBar
-      .fillStyle(H.hp / H.maxHp > 0.25 ? 0x44ff66 : 0xff4444)
-      .fillRect(H.x - 15, H.y - 21, 30 * (H.hp / H.maxHp), 3);
+      .clear()
+      .fillStyle(0x000000, 0.85)
+      .fillRect(H.x - HP_BAR_W / 2 - 2, H.y - 34, HP_BAR_W + 4, HP_BAR_H + 4) // 어두운 테두리 — 배경과 안 섞이게
+      .fillStyle(0x33383f)
+      .fillRect(H.x - HP_BAR_W / 2, H.y - 32, HP_BAR_W, HP_BAR_H) // 빈 구간도 보이게 (잃은 체력 = 회색)
+      .fillStyle(ratio > 0.25 ? 0x44ff66 : 0xff4444)
+      .fillRect(H.x - HP_BAR_W / 2, H.y - 32, HP_BAR_W * ratio, HP_BAR_H);
   }
 
   updateMonsters(dt: number) {
