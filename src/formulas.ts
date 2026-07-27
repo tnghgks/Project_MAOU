@@ -32,20 +32,22 @@ export function viewerDrift(drift: number, dt: number, rnd: () => number = Math.
 }
 
 // 도네이션 (GDD 3-3)
-// 평균 간격은 시청자 수로 결정, 실제 발생은 지수분포 = 무작위 도착 (정박자 느낌 제거)
-export function donationBase(viewers: number): number {
-  return clamp(16 / (1 + viewers / 150), 2.5, 16); // ponytail: 후원 빈도 knob — 전 구간 약 2배 간격
-}
-export function donationInterval(viewers: number, rnd: () => number = Math.random): number {
-  const base = donationBase(viewers);
-  return clamp(-Math.log(1 - rnd()) * base, base * 0.25, base * 2.5); // 몰아치기/가뭄 둘 다 허용, 극단만 컷
+// 간격은 시청자 수만으로 결정 — 후원마다 게임이 멈추고 카드가 뜨므로 난수 몰아치기는 뺐다.
+// 10명 30초(상한) · 1000명 15.5초 · 1만명 8초 · 하한 5초는 2.5만명부터.
+export function donationInterval(viewers: number): number {
+  return clamp(38 - 7.5 * Math.log10(Math.max(1, viewers)), 5, 30); // ponytail: 38/7.5 = 후원 빈도 knob
 }
 
-const BIG_CHANCE = 0.08; // ponytail: 대박 후원 확률·배율 — 체감 도박성 knob
-const BIG_MULT = 5;
-export function donationAmount(viewers: number, rnd: () => number = Math.random): number {
+export const JACKPOT_CHANCE = 0.08; // ponytail: 대박 후원(=리액션 이벤트) 확률·배율 knob
+export const JACKPOT_MULT = 5;
+export interface DonationRoll {
+  amount: number;
+  jackpot: boolean; // 리액션 이벤트(춤 + 리듬 + 고등급 카드) 발동 여부
+}
+export function rollDonation(viewers: number, rnd: () => number = Math.random): DonationRoll {
   const base = 10 * Math.pow(viewers, 0.6) * (0.5 + rnd() * 1.2); // 0.5x~1.7x
-  return Math.round(base * (rnd() < BIG_CHANCE ? BIG_MULT : 1));
+  const jackpot = rnd() < JACKPOT_CHANCE;
+  return { amount: Math.round(base * (jackpot ? JACKPOT_MULT : 1)), jackpot };
 }
 
 // 시청자 이탈 2단계 경보:

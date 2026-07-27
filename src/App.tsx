@@ -5,6 +5,7 @@ import { createGame } from './game/config.ts';
 import { gameStore } from './game/store.ts';
 import BroadcastFrame from './ui/BroadcastFrame.tsx';
 import DonationToast from './ui/DonationToast.tsx';
+import DonationEvent from './ui/DonationEvent.tsx';
 import MenuOverlay from './ui/MenuOverlay.tsx';
 import ShopPanel from './ui/ShopPanel.tsx';
 
@@ -40,6 +41,7 @@ export default function App() {
           <>
             <DonationToast />
             <ShopPanel />
+            <DonationEvent />
           </>
         )}
         <MenuOverlay />

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { judge, skillResult, type Judgement } from '../formulas.ts';
-import { bus } from '../game/events.ts';
+import { bus, busBind } from '../game/events.ts';
 
 const LANE_Y = 640;
 const HIT_X = 140;
@@ -17,11 +17,13 @@ interface Note {
   done: boolean;
 }
 
-// 도네이션 시 하단 레인에 노트 생성 → QWER 판정 → 결과를 bus로 BattleScene에 전달.
+// 리액션 이벤트(대박 후원) 때만 하단 레인이 열린다 → QWER 판정 → 결과를 bus로 전달.
+// 시퀀스 요청은 React(DonationEvent)가 'rhythm:start'로 보낸다.
 export default class RhythmScene extends Phaser.Scene {
   notes!: Note[];
   noteResults!: Judgement[];
   judgeText!: Phaser.GameObjects.Text;
+  lane!: Phaser.GameObjects.Container;
 
   constructor() {
     super('Rhythm');
@@ -32,21 +34,25 @@ export default class RhythmScene extends Phaser.Scene {
     this.noteResults = [];
 
     const add = this.add;
-    add.rectangle(640, (LANE_Y + 720) / 2, 1280, 720 - LANE_Y, 0x0d0d14).setDepth(5);
-    add
-      .circle(HIT_X, LANE_Y + 40, 24)
-      .setStrokeStyle(3, 0xffffff)
-      .setDepth(6);
-    add.text(20, LANE_Y + 30, 'QWER▶', { fontSize: '16px', color: '#555566' }).setDepth(6);
     this.judgeText = add
       .text(HIT_X, LANE_Y + 8, '', { fontSize: '16px', fontStyle: 'bold', color: '#ffffff' })
-      .setOrigin(0.5)
-      .setDepth(8);
+      .setOrigin(0.5);
+    this.lane = add
+      .container(0, 0, [
+        add.rectangle(640, (LANE_Y + 720) / 2, 1280, 720 - LANE_Y, 0x0d0d14),
+        add.circle(HIT_X, LANE_Y + 40, 24).setStrokeStyle(3, 0xffffff),
+        add.text(20, LANE_Y + 30, 'QWER▶', { fontSize: '16px', color: '#555566' }),
+        this.judgeText,
+      ])
+      .setDepth(5)
+      .setVisible(false);
 
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
       const k = e.key.toUpperCase();
       if (KEYS.includes(k)) this.hitNote(k);
     });
+
+    busBind(this, 'rhythm:start', () => this.spawnSeq());
   }
 
   // ponytail: seam — BGM 도입 시 AudioContext.currentTime 기준으로 교체 (rAF 드리프트 방지)
@@ -57,6 +63,7 @@ export default class RhythmScene extends Phaser.Scene {
   spawnSeq() {
     if (this.notes.length > 0) return; // 진행 중이면 무시 (레인 겹침 방지)
     this.noteResults = [];
+    this.lane.setVisible(true);
     const now = this.audioClock();
     for (let i = 0; i < 4; i++) {
       const key = Phaser.Utils.Array.GetRandom(KEYS);
@@ -89,7 +96,8 @@ export default class RhythmScene extends Phaser.Scene {
     if (this.noteResults.length === 4) {
       const res = skillResult(this.noteResults);
       this.notes = [];
-      bus.emit('rhythm:result', res); // BattleScene가 스킬 발동
+      this.time.delayedCall(500, () => this.lane.setVisible(false)); // 마지막 판정 글자를 보여주고 닫는다
+      bus.emit('rhythm:result', res); // React가 카드 등급 결정, Battle이 스킬 예약
     }
   }
 

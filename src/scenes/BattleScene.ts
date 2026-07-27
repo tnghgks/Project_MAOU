@@ -3,7 +3,7 @@ import {
   clamp,
   hypeTier,
   donationInterval,
-  donationAmount,
+  rollDonation,
   stepCritical,
   viewerAlert,
   MIN_VIEWERS,
@@ -13,18 +13,18 @@ import {
   type ViewerAlert,
 } from '../formulas.ts';
 import { gameState } from '../game/store.ts';
-import { bus } from '../game/events.ts';
+import { bus, busBind } from '../game/events.ts';
 import { ARENA, SUMMON_Y, CX, arenaBounds } from '../game/layout.ts';
 import { spawnHero, type HeroEntity, type MonsterEntity, type Arrow, type SkillContext } from '../game/entities.ts';
 import { stepHero, stepMonster, stepArrow, stepViewers, countNear, SUMMON_MIN_RADIUS } from '../game/battleSim.ts';
 import { MONSTERS, type MonsterId } from '../data/monsters.ts';
 import { syncRoster } from '../data/nicknames.ts';
 import { UPGRADES, type UpgradeKey } from '../data/upgrades.ts';
+import { RARITY, type Card } from '../data/cards.ts';
 import { SKILLS } from '../data/skills.ts';
 import { CHAT_POOLS, pickChatMood } from '../data/chat.ts';
 import { FINAL_EP, targetDonation } from '../data/progression.ts';
 import type { RunOutcome } from '../game/store.ts';
-import type RhythmScene from './RhythmScene.ts';
 
 const AUTO_INTERVAL = 3; // ponytail: 자동 소환 간격 — 체감 밀도 조절 knob
 const SHAKE_HOLD = 999_999; // 경보 흔들림은 단계가 바뀔 때까지 유지 (reset으로 끈다)
@@ -59,7 +59,7 @@ export default class BattleScene extends Phaser.Scene {
   autoLabel!: Phaser.GameObjects.Text;
   heroSpr!: Phaser.GameObjects.Image;
   heroHpBar!: Phaser.GameObjects.Graphics;
-  onRhythm!: (res: SkillOutcome) => void;
+  pendingSkill: SkillOutcome | null = null; // 리액션 리듬 결과 — 전투 재개 시점에 발동
   chatT = 0;
 
   constructor() {
@@ -103,17 +103,14 @@ export default class BattleScene extends Phaser.Scene {
     this.scene.launch('Hud');
     this.scene.launch('Rhythm');
 
-    // 리듬 결과 → 스킬 발동 (스킬 effect는 monsters/hero에 접근하므로 여기 소유)
-    this.onRhythm = (res) => this.fireSkill(res);
-    bus.on('rhythm:result', this.onRhythm);
-    // 상점 구매 → 씬 로컬 hero 동기화 + 임팩트
-    const onUpgrade = ({ key }: { key: UpgradeKey }) => this.applyLiveUpgrade(key);
-    bus.on('hero:upgraded', onUpgrade);
-    // Hud/Rhythm 중지는 App 디렉터가 담당 (shutdown 중 형제 씬 stop은 신뢰 불가)
-    this.events.once('shutdown', () => {
-      bus.off('rhythm:result', this.onRhythm);
-      bus.off('hero:upgraded', onUpgrade);
+    // 리듬 결과는 씬이 멈춰 있는 동안 도착한다 — 스킬 발동은 재개 시점(endDonation)까지 미룬다
+    busBind(this, 'rhythm:result', (res) => {
+      this.pendingSkill = res;
     });
+    // 상점 구매 → 씬 로컬 hero 동기화 + 임팩트
+    busBind(this, 'hero:upgraded', ({ key, delta }) => this.applyLiveUpgrade(key, delta, '마왕의 투자!'));
+    busBind(this, 'donation:end', ({ card }) => this.endDonation(card));
+    // Hud/Rhythm 중지는 App 디렉터가 담당 (shutdown 중 형제 씬 stop은 신뢰 불가)
 
     // 입력: 마우스 소환 + 숫자키 = 해당 종류를 랜덤 위치에 즉시 소환 (버튼 선택은 그대로 유지)
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.trySummon(p));
@@ -218,15 +215,31 @@ export default class BattleScene extends Phaser.Scene {
     this.monsters.push({ type: t, def, hp: def.hp, x, y, atkCd: 0, spr });
   }
 
-  // ── 도네이션 → 리듬 (RhythmScene에 시퀀스 요청) ──
+  // ── 도네이션: 전투를 멈추고 React(DonationEvent)에 넘긴다. 재개는 endDonation. ──
   fireDonation() {
-    const amt = donationAmount(this.viewers);
-    gameState().addGold(amt);
-    this.totalDonated += amt;
+    const { amount, jackpot } = rollDonation(this.viewers);
+    gameState().addGold(amount);
+    this.totalDonated += amount;
     const name = this.randomViewer() ?? '익명';
-    this.pushChat('🎁 후원', `${name}님 ${amt.toLocaleString()}G!`, '#ffdd44');
-    bus.emit('donation:arrive', { amount: amt, donor: name });
-    (this.scene.get('Rhythm') as RhythmScene).spawnSeq(); // 진행 중이면 Rhythm이 무시
+    const msg = `${name}님 ${amount.toLocaleString()}G${jackpot ? ' 대박 후원!!' : '!'}`;
+    this.pushChat('🎁 후원', msg, jackpot ? '#ff66cc' : '#ffdd44');
+    this.pendingSkill = null;
+    bus.emit('donation:arrive', { amount, donor: name, jackpot });
+    // Rhythm은 계속 돌려야 한다 (리액션 이벤트의 QWER 판정 담당)
+    this.scene.pause('Hud');
+    this.scene.pause();
+  }
+
+  // 카드 확정 → 강화 적용 후 재개. 리액션이었다면 예약된 스킬도 여기서 터진다.
+  endDonation(card: Card) {
+    this.scene.resume();
+    this.scene.resume('Hud');
+    gameState().grantCard(card);
+    this.applyLiveUpgrade(card.key, card.delta, `🎁 ${RARITY[card.rarity].label} 카드!`);
+    if (this.pendingSkill) {
+      this.fireSkill(this.pendingSkill);
+      this.pendingSkill = null;
+    }
   }
 
   // ── 스킬: 보유 스킬 중 랜덤 1개가 리듬 배율로 발동 (GDD 4장) ──
@@ -254,14 +267,15 @@ export default class BattleScene extends Phaser.Scene {
     });
   }
 
-  // ── 실시간 강화: store는 이미 갱신됨(applyUpgrade) — 씬 로컬 hero에 반영 + 연출 ──
-  applyLiveUpgrade(key: UpgradeKey) {
+  // ── 실시간 강화: store는 이미 갱신됨(applyUpgrade/grantCard) — 씬 로컬 hero에 반영 + 연출 ──
+  // delta는 호출부가 준다 (상점=1배, 카드=등급 배율).
+  applyLiveUpgrade(key: UpgradeKey, delta: number, via: string) {
     const u = UPGRADES[key];
     const H = this.hero;
     const stats = gameState().hero;
     if (u.stat === 'maxHp') {
       H.maxHp = stats.maxHp;
-      H.hp = Math.min(H.maxHp, H.hp + u.delta); // 최대치 증가분만큼 즉시 회복
+      H.hp = Math.min(H.maxHp, H.hp + delta); // 최대치 증가분만큼 즉시 회복
     } else {
       H[u.stat] = stats[u.stat];
     }
@@ -270,8 +284,8 @@ export default class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: ring, radius: 60, alpha: 0, duration: 450, onComplete: () => ring.destroy() });
     this.heroSpr.setTint(0x88ffff);
     this.time.delayedCall(200, () => this.heroSpr.clearTint());
-    this.floatText(H.x, H.y - 40, `▲ ${u.name} +${u.delta}`, '#44ddff');
-    this.pushChat('시스템', `마왕의 투자! ${u.name} 강화`, '#44ddff');
+    this.floatText(H.x, H.y - 40, `▲ ${u.name} +${delta}`, '#44ddff');
+    this.pushChat('시스템', `${via} ${u.name} 강화`, '#44ddff');
   }
 
   // 스킬이 쓰는 좁은 표면. 씬 헬퍼를 SkillContext로 감싸 skills.ts가 BattleScene에 의존하지 않게 한다.

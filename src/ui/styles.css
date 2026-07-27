@@ -561,3 +561,104 @@ button {
     opacity: 0;
   }
 }
+
+/* ── 도네이션 이벤트 팝업 (게임 일시정지 중) ──
+   bottom 11.1% = 캔버스 리듬 레인(y 640~720 / 720). 리액션 중 노트가 가려지면 안 된다. */
+.don-event {
+  position: absolute;
+  inset: 0 0 11.1% 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 1.6vw, 22px);
+  background: rgba(6, 6, 12, 0.82);
+  backdrop-filter: blur(2px);
+  animation: don-in 0.18s ease;
+}
+.don-event.jackpot {
+  background: radial-gradient(ellipse at center, rgba(70, 10, 50, 0.86), rgba(6, 6, 12, 0.9));
+}
+@keyframes don-in {
+  from {
+    opacity: 0;
+  }
+}
+.don-head {
+  font-size: clamp(12px, 1.4vw, 20px);
+  font-weight: 700;
+  color: #ffcf3a;
+}
+.don-head b {
+  color: #ff66cc;
+}
+.don-tip {
+  font-size: clamp(11px, 1.2vw, 17px);
+  color: #ddd;
+}
+.don-reaction {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(8px, 1.2vw, 16px);
+}
+.hero-dance {
+  width: clamp(56px, 7vw, 110px);
+  image-rendering: pixelated;
+  animation: dance 0.42s ease-in-out infinite alternate;
+}
+@keyframes dance {
+  from {
+    transform: translateY(0) rotate(-14deg) scaleX(1);
+  }
+  to {
+    transform: translateY(-14%) rotate(14deg) scaleX(-1);
+  }
+}
+
+.don-cards {
+  display: flex;
+  gap: clamp(8px, 1.4vw, 20px);
+}
+.don-card {
+  width: clamp(84px, 11vw, 160px);
+  padding: clamp(8px, 1.2vw, 16px) 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border-radius: 10px;
+  border: 2px solid var(--rar);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.4));
+  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  transition:
+    transform 0.12s,
+    box-shadow 0.12s,
+    opacity 0.2s;
+}
+.don-card .rar {
+  font-size: clamp(9px, 0.85vw, 13px);
+  font-weight: 800;
+  color: var(--rar);
+}
+.don-card .cname {
+  font-size: clamp(11px, 1.1vw, 17px);
+  font-weight: 700;
+  color: #fff;
+}
+.don-card .cdelta {
+  font-size: clamp(10px, 1vw, 15px);
+  color: #44ddff;
+}
+.don-card.on {
+  transform: translateY(-8%) scale(1.04);
+  box-shadow: 0 0 18px var(--rar);
+}
+.don-card.win {
+  transform: translateY(-8%) scale(1.12);
+  box-shadow: 0 0 26px var(--rar);
+}
+.don-card.lose {
+  opacity: 0.3;
+  filter: grayscale(1);
+}

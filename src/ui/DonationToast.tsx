@@ -8,8 +8,8 @@ export default function DonationToast() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(0);
 
-  useBusEvent('donation:arrive', ({ amount, donor }) => {
-    const t = { id: nextId.current++, amount, donor };
+  useBusEvent('donation:arrive', (d) => {
+    const t = { ...d, id: nextId.current++ };
     setToasts((prev) => [...prev, t]);
     // CSS 애니메이션(2.2s) 후 제거
     setTimeout(() => setToasts((prev) => prev.filter((x) => x.id !== t.id)), 2200);

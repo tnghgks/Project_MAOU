@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useStore } from 'zustand';
 import { gameStore, gameState } from '../game/store.ts';
-import { type UpgradeKey } from '../data/upgrades.ts';
+import { UPGRADES, type UpgradeKey } from '../data/upgrades.ts';
 import { bus } from '../game/events.ts';
 import { useDrag } from './useDrag.ts';
 import UpgradeShopList from './UpgradeShopList.tsx';
@@ -13,7 +13,7 @@ export default function ShopPanel() {
   const drag = useDrag();
 
   const buy = (key: UpgradeKey) => {
-    if (gameState().applyUpgrade(key)) bus.emit('hero:upgraded', { key });
+    if (gameState().applyUpgrade(key)) bus.emit('hero:upgraded', { key, delta: UPGRADES[key].delta });
   };
 
   return (

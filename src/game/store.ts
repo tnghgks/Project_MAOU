@@ -1,5 +1,6 @@
 import { createStore } from 'zustand/vanilla';
 import { UPGRADES, upgradeCost, type UpgradeKey } from '../data/upgrades.ts';
+import type { Card } from '../data/cards.ts';
 import type { SkillId } from '../data/skills.ts';
 import type { MonsterId } from '../data/monsters.ts';
 
@@ -45,6 +46,7 @@ export interface GameState {
   nextEpisode: () => void;
   resetRun: () => void;
   applyUpgrade: (key: UpgradeKey) => boolean;
+  grantCard: (card: Card) => void;
   learnSkill: (id: SkillId, cost: number) => boolean;
   recordRun: (run: RunSummary) => void;
 }
@@ -85,6 +87,12 @@ export const gameStore = createStore<GameState>()((set, get) => ({
       upgradeLevels: { ...upgradeLevels, [key]: upgradeLevels[key] + 1 },
     });
     return true;
+  },
+
+  // 도네이션 카드 보상: 골드 없이 스탯만 (upgradeLevels는 안 올린다 — 상점 가격은 구매 이력만 따라간다)
+  grantCard: (card) => {
+    const hero = get().hero;
+    set({ hero: { ...hero, [card.stat]: Math.round((hero[card.stat] + card.delta) * 100) / 100 } });
   },
 
   learnSkill: (id, cost) => {
