@@ -15,6 +15,7 @@ import {
 import { gameState } from '../game/store.ts';
 import { bus, busBind } from '../game/events.ts';
 import { ARENA, SUMMON_Y, CX, arenaBounds } from '../game/layout.ts';
+import { buildArenaMap } from '../game/arenaMap.ts';
 import { spawnHero, type HeroEntity, type MonsterEntity, type Arrow, type SkillContext } from '../game/entities.ts';
 import { stepHero, stepMonster, stepArrow, stepViewers, countNear, SUMMON_MIN_RADIUS } from '../game/battleSim.ts';
 import { MONSTERS, type MonsterId, type MonsterDef } from '../data/monsters.ts';
@@ -158,6 +159,13 @@ export default class BattleScene extends Phaser.Scene {
 
   buildUI() {
     const add = this.add;
+    // 아레나 배경 — 에피소드 시드로 생성한 40×15 타일맵을 scale 2로 깔면 ARENA(1280×480)에 맞는다
+    const { ground, props } = buildArenaMap(gameState().episode);
+    const map = this.make.tilemap({ data: ground, tileWidth: 16, tileHeight: 16 });
+    const tiles = map.addTilesetImage('tiles', 'tiles', 16, 16, 0, 1)!;
+    map.createLayer(0, tiles, ARENA.x, ARENA.y)!.setScale(2).setDepth(-10);
+    map.createBlankLayer('Props', tiles, ARENA.x, ARENA.y)!.setScale(2).setDepth(-9).putTilesAt(props, 0, 0);
+
     // 전투 영역 chrome (상단바=Hud, 리듬레인=Rhythm)
     add.rectangle(CX, (SUMMON_Y + 640) / 2, ARENA.w, 640 - SUMMON_Y, 0x1a1a24).setDepth(5); // 소환 바
     add.line(0, 0, ARENA.x, SUMMON_Y, ARENA.w, SUMMON_Y, 0x333344).setOrigin(0).setDepth(5);
@@ -289,8 +297,8 @@ export default class BattleScene extends Phaser.Scene {
     if (this.over || this.monsters.length >= MAX_ALIVE) return;
     for (let i = 0; i < 10; i++) {
       // ponytail: 아레나가 넓어 몇 번 안에 성공, 실패 시 이번 입력 무시
-      const x = Phaser.Math.Between(ARENA.x + 20, ARENA.x + ARENA.w - 20);
-      const y = Phaser.Math.Between(ARENA.y + 20, SUMMON_Y - 20);
+      const x = Phaser.Math.Between(arenaBounds.minX, arenaBounds.maxX);
+      const y = Phaser.Math.Between(arenaBounds.minY, arenaBounds.maxY);
       if (Phaser.Math.Distance.Between(x, y, this.hero.x, this.hero.y) >= SUMMON_MIN_RADIUS) {
         return this.doSummon(t, x, y);
       }
