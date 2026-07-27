@@ -6,8 +6,9 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
-#claude
-.claude
+#claude (keep shared skills/commands committed, ignore only personal local settings/state)
+.claude/settings.local.json
+.claude/skills/**/.state.json
 
 # assets
 /assets
