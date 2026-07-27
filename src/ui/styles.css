@@ -1,11 +1,28 @@
+/* 갈무리: 한글 지원 비트맵 폰트 — 16-bit 룩의 8할은 폰트다.
+   ponytail: 패키지의 galmuri.css는 7종 3.3MB를 전부 끌고 온다 — 쓰는 2종만 직접 선언 */
+@font-face {
+  font-family: 'Galmuri11';
+  src: url('galmuri/dist/Galmuri11.woff2') format('woff2');
+  font-weight: 400;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Galmuri11';
+  src: url('galmuri/dist/Galmuri11-Bold.woff2') format('woff2');
+  font-weight: 700 900;
+  font-display: block;
+}
+
 :root {
   color-scheme: dark;
-  --bg: #0f0f11;
-  --panel: #17181b;
-  --line: #26282c;
+  --bg: #10101c;
+  --panel: #1c1c30;
+  --line: #45456b;
   --text: #e6e7ea;
-  --muted: #83868c;
-  --brand: #00ffa3;
+  --muted: #8a8ab0;
+  --brand: #3cf08a;
+  /* 베벨: 좌상단 하이라이트 + 우하단 그림자 = 16-bit 패널 */
+  --bevel: inset 2px 2px 0 #4a4a78, inset -2px -2px 0 #0a0a14;
   --top-h: 48px;
   --meta-h: 92px;
   --chrome-h: 140px; /* top-h + meta-h — .screen 높이 계산의 유일한 knob */
@@ -24,8 +41,9 @@ body,
   overflow: hidden;
 }
 body {
-  font-family: 'Pretendard', 'Segoe UI', system-ui, sans-serif;
+  font-family: 'Galmuri11', 'Galmuri9', monospace;
   color: var(--text);
+  -webkit-font-smoothing: none; /* 안티에일리어싱이 켜지면 비트맵이 뭉갠다 */
 }
 button {
   font: inherit;
@@ -71,9 +89,8 @@ button {
   padding: 7px 14px;
   font-size: 13px;
   color: var(--text);
-  background: #232427;
-  border: 1px solid var(--line);
-  border-radius: 18px;
+  background: #14142a;
+  border: 2px solid var(--line);
 }
 .search::placeholder {
   color: var(--muted);
@@ -85,9 +102,9 @@ button {
   font-weight: 700;
   cursor: pointer;
   color: var(--text);
-  background: #232427;
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  background: #2a2a48;
+  border: 2px solid var(--line);
+  box-shadow: var(--bevel);
 }
 .chat-toggle:hover {
   border-color: var(--brand);
@@ -123,7 +140,7 @@ button {
   text-overflow: ellipsis;
 }
 .nav-list li:hover {
-  background: #202124;
+  background: #26264a;
 }
 .nav-list .me {
   color: var(--brand);
@@ -132,8 +149,7 @@ button {
 .ico {
   flex: 0 0 22px;
   height: 22px;
-  border-radius: 50%;
-  background: #2b2d31;
+  background: #2b2d51;
   display: grid;
   place-items: center;
   font-size: 12px;
@@ -142,7 +158,6 @@ button {
   margin-left: auto;
   width: 6px;
   height: 6px;
-  border-radius: 50%;
   background: #ff4d4d;
 }
 
@@ -172,6 +187,7 @@ button {
 }
 .canvas-layer canvas {
   display: block;
+  image-rendering: pixelated; /* CSS로 늘린 캔버스는 브라우저가 뭉갠다 — 여기서 막는다 */
   width: 100% !important;
   height: 100% !important;
 }
@@ -194,7 +210,6 @@ button {
   padding: 2px 6px;
   font-size: 10px;
   font-weight: 800;
-  border-radius: 4px;
   background: #ff2d55;
   color: #fff;
   letter-spacing: 0.5px;
@@ -213,7 +228,6 @@ button {
 .avatar {
   width: 30px;
   height: 30px;
-  border-radius: 50%;
   background: #3a2b4d;
   display: grid;
   place-items: center;
@@ -224,10 +238,10 @@ button {
   padding: 6px 14px;
   font-size: 12px;
   font-weight: 700;
-  border: 1px solid var(--line);
-  border-radius: 16px;
+  border: 2px solid var(--line);
+  box-shadow: var(--bevel);
   cursor: pointer;
-  background: #232427;
+  background: #2a2a48;
   color: var(--text);
 }
 .follow.on {
@@ -237,7 +251,7 @@ button {
 }
 .sub {
   margin-left: 0;
-  background: #232427;
+  background: #22223a;
   color: var(--muted);
   cursor: default;
 }
@@ -247,7 +261,6 @@ button {
 }
 .nav::-webkit-scrollbar-thumb {
   background: #333;
-  border-radius: 3px;
 }
 
 /* 좁은 화면: 추천 채널부터 접는다 */
@@ -283,11 +296,9 @@ button {
   touch-action: none;
   user-select: none;
   padding: 3px 8px;
-  border-radius: 12px;
   font-weight: 700;
   color: #cfd2d6;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(2px);
+  background: rgba(10, 10, 24, 0.82);
 }
 .chat ul {
   list-style: none;
@@ -305,10 +316,8 @@ button {
   flex: 0 0 auto;
   max-width: 100%;
   padding: 3px 8px;
-  border-radius: 6px;
   line-height: 1.45;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(2px);
+  background: rgba(10, 10, 24, 0.82);
   color: #e8e9eb;
   word-break: break-word;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
@@ -353,7 +362,7 @@ button {
   justify-content: center;
   gap: clamp(6px, 1vw, 14px);
   text-align: center;
-  background: radial-gradient(ellipse at center, #14141c 0%, #0a0a10 100%);
+  background: #0e0e18;
   color: #eee;
   padding: 3%;
   overflow-y: auto;
@@ -419,14 +428,20 @@ button {
   font-size: clamp(14px, 1.4vw, 22px);
   font-weight: 700;
   color: #2a1800;
-  background: linear-gradient(90deg, #ffcf3a, #ff9d2e);
+  background: #ffcf3a;
   border: none;
-  border-radius: 10px;
+  box-shadow:
+    inset 2px 2px 0 #ffe98a,
+    inset -2px -2px 0 #b06a10;
   cursor: pointer;
-  transition: transform 0.1s;
 }
 .cta:hover {
-  transform: scale(1.04);
+  background: #ffe062;
+}
+.cta:active {
+  box-shadow:
+    inset -2px -2px 0 #ffe98a,
+    inset 2px 2px 0 #b06a10;
 }
 
 .upgrade .gold {
@@ -446,8 +461,8 @@ button {
   text-align: left;
   color: #fff;
   background: #2a2a3a;
-  border: 1px solid #3a3a4c;
-  border-radius: 8px;
+  border: 2px solid #3a3a4c;
+  box-shadow: var(--bevel);
   cursor: pointer;
 }
 .shop button:hover:not(:disabled) {
@@ -492,12 +507,12 @@ button {
   pointer-events: none;
 }
 .toast {
-  background: linear-gradient(90deg, #ffcf3a, #ff9d2e);
+  background: #ffcf3a;
+  border: 2px solid #2a1800;
   color: #2a1800;
   font-weight: 700;
   font-size: clamp(10px, 1vw, 15px);
   padding: 6px 16px;
-  border-radius: 8px;
   white-space: nowrap;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
   animation: toast-pop 2.2s ease forwards;
@@ -534,11 +549,10 @@ button {
   justify-content: center;
   gap: clamp(10px, 1.6vw, 22px);
   background: rgba(6, 6, 12, 0.82);
-  backdrop-filter: blur(2px);
   animation: don-in 0.18s ease;
 }
 .don-event.jackpot {
-  background: radial-gradient(ellipse at center, rgba(70, 10, 50, 0.86), rgba(6, 6, 12, 0.9));
+  background: rgba(48, 8, 40, 0.88);
 }
 @keyframes don-in {
   from {
@@ -588,9 +602,8 @@ button {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  border-radius: 10px;
   border: 2px solid var(--rar);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(0, 0, 0, 0.4));
+  background: #1a1a2c;
   box-shadow: 0 0 0 rgba(0, 0, 0, 0);
   transition:
     transform 0.12s,
