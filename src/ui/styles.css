@@ -281,7 +281,8 @@ button {
   right: 2%;
   z-index: 3;
   width: clamp(190px, 27%, 330px);
-  height: 76%;
+  height: auto; /* 줄 수만큼만 차지 — 노출 개수는 ChatPanel이 자른다 */
+  max-height: 40%;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -302,7 +303,7 @@ button {
 }
 .chat ul {
   list-style: none;
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-height: 0;
   overflow: hidden;
   display: flex;
