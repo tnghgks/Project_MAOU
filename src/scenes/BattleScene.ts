@@ -26,8 +26,33 @@ import { CHAT_POOLS, pickChatMood } from '../data/chat.ts';
 import { FINAL_EP, targetGold, bossOf } from '../data/progression.ts';
 import type { RunOutcome } from '../game/store.ts';
 
-const AUTO_INTERVAL = 3; // ponytail: 자동 소환 간격 — 체감 밀도 조절 knob
 const START_VIEWERS = 12; // 첫 방송 시청자 수
+// 소환 카드 바 (자동 소환 전용). ponytail: 밸런스 knob은 전부 여기
+const CARD = { w: 240, h: 108, gap: 12, x: 20, y: SUMMON_Y + 6 };
+const SLIDER = { x: 96, w: 136, h: 12 }; // 카드 좌상단 기준 오프셋
+const INTERVAL_MIN = 0.5;
+const INTERVAL_MAX = 6;
+const COUNT_MIN = 1;
+const COUNT_MAX = 5;
+const MAX_ALIVE = 60; // 동시 생존 상한 — 넘으면 소환 스킵 (프레임 보호)
+
+// 몬스터 종류 1개 = 카드 1장. 활성화된 카드는 서로 독립적으로 자기 주기마다 count마리씩 소환한다.
+interface SummonSlot {
+  type: MonsterId;
+  on: boolean;
+  interval: number;
+  count: number;
+  t: number; // 다음 소환까지 남은 시간
+  bg: Phaser.GameObjects.Rectangle;
+  chip: Phaser.GameObjects.Text;
+  cd: Phaser.GameObjects.Rectangle; // 하단 주기 게이지
+  iv: SliderView;
+  ct: SliderView;
+}
+interface SliderView {
+  label: Phaser.GameObjects.Text;
+  fill: Phaser.GameObjects.Rectangle;
+}
 const HP_BAR_W = 48; // ponytail: 체력바 크기 knob
 const HP_BAR_H = 8;
 const SHAKE_HOLD = 999_999; // 경보 흔들림은 단계가 바뀔 때까지 유지 (reset으로 끈다)
@@ -56,12 +81,8 @@ export default class BattleScene extends Phaser.Scene {
   tier!: HypeTier; // HudScene가 읽음
   over!: boolean;
   available!: MonsterId[];
-  selectedType!: MonsterId;
-  summonBtns!: Record<string, Phaser.GameObjects.Rectangle>;
-  autoOn = false;
-  autoT = 0;
-  autoBtn!: Phaser.GameObjects.Rectangle;
-  autoLabel!: Phaser.GameObjects.Text;
+  slots!: SummonSlot[];
+  dragging: { slot: SummonSlot; kind: 'interval' | 'count'; x: number } | null = null; // 드래그 중인 슬라이더
   heroSpr!: Phaser.GameObjects.Image;
   heroHpBar!: Phaser.GameObjects.Graphics;
   pendingSkill: SkillOutcome | null = null; // 리액션 리듬 결과 — 전투 재개 시점에 발동
@@ -98,9 +119,7 @@ export default class BattleScene extends Phaser.Scene {
     this.over = false;
 
     this.available = (Object.keys(MONSTERS) as MonsterId[]).filter((k) => MONSTERS[k].unlock <= S.episode);
-    this.selectedType = this.available[0];
-    this.autoOn = false;
-    this.autoT = 0;
+    this.dragging = null;
 
     this.buildUI();
     this.heroSpr = this.add.image(this.hero.x, this.hero.y, 'hero').setScale(1.3);
@@ -117,11 +136,16 @@ export default class BattleScene extends Phaser.Scene {
     busBind(this, 'donation:end', ({ card }) => this.endDonation(card));
     // Hud/Rhythm 중지는 App 디렉터가 담당 (shutdown 중 형제 씬 stop은 신뢰 불가)
 
-    // 입력: 마우스 소환 + 숫자키 = 해당 종류를 랜덤 위치에 즉시 소환 (버튼 선택은 그대로 유지)
-    this.input.on('pointerdown', (p: Phaser.Input.Pointer) => this.trySummon(p));
+    // 입력: 슬라이더 드래그(카드 밖으로 나가도 추적) + 숫자키 = 해당 카드 ON/OFF
+    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      if (this.dragging && p.isDown) this.dragTo(p.x);
+    });
+    this.input.on('pointerup', () => {
+      this.dragging = null;
+    });
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
       const digit = parseInt(e.key, 10);
-      if (digit >= 1 && digit <= this.available.length) this.summonRandom(this.available[digit - 1]);
+      if (digit >= 1 && digit <= this.slots.length) this.toggleSlot(this.slots[digit - 1]);
     });
 
     this.pushChat(
@@ -129,6 +153,7 @@ export default class BattleScene extends Phaser.Scene {
       this.isFinal ? '최종화 — 마왕이 직접 나선다!' : `${S.episode}화 방송이 시작되었습니다.`,
       '#888888',
     );
+    this.pushChat('시스템', '카드를 눌러 자동 소환 ON/OFF · 바를 드래그해 주기·수량 조절', '#888888');
   }
 
   buildUI() {
@@ -136,74 +161,132 @@ export default class BattleScene extends Phaser.Scene {
     // 전투 영역 chrome (상단바=Hud, 리듬레인=Rhythm)
     add.rectangle(CX, (SUMMON_Y + 640) / 2, ARENA.w, 640 - SUMMON_Y, 0x1a1a24).setDepth(5); // 소환 바
     add.line(0, 0, ARENA.x, SUMMON_Y, ARENA.w, SUMMON_Y, 0x333344).setOrigin(0).setDepth(5);
+    this.slots = this.available.map((k, i) => this.buildCard(k, i));
+    this.toggleSlot(this.slots[0]); // 첫 카드는 켜둔다 — 수동 소환이 없어 전부 OFF면 방송이 안 굴러간다
+  }
 
-    // 소환 버튼 (해금된 몬스터만)
-    this.summonBtns = {};
-    let bx = 20;
-    this.available.forEach((k, i) => {
-      const m = MONSTERS[k];
-      const btn = add
-        .rectangle(bx, SUMMON_Y + 14, 150, 30, 0x2a2a3a)
-        .setOrigin(0)
-        .setDepth(6)
-        .setInteractive();
-      add.text(bx + 6, SUMMON_Y + 20, `${i + 1}.${m.name}`, { fontSize: '12px', color: '#ffffff' }).setDepth(7);
-      btn.on('pointerdown', (_p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => {
-        ev.stopPropagation();
-        this.selectType(k);
-      });
-      this.summonBtns[k] = btn;
-      bx += 158;
-    });
-    this.selectType(this.selectedType);
+  // 소환 카드 1장: 초상화 + 종류 정보 + 주기/수량 슬라이더. 카드 본체 클릭 = ON/OFF.
+  buildCard(t: MonsterId, i: number): SummonSlot {
+    const add = this.add;
+    const def = MONSTERS[t];
+    const x = CARD.x + i * (CARD.w + CARD.gap);
+    const y = CARD.y;
 
-    // 자동 소환 토글: 선택된 종류를 AUTO_INTERVAL 간격으로 랜덤 위치에 소환
-    this.autoBtn = add
-      .rectangle(bx, SUMMON_Y + 14, 110, 30, 0x2a2a3a)
+    const bg = add
+      .rectangle(x, y, CARD.w, CARD.h, 0x22222e)
       .setOrigin(0)
       .setDepth(6)
+      .setStrokeStyle(2, 0x3a3a4a)
       .setInteractive();
-    this.autoLabel = add.text(bx + 8, SUMMON_Y + 20, '', { fontSize: '12px', color: '#ffffff' }).setDepth(7);
-    this.autoBtn.on(
-      'pointerdown',
-      (_p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => {
-        ev.stopPropagation();
-        this.toggleAuto();
-      },
-    );
-    this.renderAutoBtn();
+    add
+      .rectangle(x + 8, y + 8, 44, 44, 0x11111a)
+      .setOrigin(0)
+      .setDepth(7)
+      .setStrokeStyle(1, 0x4a4a5e);
+    add
+      .image(x + 30, y + 30, `m_${t}`)
+      .setDisplaySize(40, 40)
+      .setDepth(8);
+    add.text(x + 60, y + 10, def.name, { fontSize: '13px', fontStyle: 'bold', color: '#ffffff' }).setDepth(8);
+    add
+      .text(x + 60, y + 30, `[${i + 1}] ⚔${def.dmg} ♥${def.hp} 💰${def.gold}`, { fontSize: '11px', color: '#8a8aa0' })
+      .setDepth(8);
+    const chip = add
+      .text(x + CARD.w - 10, y + 10, '', { fontSize: '12px', fontStyle: 'bold' })
+      .setOrigin(1, 0)
+      .setDepth(8);
+    const cd = add
+      .rectangle(x + 2, y + CARD.h - 6, 0, 4, 0xffaa33)
+      .setOrigin(0)
+      .setDepth(8);
+
+    const iv = this.buildSlider(x, y + 58);
+    const ct = this.buildSlider(x, y + 82);
+    const slot: SummonSlot = { type: t, on: false, interval: 3, count: 1, t: 0, bg, chip, cd, iv, ct };
+
+    bg.on('pointerdown', () => this.toggleSlot(slot));
+    iv.hit.on('pointerdown', (p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => {
+      ev.stopPropagation(); // 슬라이더 조작이 카드 토글로 새지 않게
+      this.dragging = { slot, kind: 'interval', x: x + SLIDER.x };
+      this.dragTo(p.x);
+    });
+    ct.hit.on('pointerdown', (p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => {
+      ev.stopPropagation();
+      this.dragging = { slot, kind: 'count', x: x + SLIDER.x };
+      this.dragTo(p.x);
+    });
+    this.refreshCard(slot);
+    return slot;
   }
 
-  toggleAuto() {
-    this.autoOn = !this.autoOn;
-    this.autoT = 0; // 켜자마자 1마리
-    this.renderAutoBtn();
+  // 트랙 + 채움 + 판정용 히트박스(트랙보다 세로로 넉넉하게 — 얇은 바를 정확히 집기 어렵다)
+  buildSlider(x: number, ry: number): SliderView & { hit: Phaser.GameObjects.Rectangle } {
+    const add = this.add;
+    const label = add.text(x + 10, ry, '', { fontSize: '11px', color: '#c8c8dd' }).setDepth(8);
+    add
+      .rectangle(x + SLIDER.x, ry - 1, SLIDER.w, SLIDER.h, 0x11111a)
+      .setOrigin(0)
+      .setDepth(7);
+    const fill = add
+      .rectangle(x + SLIDER.x, ry - 1, 0, SLIDER.h, 0x5566cc)
+      .setOrigin(0)
+      .setDepth(8);
+    const hit = add
+      .rectangle(x + SLIDER.x, ry - 6, SLIDER.w, SLIDER.h + 12, 0xffffff, 0)
+      .setOrigin(0)
+      .setDepth(9)
+      .setInteractive();
+    return { label, fill, hit };
   }
 
-  renderAutoBtn() {
-    this.autoBtn.setFillStyle(this.autoOn ? 0xcc6633 : 0x2a2a3a);
-    this.autoLabel.setText(this.autoOn ? '⏸ 자동 ON' : '▶ 자동소환');
+  toggleSlot(s: SummonSlot) {
+    s.on = !s.on;
+    s.t = 0; // 켜자마자 1회
+    this.refreshCard(s);
   }
 
-  selectType(k: MonsterId) {
-    this.selectedType = k;
-    for (const [t, btn] of Object.entries(this.summonBtns)) btn.setFillStyle(t === k ? 0x555577 : 0x2a2a3a);
-  }
-
-  // ── 소환 ──
-  trySummon(p: Phaser.Input.Pointer) {
-    if (this.over) return;
-    if (p.x < ARENA.x || p.x > ARENA.x + ARENA.w || p.y < ARENA.y || p.y > SUMMON_Y) return;
-    if (Phaser.Math.Distance.Between(p.x, p.y, this.hero.x, this.hero.y) < SUMMON_MIN_RADIUS) {
-      this.floatText(p.x, p.y, '용사와 너무 가까움!', '#ff6666');
-      return;
+  // 클릭/드래그 x → 슬라이더 값. 트랙 밖으로 나가도 양 끝에 물린다.
+  dragTo(px: number) {
+    const d = this.dragging;
+    if (!d) return;
+    const r = clamp((px - d.x) / SLIDER.w, 0, 1);
+    if (d.kind === 'interval') {
+      d.slot.interval = Math.round((INTERVAL_MIN + r * (INTERVAL_MAX - INTERVAL_MIN)) * 10) / 10;
+      d.slot.t = Math.min(d.slot.t, d.slot.interval);
+    } else {
+      d.slot.count = Math.round(COUNT_MIN + r * (COUNT_MAX - COUNT_MIN));
     }
-    this.doSummon(this.selectedType, p.x, p.y);
+    this.refreshCard(d.slot);
   }
 
-  // 숫자키/자동: 용사 반경(SUMMON_MIN_RADIUS) 밖 랜덤 지점에 즉시 소환
+  refreshCard(s: SummonSlot) {
+    s.bg.setFillStyle(s.on ? 0x2c3350 : 0x22222e).setStrokeStyle(2, s.on ? 0xffaa33 : 0x3a3a4a);
+    s.chip.setText(s.on ? '● ON' : '○ OFF').setColor(s.on ? '#ffcc44' : '#666677');
+    s.iv.label.setText(`주기 ${s.interval.toFixed(1)}s`);
+    s.iv.fill.width = (SLIDER.w * (s.interval - INTERVAL_MIN)) / (INTERVAL_MAX - INTERVAL_MIN);
+    s.ct.label.setText(`수량 ×${s.count}`);
+    s.ct.fill.width = (SLIDER.w * (s.count - COUNT_MIN)) / (COUNT_MAX - COUNT_MIN);
+  }
+
+  // 카드별 자동 소환: 활성 카드는 서로 독립적으로 자기 주기마다 count마리
+  stepSummon(dt: number) {
+    for (const s of this.slots) {
+      if (!s.on) {
+        s.cd.width = 0;
+        continue;
+      }
+      s.t -= dt;
+      if (s.t <= 0) {
+        for (let i = 0; i < s.count; i++) this.summonRandom(s.type);
+        s.t = s.interval;
+      }
+      s.cd.width = (CARD.w - 4) * (1 - clamp(s.t / s.interval, 0, 1));
+    }
+  }
+
+  // ── 소환: 용사 반경(SUMMON_MIN_RADIUS) 밖 랜덤 지점 ──
   summonRandom(t: MonsterId) {
-    if (this.over) return;
+    if (this.over || this.monsters.length >= MAX_ALIVE) return;
     for (let i = 0; i < 10; i++) {
       // ponytail: 아레나가 넓어 몇 번 안에 성공, 실패 시 이번 입력 무시
       const x = Phaser.Math.Between(ARENA.x + 20, ARENA.x + ARENA.w - 20);
@@ -371,13 +454,7 @@ export default class BattleScene extends Phaser.Scene {
       this.spawnBoss();
     }
 
-    if (this.autoOn) {
-      this.autoT -= dt;
-      if (this.autoT <= 0) {
-        this.summonRandom(this.selectedType);
-        this.autoT = AUTO_INTERVAL;
-      }
-    }
+    this.stepSummon(dt);
 
     const near = countNear(this.monsters, H);
     // this는 { viewers, peakViewers, drift } 필드를 가져 ViewerState로 그대로 넘긴다.

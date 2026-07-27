@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { clamp, type ViewerAlert } from '../formulas.ts';
 import { gameState } from '../game/store.ts';
+import { ARENA, CX } from '../game/layout.ts';
 import type BattleScene from './BattleScene.ts';
 
 const ALERT_COLORS: Record<ViewerAlert, string> = { normal: '#ffffff', warn: '#ff9933', critical: '#ff4444' };
@@ -39,7 +40,7 @@ export default class HudScene extends Phaser.Scene {
     this.hypeLabel = add.text(670, 10, '', { fontSize: '16px', color: '#ffffff' }).setDepth(6);
 
     // 벼랑끝 비네팅
-    this.vignette = add.rectangle(640, 300, 1280, 520, 0xff0000, 0).setDepth(4);
+    this.vignette = add.rectangle(CX, ARENA.y + ARENA.h / 2, ARENA.w, ARENA.h, 0xff0000, 0).setDepth(4);
   }
 
   update() {
