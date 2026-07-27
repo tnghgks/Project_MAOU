@@ -66,6 +66,27 @@ export function criticalStep(viewers: number, critical: boolean, critT: number):
   return critT <= 0 ? 'fail' : 'none';
 }
 
+// criticalStep을 한 프레임 적용하는 순수 리듀서: 감소 → 분류 → 상태 반영.
+// BattleScene.updateCritical과 test/critical.test.ts가 이 전이 로직을 공유한다(재구현 금지).
+// s를 제자리 변이하고, 씬이 연출(채팅/방송종료)로 반응할 이벤트만 반환한다. 'none'은 null.
+export interface CritState {
+  critical: boolean;
+  critT: number;
+}
+export type CritEvent = 'enter' | 'exit' | 'fail' | null;
+export function stepCritical(s: CritState, viewers: number, dt: number): CritEvent {
+  if (s.critical) s.critT -= dt;
+  const action = criticalStep(viewers, s.critical, s.critT);
+  if (action === 'enter') {
+    s.critical = true;
+    s.critT = CRIT_TIME;
+  } else if (action === 'exit') {
+    s.critical = false;
+    s.critT = 0;
+  }
+  return action === 'none' ? null : action;
+}
+
 // 카운트다운은 히스테리시스(CRIT_ESCAPE)를 타므로 critical 상태를 그대로 받는다
 export type ViewerAlert = 'normal' | 'warn' | 'critical';
 export function viewerAlert(viewers: number, critical: boolean): ViewerAlert {

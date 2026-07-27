@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useStore } from 'zustand';
 import { gameStore, gameState } from '../game/store.ts';
-import { UPGRADES, upgradeCost, type UpgradeKey } from '../data/upgrades.ts';
+import { type UpgradeKey } from '../data/upgrades.ts';
 import { bus } from '../game/events.ts';
 import { useDrag } from './useDrag.ts';
+import UpgradeShopList from './UpgradeShopList.tsx';
 
 // 전투 중 실시간 강화 상점. 구매 = store 액션 → bus로 BattleScene에 통지 (씬 로컬 hero 동기화 + 임팩트).
 export default function ShopPanel() {
@@ -26,17 +27,7 @@ export default function ShopPanel() {
             <span className="grip">⠿</span>💰 {Math.floor(gold).toLocaleString()}G
           </p>
           <ul className="shop">
-            {(Object.keys(UPGRADES) as UpgradeKey[]).map((key) => {
-              const u = UPGRADES[key];
-              const cost = upgradeCost(key, upgradeLevels[key]);
-              return (
-                <li key={key}>
-                  <button disabled={gold < cost} onClick={() => buy(key)}>
-                    {u.name} <span className="lv">Lv.{upgradeLevels[key]}</span> +{u.delta} → {cost.toLocaleString()}G
-                  </button>
-                </li>
-              );
-            })}
+            <UpgradeShopList gold={gold} upgradeLevels={upgradeLevels} onBuy={buy} />
           </ul>
         </div>
       )}

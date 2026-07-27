@@ -1,7 +1,14 @@
 import assert from 'node:assert';
 import {
-  danger, hypeTier, donationBase, donationInterval, donationAmount, judge, skillResult,
-  viewerDrift, DRIFT_MAX,
+  danger,
+  hypeTier,
+  donationBase,
+  donationInterval,
+  donationAmount,
+  judge,
+  skillResult,
+  viewerDrift,
+  DRIFT_MAX,
 } from '../src/formulas.ts';
 
 // 위험도: 풀피+몹0 = 0, 빈사+몹10 = 1
@@ -24,8 +31,14 @@ assert.ok(donationBase(12) > donationBase(300) && donationBase(300) > donationBa
 // 실제 간격은 지수분포 — 평균은 base 근처, 극단은 [0.25x, 2.5x]로 컷
 {
   const base = donationBase(500);
-  assert.strictEqual(donationInterval(500, () => 0), base * 0.25); // rnd→0: 하한 클램프
-  assert.strictEqual(donationInterval(500, () => 0.999999), base * 2.5); // rnd→1: 상한 클램프
+  assert.strictEqual(
+    donationInterval(500, () => 0),
+    base * 0.25,
+  ); // rnd→0: 하한 클램프
+  assert.strictEqual(
+    donationInterval(500, () => 0.999999),
+    base * 2.5,
+  ); // rnd→1: 상한 클램프
   let sum = 0;
   const n = 20000;
   for (let i = 0; i < n; i++) sum += donationInterval(500, Math.random);
@@ -65,12 +78,14 @@ const dt = 1 / 60;
   // 핵심: 프레임 간에는 이어지되(진동 아님), 수십 초 단위로는 크게 방황해야 자연스럽다
   let d = 0;
   let maxJump = 0;
-  let lo = Infinity, hi = -Infinity;
+  let lo = Infinity,
+    hi = -Infinity;
   for (let i = 0; i < 60 * 60; i++) {
     const prev = d;
     d = viewerDrift(d, dt);
     maxJump = Math.max(maxJump, Math.abs(d - prev));
-    lo = Math.min(lo, d); hi = Math.max(hi, d);
+    lo = Math.min(lo, d);
+    hi = Math.max(hi, d);
   }
   assert.ok(maxJump < DRIFT_MAX * 0.2, `프레임 간 튐 — 진동으로 보인다 (${maxJump})`);
   assert.ok(hi - lo > DRIFT_MAX, `방황 폭이 좁다 — 여전히 기계적 (${hi - lo})`);

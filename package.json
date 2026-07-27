@@ -8,9 +8,18 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "tsx test/formulas.test.ts && tsx test/store.test.ts && tsx test/critical.test.ts && tsx test/nicknames.test.ts",
+    "test": "tsx test/formulas.test.ts && tsx test/store.test.ts && tsx test/critical.test.ts && tsx test/nicknames.test.ts && tsx test/skills.test.ts && tsx test/battleSim.test.ts",
+    "format": "prettier --write src test",
+    "format:check": "prettier --check src test",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
+  },
+  "prettier": {
+    "printWidth": 120,
+    "singleQuote": true,
+    "semi": true,
+    "trailingComma": "all",
+    "arrowParens": "always"
   },
   "dependencies": {
     "phaser": "^3.80.1",
@@ -24,6 +33,7 @@
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react": "^4.3.4",
     "gh-pages": "^6.3.0",
+    "prettier": "^3.9.6",
     "tsx": "^4.23.1",
     "typescript": "^7.0.2",
     "vite": "^5.4.0"

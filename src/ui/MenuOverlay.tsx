@@ -6,7 +6,12 @@ import ResultView from './ResultView.tsx';
 import UpgradeView from './UpgradeView.tsx';
 import EndingView from './EndingView.tsx';
 
-const VIEWS: Partial<Record<Phase, FC>> = { title: TitleView, result: ResultView, upgrade: UpgradeView, ending: EndingView };
+const VIEWS: Partial<Record<Phase, FC>> = {
+  title: TitleView,
+  result: ResultView,
+  upgrade: UpgradeView,
+  ending: EndingView,
+};
 
 export default function MenuOverlay() {
   const phase = useStore(gameStore, (s) => s.phase);

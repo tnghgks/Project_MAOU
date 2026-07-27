@@ -3,7 +3,10 @@ import { gameStore, gameState } from '../game/store.ts';
 
 export default function TitleView() {
   const records = useStore(gameStore, (s) => s.records);
-  const start = () => { gameState().resetRun(); gameState().setPhase('broadcast'); };
+  const start = () => {
+    gameState().resetRun();
+    gameState().setPhase('broadcast');
+  };
   return (
     <div className="menu">
       <h1 className="title-logo">마왕 채널</h1>
@@ -15,9 +18,13 @@ export default function TitleView() {
         <p>용사를 죽이지 마라. 단, 죽기 직전까지 몰아붙여라.</p>
       </div>
       {(records.bestViewers || records.bestGold) > 0 && (
-        <p className="records">최고 동접 {records.bestViewers.toLocaleString()}명 · 최고 골드 {records.bestGold.toLocaleString()}G</p>
+        <p className="records">
+          최고 동접 {records.bestViewers.toLocaleString()}명 · 최고 골드 {records.bestGold.toLocaleString()}G
+        </p>
       )}
-      <button className="cta" onClick={start}>▶ 방송 시작</button>
+      <button className="cta" onClick={start}>
+        ▶ 방송 시작
+      </button>
     </div>
   );
 }

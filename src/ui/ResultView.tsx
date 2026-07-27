@@ -7,11 +7,17 @@ const FAIL = {
 };
 
 export default function ResultView() {
-  const { lastRun, gold, episode } = useStore(gameStore, (s) => ({ lastRun: s.lastRun, gold: s.gold, episode: s.episode }));
+  const { lastRun, gold, episode } = useStore(gameStore, (s) => ({
+    lastRun: s.lastRun,
+    gold: s.gold,
+    episode: s.episode,
+  }));
   const fail = lastRun.outcome === 'clear' ? null : FAIL[lastRun.outcome];
   const proceed = () => {
-    if (fail) { gameState().resetRun(); gameState().setPhase('title'); }
-    else gameState().setPhase('upgrade');
+    if (fail) {
+      gameState().resetRun();
+      gameState().setPhase('title');
+    } else gameState().setPhase('upgrade');
   };
   return (
     <div className="menu">
@@ -27,12 +33,26 @@ export default function ResultView() {
         </>
       )}
       <dl className="stats">
-        <div><dt>최고 동접</dt><dd>{lastRun.peakViewers.toLocaleString()}명</dd></div>
-        <div><dt>총 도네이션</dt><dd>{lastRun.totalDonated.toLocaleString()}G</dd></div>
-        <div><dt>보유 골드</dt><dd>{Math.floor(gold).toLocaleString()}G</dd></div>
-        <div><dt>처치한 몬스터</dt><dd>{lastRun.kills}마리</dd></div>
+        <div>
+          <dt>최고 동접</dt>
+          <dd>{lastRun.peakViewers.toLocaleString()}명</dd>
+        </div>
+        <div>
+          <dt>총 도네이션</dt>
+          <dd>{lastRun.totalDonated.toLocaleString()}G</dd>
+        </div>
+        <div>
+          <dt>보유 골드</dt>
+          <dd>{Math.floor(gold).toLocaleString()}G</dd>
+        </div>
+        <div>
+          <dt>처치한 몬스터</dt>
+          <dd>{lastRun.kills}마리</dd>
+        </div>
       </dl>
-      <button className="cta" onClick={proceed}>{fail ? '↺ 타이틀로' : '▶ 육성 화면으로'}</button>
+      <button className="cta" onClick={proceed}>
+        {fail ? '↺ 타이틀로' : '▶ 육성 화면으로'}
+      </button>
     </div>
   );
 }

@@ -16,9 +16,15 @@ export function useDrag() {
     const p = panel.getBoundingClientRect();
     const b = box.getBoundingClientRect();
     g.current = {
-      on: true, px: e.clientX, py: e.clientY, dx: d.x, dy: d.y,
-      minX: d.x - (p.left - b.left), maxX: d.x + (b.right - p.right),
-      minY: d.y - (p.top - b.top), maxY: d.y + (b.bottom - p.bottom),
+      on: true,
+      px: e.clientX,
+      py: e.clientY,
+      dx: d.x,
+      dy: d.y,
+      minX: d.x - (p.left - b.left),
+      maxX: d.x + (b.right - p.right),
+      minY: d.y - (p.top - b.top),
+      maxY: d.y + (b.bottom - p.bottom),
     };
     e.currentTarget.setPointerCapture(e.pointerId);
   };

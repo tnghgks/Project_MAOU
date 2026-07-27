@@ -23,7 +23,9 @@ export default class RhythmScene extends Phaser.Scene {
   noteResults!: Judgement[];
   judgeText!: Phaser.GameObjects.Text;
 
-  constructor() { super('Rhythm'); }
+  constructor() {
+    super('Rhythm');
+  }
 
   create() {
     this.notes = [];
@@ -31,9 +33,15 @@ export default class RhythmScene extends Phaser.Scene {
 
     const add = this.add;
     add.rectangle(640, (LANE_Y + 720) / 2, 1280, 720 - LANE_Y, 0x0d0d14).setDepth(5);
-    add.circle(HIT_X, LANE_Y + 40, 24).setStrokeStyle(3, 0xffffff).setDepth(6);
+    add
+      .circle(HIT_X, LANE_Y + 40, 24)
+      .setStrokeStyle(3, 0xffffff)
+      .setDepth(6);
     add.text(20, LANE_Y + 30, 'QWER▶', { fontSize: '16px', color: '#555566' }).setDepth(6);
-    this.judgeText = add.text(HIT_X, LANE_Y + 8, '', { fontSize: '16px', fontStyle: 'bold', color: '#ffffff' }).setOrigin(0.5).setDepth(8);
+    this.judgeText = add
+      .text(HIT_X, LANE_Y + 8, '', { fontSize: '16px', fontStyle: 'bold', color: '#ffffff' })
+      .setOrigin(0.5)
+      .setDepth(8);
 
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
       const k = e.key.toUpperCase();
@@ -42,7 +50,9 @@ export default class RhythmScene extends Phaser.Scene {
   }
 
   // ponytail: seam — BGM 도입 시 AudioContext.currentTime 기준으로 교체 (rAF 드리프트 방지)
-  audioClock() { return this.time.now / 1000; }
+  audioClock() {
+    return this.time.now / 1000;
+  }
 
   spawnSeq() {
     if (this.notes.length > 0) return; // 진행 중이면 무시 (레인 겹침 방지)
@@ -52,7 +62,10 @@ export default class RhythmScene extends Phaser.Scene {
       const key = Phaser.Utils.Array.GetRandom(KEYS);
       const hitTime = now + 1.8 + i * BEAT;
       const spr = this.add.circle(0, LANE_Y + 40, 18, KEY_COLORS[key]).setDepth(7);
-      const txt = this.add.text(0, LANE_Y + 40, key, { fontSize: '18px', fontStyle: 'bold', color: '#000000' }).setOrigin(0.5).setDepth(8);
+      const txt = this.add
+        .text(0, LANE_Y + 40, key, { fontSize: '18px', fontStyle: 'bold', color: '#000000' })
+        .setOrigin(0.5)
+        .setDepth(8);
       this.notes.push({ key, hitTime, spr, txt, done: false });
     }
   }

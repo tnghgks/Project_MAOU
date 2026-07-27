@@ -3,7 +3,9 @@ import { loadGame, gameState } from '../game/store.ts';
 import { MONSTERS } from '../data/monsters.ts';
 
 export default class BootScene extends Phaser.Scene {
-  constructor() { super('Boot'); }
+  constructor() {
+    super('Boot');
+  }
 
   preload() {
     // Kenney Tiny Dungeon (CC0), 16×16. 몬스터 스프라이트는 data 테이블에서 파일명 참조.
