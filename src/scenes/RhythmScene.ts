@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
 import { judge, skillResult, type Judgement } from '../formulas.ts';
 import { bus, busBind } from '../game/events.ts';
+import { CANVAS, CX, SUMMON_Y } from '../game/layout.ts';
 
-const LANE_Y = 640;
+const LANE_Y = SUMMON_Y; // 레인은 소환 바를 통째로 덮는다 — 리액션 중엔 전투가 멈춰 카드를 못 쓴다
+const NOTE_Y = (LANE_Y + CANVAS.H) / 2; // 레인 세로 중앙
 const HIT_X = 140;
 const NOTE_SPEED = 400; // px/s
 const BEAT = 60 / 128; // 128 BPM
@@ -39,9 +41,9 @@ export default class RhythmScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.lane = add
       .container(0, 0, [
-        add.rectangle(640, (LANE_Y + 720) / 2, 1280, 720 - LANE_Y, 0x0d0d14),
-        add.circle(HIT_X, LANE_Y + 40, 24).setStrokeStyle(3, 0xffffff),
-        add.text(20, LANE_Y + 30, 'QWER▶', { fontSize: '16px', color: '#555566' }),
+        add.rectangle(CX, NOTE_Y, CANVAS.W, CANVAS.H - LANE_Y, 0x0d0d14),
+        add.circle(HIT_X, NOTE_Y, 24).setStrokeStyle(3, 0xffffff),
+        add.text(20, NOTE_Y - 10, 'QWER▶', { fontSize: '16px', color: '#555566' }),
         this.judgeText,
       ])
       .setDepth(5)
@@ -68,9 +70,9 @@ export default class RhythmScene extends Phaser.Scene {
     for (let i = 0; i < 4; i++) {
       const key = Phaser.Utils.Array.GetRandom(KEYS);
       const hitTime = now + 1.8 + i * BEAT;
-      const spr = this.add.circle(0, LANE_Y + 40, 18, KEY_COLORS[key]).setDepth(7);
+      const spr = this.add.circle(0, NOTE_Y, 18, KEY_COLORS[key]).setDepth(7);
       const txt = this.add
-        .text(0, LANE_Y + 40, key, { fontSize: '18px', fontStyle: 'bold', color: '#000000' })
+        .text(0, NOTE_Y, key, { fontSize: '18px', fontStyle: 'bold', color: '#000000' })
         .setOrigin(0.5)
         .setDepth(8);
       this.notes.push({ key, hitTime, spr, txt, done: false });

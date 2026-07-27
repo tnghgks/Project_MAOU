@@ -1,10 +1,12 @@
 // 아레나 배경 타일맵을 에피소드 시드로 절차 생성한다.
-// 16×16 타일 40×15 → scale 2에서 ARENA(1280×480)에 정확히 맞는다.
+// 16×16 타일을 scale 2로 깔아 ARENA에 정확히 맞춘다 — 가로 칸 수는 캔버스 폭을 따라간다.
 // 타일 인덱스는 assets/Tilemap/tilemap.png(12열) 기준 0-based. 빈 칸은 -1.
-// ponytail: Phaser를 import하지 않는다 — node 테스트가 window 없이 이 모듈을 돌려야 한다.
+// ponytail: Phaser를 import하지 않는다 — node 테스트가 window 없이 이 모듈을 돌려야 한다
+// (layout도 window 없으면 기본 폭으로 떨어진다).
+import { ARENA, TILE_PX } from './layout.ts';
 
-export const MAP_W = 40;
-export const MAP_H = 15;
+export const MAP_W = ARENA.w / TILE_PX;
+export const MAP_H = ARENA.h / TILE_PX;
 
 // 벽 9-slice + 바닥
 const T = {

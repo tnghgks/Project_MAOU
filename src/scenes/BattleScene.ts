@@ -14,7 +14,7 @@ import {
 } from '../formulas.ts';
 import { gameState, heroPower } from '../game/store.ts';
 import { bus, busBind } from '../game/events.ts';
-import { ARENA, SUMMON_Y, CX, arenaBounds } from '../game/layout.ts';
+import { ARENA, CANVAS, SUMMON_Y, CX, arenaBounds } from '../game/layout.ts';
 import { buildArenaMap } from '../game/arenaMap.ts';
 import { spawnHero, type HeroEntity, type MonsterEntity, type Arrow, type SkillContext } from '../game/entities.ts';
 import { stepHero, stepMonster, stepArrow, stepViewers, countNear, SUMMON_MIN_RADIUS } from '../game/battleSim.ts';
@@ -42,7 +42,7 @@ import type { RunOutcome } from '../game/store.ts';
 
 const START_VIEWERS = 12; // 첫 방송 시청자 수
 // 소환 카드 바 (자동 소환 전용). ponytail: 밸런스 knob은 전부 여기
-const CARD = { w: 240, h: 108, gap: 12, x: 20, y: SUMMON_Y + 6 };
+const CARD = { w: 240, h: 108, gap: 12, x: 20, y: SUMMON_Y + (CANVAS.H - SUMMON_Y - 108) / 2 }; // 소환 바 세로 중앙
 const SLIDER = { x: 96, w: 136, h: 12 }; // 카드 좌상단 기준 오프셋
 const INTERVAL_MIN = 0.5;
 const INTERVAL_MAX = 6;
@@ -193,7 +193,7 @@ export default class BattleScene extends Phaser.Scene {
     map.createBlankLayer('Props', tiles, ARENA.x, ARENA.y)!.setScale(2).setDepth(-9).putTilesAt(props, 0, 0);
 
     // 전투 영역 chrome (상단바=Hud, 리듬레인=Rhythm)
-    add.rectangle(CX, (SUMMON_Y + 640) / 2, ARENA.w, 640 - SUMMON_Y, 0x1a1a24).setDepth(5); // 소환 바
+    add.rectangle(CX, (SUMMON_Y + CANVAS.H) / 2, ARENA.w, CANVAS.H - SUMMON_Y, 0x1a1a24).setDepth(5); // 소환 바
     add.line(0, 0, ARENA.x, SUMMON_Y, ARENA.w, SUMMON_Y, 0x333344).setOrigin(0).setDepth(5);
     this.slots = this.available.map((k, i) => this.buildCard(k, i));
     this.toggleSlot(this.slots[0]); // 첫 카드는 켜둔다 — 수동 소환이 없어 전부 OFF면 방송이 안 굴러간다
