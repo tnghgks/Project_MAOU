@@ -30,4 +30,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Build and deploy
-        run: npm run deploy -- -u "github-actions[bot] <github-actions[bot]@users.noreply.github.com>"
+        run: npm run deploy
