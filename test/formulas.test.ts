@@ -32,15 +32,15 @@ assert.ok(Math.abs(danger(1, 0, COMBO_FULL / 2) - COMBO_BONUS / 2) < 1e-9);
 assert.strictEqual(danger(1, 0, 0), danger(1, 0), '콤보 0 = 기존 동작');
 
 // 구간 경계
-assert.strictEqual(hypeTier(0.1).rate, -0.03);
-assert.strictEqual(hypeTier(0.5).rate, 0.05);
-assert.strictEqual(hypeTier(0.9).rate, 0.09);
+assert.strictEqual(hypeTier(0.1).rate, -0.01);
+assert.strictEqual(hypeTier(0.5).rate, 0.03);
+assert.strictEqual(hypeTier(0.9).rate, 0.05);
 
-// 도네 간격: 38 - 7.5*log10(v), [5,30] 클램프
-assert.strictEqual(donationInterval(10), 30); // 10명 = 상한 (30.5 → 컷)
-assert.ok(Math.abs(donationInterval(10000) - 8) < 1e-9); // 1만명 = 8초
-assert.strictEqual(donationInterval(1e9), 5); // 하한
-assert.strictEqual(donationInterval(0), 30); // log10(0)=-Inf 방어
+// 도네 간격: 30 - 5*log10(v), [10,25] 클램프
+assert.strictEqual(donationInterval(10), 25); // 10명 = 상한
+assert.strictEqual(donationInterval(10000), 10); // 1만명 = 하한
+assert.strictEqual(donationInterval(1e9), 10); // 하한
+assert.strictEqual(donationInterval(0), 25); // log10(0)=-Inf 방어
 // 시청자가 늘수록 짧아진다 (단조 감소)
 assert.ok(donationInterval(100) > donationInterval(1000) && donationInterval(1000) > donationInterval(5000));
 
@@ -103,11 +103,15 @@ assert.strictEqual(judge(-60), 'perfect');
 assert.strictEqual(judge(100), 'good');
 assert.strictEqual(judge(141), 'miss');
 
-// 스킬 배율
-assert.strictEqual(skillResult(['perfect', 'perfect', 'perfect', 'perfect']).mult, 3.0);
-assert.strictEqual(skillResult(['perfect', 'perfect', 'perfect', 'good']).mult, 2.0);
-assert.strictEqual(skillResult(['good', 'good', 'perfect', 'miss']).mult, 1.0);
-assert.strictEqual(skillResult(['miss', 'miss', 'miss', 'good']).mult, 0.3);
+// 리듬 보상 (GDD 3-4, 2026-07-28 개편): 시청자 배율 + 스킬 등급 획득
+assert.strictEqual(skillResult(['perfect', 'perfect', 'perfect', 'perfect']).viewerMult, 1.05);
+assert.strictEqual(skillResult(['perfect', 'perfect', 'perfect', 'perfect']).rarity, 'epic');
+assert.ok(skillResult(['perfect', 'perfect', 'perfect', 'perfect']).bonusDonation);
+assert.strictEqual(skillResult(['perfect', 'perfect', 'perfect', 'good']).viewerMult, 1.03);
+assert.strictEqual(skillResult(['perfect', 'perfect', 'perfect', 'good']).rarity, 'uncommon');
+assert.strictEqual(skillResult(['good', 'good', 'perfect', 'miss']).viewerMult, 1.01);
+assert.strictEqual(skillResult(['good', 'good', 'perfect', 'miss']).rarity, 'common');
+assert.strictEqual(skillResult(['miss', 'miss', 'miss', 'good']).viewerMult, 0.95);
 assert.ok(skillResult(['miss', 'miss', 'miss', 'good']).penalty);
 
 console.log('formulas OK');

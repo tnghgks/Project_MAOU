@@ -10,6 +10,7 @@ import {
   CRIT_TIME,
   type HypeTier,
   type SkillOutcome,
+  type SkillRarity,
   type ViewerAlert,
 } from '../formulas.ts';
 import { gameState, heroPower } from '../game/store.ts';
@@ -32,7 +33,7 @@ import { MONSTERS, type MonsterId, type MonsterDef } from '../data/monsters.ts';
 import { syncRoster } from '../data/nicknames.ts';
 import { UPGRADES, type UpgradeKey } from '../data/upgrades.ts';
 import { RARITY, type Card } from '../data/cards.ts';
-import { SKILLS, type SkillId } from '../data/skills.ts';
+import { SKILLS, pickSkillReward, type SkillId } from '../data/skills.ts';
 import { CHAT_POOLS, pickChatMood } from '../data/chat.ts';
 import {
   pickRequest,
@@ -62,6 +63,7 @@ const COUNT_MAX = 5;
 const MAX_ALIVE = 60; // 동시 생존 상한 — 넘으면 소환 스킵 (프레임 보호)
 // 시점 전환 쿨타임. 무한 토글이면 최적해가 "위험할 때만 용사 모드"로 수렴한다 — 언제 넘어갈지가 판단이어야 한다.
 const MODE_CD = 4; // ponytail: 전환 리스크 knob
+const RARITY_LABEL: Record<SkillRarity, string> = { common: 'Common', uncommon: 'Uncommon', epic: '에픽' }; // GDD 3-4 표기 그대로
 
 // 몬스터 종류 1개 = 카드 1장. 활성화된 카드는 서로 독립적으로 자기 주기마다 count마리씩 소환한다.
 interface SummonSlot {
@@ -82,7 +84,7 @@ interface SliderView {
 }
 const HP_BAR_W = 48; // ponytail: 체력바 크기 knob
 const HP_BAR_H = 8;
-const SHAKE_HOLD = 999_999; // 경보 흔들림은 단계가 바뀔 때까지 유지 (reset으로 끈다)
+const SHAKE_HOLD = 999_999; // critical 흔들림은 단계가 바뀔 때까지 유지 (reset으로 끈다). warn은 흔들지 않는다
 
 export default class BattleScene extends Phaser.Scene {
   isFinal!: boolean;
@@ -176,6 +178,12 @@ export default class BattleScene extends Phaser.Scene {
 
     this.buildUI();
     this.setSummonVisible(S.mode === 'maou'); // 시점은 화가 바뀌어도 유지 (resetRun만 마왕으로 되돌린다)
+    // 최종화: 용사만 플레이 가능, 도네이션 금지 (GDD 7장, 2026-07-28 정정) — 시점 강제 전환 + 소환 바 숨김.
+    // 도네이션 차단은 update()의 donateT 블록에서 isFinal로 건너뛴다.
+    if (this.isFinal) {
+      if (gameState().mode !== 'hero') gameState().toggleMode();
+      this.setSummonVisible(false);
+    }
     this.heroSpr = this.add.image(this.hero.x, this.hero.y, 'hero').setScale(1.3);
     this.heroHpBar = this.add.graphics().setDepth(3); // 몬스터·화살 위로
 
@@ -226,6 +234,10 @@ export default class BattleScene extends Phaser.Scene {
   // ── 시점 전환 (C키) ── 소환은 계속 돌아간다. 바뀌는 건 조작 표면과 하단 패널뿐.
   // 쿨타임 중엔 거절 — 되돌아올 수 없는 몇 초가 있어야 "지금 넘어갈까"가 선택이 된다.
   switchMode() {
+    if (this.isFinal) {
+      this.floatText(this.hero.x, this.hero.y - 60, '최종화 — 용사 시점 고정', '#ff9933');
+      return;
+    }
     if (this.modeCd > 0) {
       this.floatText(this.hero.x, this.hero.y - 60, `전환 대기 ${this.modeCd.toFixed(1)}s`, '#ff9933');
       return;
@@ -247,7 +259,7 @@ export default class BattleScene extends Phaser.Scene {
     if (!v) this.dragging = null; // 숨기는 순간 잡고 있던 슬라이더를 놓는다
   }
 
-  // 용사 모드 스킬 시전 (1~4키). 도네 리듬 경로(fireSkill)와 달리 배율 없이 쿨타임으로 제한한다.
+  // 용사 모드 스킬 시전 (1~4키). 도네 리듬 경로(resolveRhythmResult)와 달리 배율 없이 쿨타임으로 제한한다.
   castSkill(i: number) {
     const id = gameState().skills[i];
     if (!id || (this.skillCd[id] ?? 0) > 0) return;
@@ -483,34 +495,44 @@ export default class BattleScene extends Phaser.Scene {
       this.applyLiveUpgrade(card.key, card.delta, `🎁 ${RARITY[card.rarity].label} 카드!`);
     }
     if (this.pendingSkill) {
-      this.fireSkill(this.pendingSkill);
+      this.resolveRhythmResult(this.pendingSkill);
       this.pendingSkill = null;
     }
   }
 
-  // ── 스킬: 보유 스킬 중 랜덤 1개가 리듬 배율로 발동 (GDD 4장) ──
-  fireSkill(res: SkillOutcome) {
+  // ── 리듬 보상: 시청자 변화율 + 스킬 등급 획득 (+ ALL PERFECT 추가 후원) — GDD 3-4, 2026-07-28 개편.
+  // 예전엔 보유 스킬 중 하나가 배율로 발동했지만, 이제 리듬 결과 자체가 신규 스킬 지급을 겸한다.
+  resolveRhythmResult(res: SkillOutcome) {
     if (res.penalty) {
-      this.viewers = Math.max(MIN_VIEWERS, this.viewers * 0.95);
+      this.viewers = Math.max(MIN_VIEWERS, this.viewers * res.viewerMult);
       this.pushChat('시스템', '스킬 불발... 시청자가 실망했다', '#ff6666');
       return;
     }
-    const skill = SKILLS[Phaser.Utils.Array.GetRandom(gameState().skills)];
-    skill.effect(this.skillContext(), res.mult);
+    this.viewers *= res.viewerMult;
+    const parts = [`시청자 +${Math.round((res.viewerMult - 1) * 100)}%`];
+
+    const gained = res.rarity ? pickSkillReward(gameState().skills, res.rarity) : null;
+    if (gained) {
+      gameState().learnSkill(gained, 0);
+      parts.push(`${RARITY_LABEL[res.rarity!]} 스킬 [${SKILLS[gained].name}] 획득`);
+    }
+
+    if (res.bonusDonation) {
+      const { amount } = rollDonation(this.viewers);
+      gameState().addGold(amount);
+      this.totalDonated += amount;
+      parts.push(`추가 후원 ${amount.toLocaleString()}G`);
+    }
+
     this.cameras.main.flash(res.clear ? 400 : 150, 255, 255, 200);
-    this.floatText(this.hero.x, this.hero.y - 40, `⚡ ${skill.name} ${res.grade} ×${res.mult}`, '#ffee44');
+    this.floatText(this.hero.x, this.hero.y - 40, `🎁 ${res.grade}`, '#ffee44');
+    this.pushChat('시스템', `🎁 ${res.grade} — ${parts.join(' · ')}`, '#ffee44');
     if (res.clear) {
-      for (const m of this.monsters) if (m !== this.boss) this.hitFx(m, 9999); // 보스는 전멸기 면역 — 클리어는 정공법으로
       for (const line of CHAT_POOLS.allperfect) {
         const who = this.randomViewer();
         if (who) this.pushChat(who, line, '#ffee44');
       }
     }
-    this.time.delayedCall(300, () => {
-      this.children.list
-        .filter((c) => (c as Phaser.GameObjects.Arc).fillColor === 0xffffaa)
-        .forEach((c) => c.destroy());
-    });
   }
 
   // ── 실시간 강화: store는 이미 갱신됨(applyUpgrade/grantCard) — 씬 로컬 hero에 반영 + 연출 ──
@@ -615,10 +637,13 @@ export default class BattleScene extends Phaser.Scene {
     this.updateCritical(dt);
     if (this.over) return;
 
-    this.donateT -= dt;
-    if (this.donateT <= 0) {
-      this.fireDonation();
-      this.donateT = donationInterval(this.viewers);
+    if (!this.isFinal) {
+      // 최종화는 도네이션 금지 (GDD 7장, 2026-07-28 정정)
+      this.donateT -= dt;
+      if (this.donateT <= 0) {
+        this.fireDonation();
+        this.donateT = donationInterval(this.viewers);
+      }
     }
 
     for (const id of Object.keys(this.skillCd) as SkillId[]) this.skillCd[id] = Math.max(0, this.skillCd[id]! - dt);
@@ -657,14 +682,15 @@ export default class BattleScene extends Phaser.Scene {
     this.syncAlert();
   }
 
-  // 경보 단계가 바뀔 때만 흔들림을 갈아끼운다 (매 프레임 shake 재호출은 진동이 튄다)
+  // 경보 단계가 바뀔 때만 흔들림을 갈아끼운다 (매 프레임 shake 재호출은 진동이 튄다).
+  // GDD 3-9 정정(2026-07-28): warn(시청자 ≤5)은 화면 흔들림 없이 주황 비네팅만 — 흔들림은
+  // critical(1명)에서만. HudScene.alertVignette가 b.alert를 읽어 비네팅 색/알파를 그린다.
   syncAlert() {
     const next = viewerAlert(this.viewers, this.critical);
     if (next === this.alert) return;
     this.alert = next;
     this.cameras.main.shakeEffect.reset();
     if (next === 'warn') {
-      this.cameras.main.shake(SHAKE_HOLD, 0.002);
       this.pushChat('시스템', '시청자가 빠지고 있다...', '#ff9933');
     } else if (next === 'critical') {
       this.cameras.main.shake(SHAKE_HOLD, 0.006);

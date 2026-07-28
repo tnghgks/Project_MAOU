@@ -73,7 +73,7 @@ export function drawCards(
   );
 }
 
-// 리액션(리듬) 보상: 노멀이 안 나온다. 판정이 좋을수록(mult≥2) 에픽 확정.
-export function reactionCard(mult: number, rnd: () => number = Math.random): Card {
-  return makeCard(pick(KEYS, rnd), rollRarity(rnd, mult >= 2 ? ['epic'] : ['rare', 'epic']));
+// 리액션(리듬) 보상: 노멀이 안 나온다. highTier(ALL PERFECT/GREAT)면 에픽 확정.
+export function reactionCard(highTier: boolean, rnd: () => number = Math.random): Card {
+  return makeCard(pick(KEYS, rnd), rollRarity(rnd, highTier ? ['epic'] : ['rare', 'epic']));
 }

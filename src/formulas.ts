@@ -24,10 +24,10 @@ export interface HypeTier {
   color: number;
 }
 export function hypeTier(d: number): HypeTier {
-  if (d < 0.2) return { rate: -0.03, label: '😴 노잼', color: 0x556677 };
+  if (d < 0.2) return { rate: -0.01, label: '😴 노잼', color: 0x556677 };
   if (d < 0.45) return { rate: 0.01, label: '🙂 볼만함', color: 0x44aa66 };
-  if (d < 0.75) return { rate: 0.05, label: '🔥 꿀잼', color: 0xff8822 };
-  return { rate: 0.09, label: '💀 벼랑끝', color: 0xff3333 };
+  if (d < 0.75) return { rate: 0.03, label: '🔥 꿀잼', color: 0xff8822 };
+  return { rate: 0.05, label: '💀 벼랑끝', color: 0xff3333 };
 }
 
 // 시청자 증감 흔들림 — tier.rate에 더해지는 보정치.
@@ -44,9 +44,9 @@ export function viewerDrift(drift: number, dt: number, rnd: () => number = Math.
 
 // 도네이션 (GDD 3-3)
 // 간격은 시청자 수만으로 결정 — 후원마다 게임이 멈추고 카드가 뜨므로 난수 몰아치기는 뺐다.
-// 10명 30초(상한) · 1000명 15.5초 · 1만명 8초 · 하한 5초는 2.5만명부터.
+// 10명 25초(상한) · 100명 20초 · 1000명 15초 · 1만명 10초(하한).
 export function donationInterval(viewers: number): number {
-  return clamp(38 - 7.5 * Math.log10(Math.max(1, viewers)), 5, 30); // ponytail: 38/7.5 = 후원 빈도 knob
+  return clamp(30 - 5 * Math.log10(Math.max(1, viewers)), 10, 25); // ponytail: 30/5 = 후원 빈도 knob
 }
 
 export const JACKPOT_CHANCE = 0.08; // ponytail: 대박 후원(=리액션 이벤트) 확률·배율 knob
@@ -116,10 +116,16 @@ export function judge(deltaMs: number): Judgement {
   return 'miss';
 }
 
-// 판정 결과 배열 → 스킬 배율 (GDD 3-4 표)
+// 판정 결과 배열 → 리듬 보상 (GDD 3-4 표, 2026-07-28 개편: 스킬 데미지 배율 → 시청자 변화율 + 스킬 등급 획득).
+// highTier는 리액션 보상 카드 등급 게이팅용(cards.reactionCard가 소비) — ALL PERFECT/GREAT일 때만 true,
+// 예전 mult>=2 기준을 그대로 승계한다.
+export type SkillRarity = 'common' | 'uncommon' | 'epic';
 export interface SkillOutcome {
-  mult: number;
   grade: string;
+  viewerMult: number; // 시청자 배율 (예: 1.05 = +5%)
+  rarity?: SkillRarity; // 이번 결과로 획득 시도할 스킬 등급 (penalty면 없음)
+  bonusDonation?: boolean; // ALL PERFECT 전용 — 추가 골드 도네이션
+  highTier?: boolean;
   clear?: boolean;
   penalty?: boolean;
 }
@@ -127,8 +133,10 @@ export function skillResult(results: Judgement[]): SkillOutcome {
   const n = results.length;
   const perfect = results.filter((r) => r === 'perfect').length;
   const miss = results.filter((r) => r === 'miss').length;
-  if (perfect === n) return { mult: 3.0, clear: true, grade: 'ALL PERFECT' };
-  if (miss > n / 2) return { mult: 0.3, penalty: true, grade: 'MISS...' };
-  if (perfect > n / 2) return { mult: 2.0, grade: 'GREAT' };
-  return { mult: 1.0, grade: 'GOOD' };
+  if (perfect === n) {
+    return { grade: 'ALL PERFECT', viewerMult: 1.05, rarity: 'epic', bonusDonation: true, highTier: true, clear: true };
+  }
+  if (miss > n / 2) return { grade: 'MISS...', viewerMult: 0.95, penalty: true };
+  if (perfect > n / 2) return { grade: 'GREAT', viewerMult: 1.03, rarity: 'uncommon', highTier: true };
+  return { grade: 'GOOD', viewerMult: 1.01, rarity: 'common' };
 }

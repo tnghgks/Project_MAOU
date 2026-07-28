@@ -62,7 +62,7 @@ export function spawnHero(s: HeroStats, at: { x: number; y: number }): HeroEntit
 }
 
 // 스킬이 전투에 개입하기 위한 좁은 표면 — 스킬 데이터가 BattleScene 구체 클래스에 의존하지 않도록.
-// BattleScene.fireSkill이 씬 헬퍼(hitFx/freezeUntil/time 등)를 백엔드로 이 객체를 구성해 넘긴다.
+// BattleScene.castSkill이 씬 헬퍼(hitFx/freezeUntil/time 등)를 백엔드로 이 객체를 구성해 넘긴다.
 export interface SkillContext {
   readonly hero: HeroEntity;
   readonly monsters: readonly MonsterEntity[];

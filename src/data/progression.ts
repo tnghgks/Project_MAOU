@@ -11,10 +11,12 @@ export interface EpisodeDef {
 export const FINAL_EP = 3;
 
 // ponytail: 난이도 knob — 목표 골드와 보스는 여기만 만진다
+// 목표 골드는 GDD 6장 "예상 획득 골드" 표를 따른다 (2026-07-28 하향 조정 — 해당 섹션은 GDD에도
+// "검토 필요"로 표시돼 있어 추후 다시 바뀔 수 있다).
 export const EPISODES: Record<number, EpisodeDef> = {
   1: { targetGold: 1_000, boss: 'boss_golem' },
-  2: { targetGold: 2_000, boss: 'boss_knight' },
-  3: { targetGold: 3_000, boss: 'boss_maou' }, // 최종화 — 마왕이 직접 나선다
+  2: { targetGold: 3_000, boss: 'boss_knight' },
+  3: { targetGold: 5_000, boss: 'boss_maou' }, // 최종화 — 마왕이 직접 나선다
 };
 
 const episodeDef = (ep: number) => EPISODES[ep] ?? EPISODES[FINAL_EP];
