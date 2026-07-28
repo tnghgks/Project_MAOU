@@ -3,6 +3,7 @@ import { gameStore, gameState, heroPower } from '../game/store.ts';
 import { SKILL_COST, type UpgradeKey } from '../data/upgrades.ts';
 import { SKILLS, type SkillId } from '../data/skills.ts';
 import { FINAL_EP } from '../data/progression.ts';
+import { stageCut } from '../data/cutscenes.ts';
 import UpgradeShopList from './UpgradeShopList.tsx';
 
 export default function UpgradeView() {
@@ -23,7 +24,7 @@ export default function UpgradeView() {
   };
   const next = () => {
     gameState().nextEpisode();
-    gameState().setPhase('broadcast');
+    gameState().playCuts(stageCut(nextEp), () => gameState().setPhase('broadcast')); // 스테이지 진입 컷씬
   };
 
   return (

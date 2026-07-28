@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { bus, type Donation } from '../game/events.ts';
 import { useBusEvent } from './useBusEvent.ts';
 import { drawCards, reactionCard, RARITY, type Card } from '../data/cards.ts';
+import { missingTraits } from '../data/traits.ts';
+import { gameState } from '../game/store.ts';
 
 // 도네이션 1회의 진행 주체. 이 팝업이 떠 있는 동안 Battle/Hud는 멈춰 있고,
 // 카드가 확정되면 'donation:end'로 강화 적용 + 재개를 요청한다 (events.ts 사이클 주석 참고).
@@ -49,7 +51,8 @@ export default function DonationEvent() {
       return;
     }
     // 일반 → 카드 3장 노출, 커서가 돌다가 랜덤 1장 당첨
-    const three = drawCards(3);
+    // 아직 없는 특성만 풀에 섞는다 — 전부 모았으면 기존 강화 카드만 나온다
+    const three = drawCards(3, missingTraits(gameState().traits));
     const win = Math.floor(Math.random() * 3);
     setCards(three);
     setCursor(0);
@@ -81,14 +84,15 @@ export default function DonationEvent() {
               key={i}
               className={
                 'don-card' +
+                (c.trait ? ' trait' : '') +
                 (stage === 'draw' && i === cursor ? ' on' : '') +
                 (stage === 'reveal' ? (i === picked ? ' win' : ' lose') : '')
               }
               style={{ '--rar': RARITY[c.rarity].color } as CSSProperties}
             >
-              <span className="rar">{RARITY[c.rarity].label}</span>
+              <span className="rar">{c.trait ? '특성' : RARITY[c.rarity].label}</span>
               <span className="cname">{c.name}</span>
-              <span className="cdelta">+{c.delta}</span>
+              <span className="cdelta">{c.trait ? c.desc : `+${c.delta}`}</span>
             </div>
           ))}
         </div>

@@ -7,6 +7,7 @@ import {
   reqProgress,
   type ActiveRequest,
   type ReqCtx,
+  type ReqPool,
   type RequestDef,
 } from '../src/data/requests.ts';
 import type { MonsterId } from '../src/data/monsters.ts';
@@ -18,6 +19,15 @@ const ctx = (p: Partial<ReqCtx> & { alive?: Partial<Record<MonsterId, number>> }
   total: p.total ?? 0,
   hpRatio: p.hpRatio ?? 1,
   killsSince: p.killsSince ?? 0,
+  combo: p.combo ?? 0,
+  noHitT: p.noHitT ?? 0,
+  bossDmgRatio: p.bossDmgRatio ?? 0,
+});
+// 출제 게이트용 방송 상태 — 기본은 "용사 시점 + 보스 없음"이라 heroOnly가 풀에 남는다
+const pool = (p: Partial<ReqPool> = {}): ReqPool => ({
+  unlocked: p.unlocked ?? [],
+  hero: p.hero ?? true,
+  boss: p.boss ?? false,
 });
 const def: RequestDef = { text: '슬라임 {n}', dur: 10, need: 3, now: (c) => c.count('slime') };
 const active = (d = def): ActiveRequest => startRequest(d, 1, 0); // 전투력 1.00 = 기준값 그대로
@@ -99,25 +109,61 @@ const active = (d = def): ActiveRequest => startRequest(d, 1, 0); // 전투력 1
 // 1화(슬라임/궁수/골렘만 해금)에선 박쥐·기사 요청이 안 나온다
 {
   const ep1: MonsterId[] = ['slime', 'archer', 'golem'];
-  const pool = REQUESTS.filter((r) => (r.needs ?? []).every((m) => ep1.includes(m)));
-  assert.ok(pool.length > 0);
+  const ok = REQUESTS.filter((r) => (r.needs ?? []).every((m) => ep1.includes(m)) && !r.needsBoss);
+  assert.ok(ok.length > 0);
   assert.ok(
-    !pool.some((r) => (r.needs ?? []).some((m) => m === 'bat' || m === 'knight')),
+    !ok.some((r) => (r.needs ?? []).some((m) => m === 'bat' || m === 'knight')),
     '미해금 몬스터 요청은 제외돼야 함',
   );
-  for (let i = 0; i < 200; i++) assert.ok(pool.includes(pickRequest(ep1)!));
+  for (let i = 0; i < 200; i++) assert.ok(ok.includes(pickRequest(pool({ unlocked: ep1 }))!));
 }
 
 // 직전 요청은 다시 안 나온다
 {
-  const all = Object.keys({}) as MonsterId[]; // 해금 없음 → needs 없는 요청만
   const noNeed = REQUESTS.filter((r) => !r.needs);
   assert.ok(noNeed.length >= 2, '해금 무관 요청이 2개 이상이라야 exclude가 의미 있다');
-  for (let i = 0; i < 200; i++) assert.notStrictEqual(pickRequest(all, Math.random, noNeed[0]), noNeed[0]);
+  for (let i = 0; i < 200; i++) assert.notStrictEqual(pickRequest(pool(), Math.random, noNeed[0]), noNeed[0]);
 }
 
 // 뽑을 게 없으면 null (씬은 출제를 건너뛴다)
-assert.strictEqual(pickRequest([], () => 0, undefined) !== null, true, '해금 무관 요청은 항상 남는다');
+assert.strictEqual(pickRequest(pool(), () => 0) !== null, true, '해금 무관 요청은 항상 남는다');
+
+// ── 용사 전용 / 보스 전용 게이트 ──
+{
+  const heroReqs = REQUESTS.filter((r) => r.heroOnly);
+  assert.ok(heroReqs.length >= 3, '용사 시점 전용 요청이 있어야 소환 조작 없이도 할 게 생긴다');
+
+  // 마왕 시점에선 heroOnly가 절대 안 나온다
+  for (let i = 0; i < 400; i++) {
+    const r = pickRequest(pool({ hero: false, boss: true }));
+    assert.ok(r && !r.heroOnly, '마왕 시점에 용사 전용 요청이 출제됨');
+  }
+  // 보스가 없으면 needsBoss도 안 나온다
+  for (let i = 0; i < 400; i++) {
+    const r = pickRequest(pool({ boss: false }));
+    assert.ok(r && !r.needsBoss, '보스 없는데 보스 요청이 출제됨');
+  }
+  // 용사 시점 + 보스 등장이면 전부 후보에 들어온다
+  const seen = new Set<RequestDef>();
+  for (let i = 0; i < 2000; i++) seen.add(pickRequest(pool({ boss: true }))!);
+  assert.ok(
+    heroReqs.every((r) => seen.has(r)),
+    '용사+보스 상황에선 전용 요청이 실제로 뽑혀야 한다',
+  );
+}
+
+// 용사 요청 판정: 노 데미지 / 콤보 / 보스 딜은 각자 자기 ctx 필드만 본다
+{
+  const noHit = REQUESTS.find((r) => r.now(ctx({ noHitT: 99 })) === 99)!;
+  assert.ok(noHit.heroOnly && noHit.need === 20, '노 데미지 요청 = 20초 도달형');
+  assert.strictEqual(reqProgress(startRequest(noHit, 1, 0), ctx({ noHitT: 10 })), 0.5);
+
+  const boss = REQUESTS.find((r) => r.needsBoss)!;
+  const active = startRequest(boss, 1, 0, 5000);
+  assert.strictEqual(active.bossHp0, 5000, '보스 HP 스냅샷');
+  assert.strictEqual(stepRequest(active, ctx({ bossDmgRatio: 0.29 }), 0.1), null);
+  assert.strictEqual(stepRequest(active, ctx({ bossDmgRatio: 0.3 }), 0.1), 'success');
+}
 
 // 모든 요청이 빈 상황에서도 숫자를 낸다 (now 오타 방지)
 // 개수 목표는 문구에 {n}이 있어야 한다 — 없으면 스케일된 목표와 표시가 어긋난다

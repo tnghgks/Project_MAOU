@@ -1,5 +1,15 @@
 import assert from 'node:assert';
-import { stepHero, stepMonster, stepArrow, stepViewers, countNear } from '../src/game/battleSim.ts';
+import {
+  stepHero,
+  stepMonster,
+  stepArrow,
+  stepViewers,
+  bumpCombo,
+  countNear,
+  COMBO_WINDOW,
+  DASH_CD,
+  DASH_SPEED,
+} from '../src/game/battleSim.ts';
 import { spawnHero, type MonsterEntity, type Arrow } from '../src/game/entities.ts';
 import { MONSTERS } from '../src/data/monsters.ts';
 import { arenaBounds } from '../src/game/layout.ts';
@@ -60,6 +70,49 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   assert.strictEqual(hero.atkCd, 1 / stats.atkSpd, '공격 쿨다운 = 1/atkSpd');
 }
 
+// ── stepHero(용사 모드): 입력 방향으로만 이동, 자동 추적 없음 ──
+{
+  const hero = spawnHero(stats, HOME);
+  const m = mon('golem', HOME.x + 200, HOME.y); // 오른쪽 SEEK_RANGE(300) 안 — 자동이면 다가갔을 거리
+  const intent = stepHero(hero, [m], 1, 0.1, HOME, arenaBounds, { dx: -1, dy: 0, dash: false });
+  assert.strictEqual(hero.x, HOME.x - stats.speed * 0.1, '입력 방향(왼쪽)으로 speed*dt');
+  assert.strictEqual(intent.attack, null, '사거리 밖이면 공격 없음');
+  assert.strictEqual(intent.movingLeft, true);
+}
+
+// ── stepHero(용사 모드): HP 25% 이하여도 자동 후퇴가 조작권을 뺏지 않는다 ──
+{
+  const hero = spawnHero(stats, HOME);
+  hero.hp = 20; // 자동 AI라면 후퇴가 발동하는 구간
+  const m = mon('golem', HOME.x + 100, HOME.y);
+  stepHero(hero, [m], 1, 0.1, HOME, arenaBounds, { dx: 1, dy: 0, dash: false });
+  assert.strictEqual(hero.retreatT, 0, '수동 조작 중엔 후퇴 미발동');
+  assert.ok(hero.x > HOME.x, '입력대로 몬스터 쪽(오른쪽)으로 전진');
+}
+
+// ── stepHero(용사 모드): 사거리 안이면 이동 중에도 자동 공격 ──
+{
+  const hero = spawnHero(stats, HOME);
+  const m = mon('golem', HOME.x + 50, HOME.y); // 거리 50 ≤ range 60
+  const intent = stepHero(hero, [m], 1, 0.1, HOME, arenaBounds, { dx: 0, dy: 1, dash: false });
+  assert.strictEqual(intent.attack, m, '이동은 수동이어도 공격은 자동');
+  assert.strictEqual(hero.atkCd, 1 / stats.atkSpd);
+}
+
+// ── stepHero(용사 모드): 대시 = 속도 배율 + 무적, 쿨 중엔 재발동 없음 ──
+{
+  const hero = spawnHero(stats, HOME);
+  const dash = { dx: 1, dy: 0, dash: true };
+  stepHero(hero, [], 0, 0.05, HOME, arenaBounds, dash);
+  assert.ok(hero.invulnT > 0, '대시 중 무적');
+  assert.strictEqual(hero.dashCd, DASH_CD, '감산이 발동보다 먼저라 세팅값 그대로');
+  assert.strictEqual(hero.x, HOME.x + stats.speed * DASH_SPEED * 0.05, '대시 속도 배율');
+
+  const cdBefore = hero.dashCd;
+  stepHero(hero, [], 0, 0.05, HOME, arenaBounds, dash); // 쿨 중 재입력
+  assert.strictEqual(hero.dashCd, cdBefore - 0.05, '쿨 중엔 재발동 없이 감산만');
+}
+
 // ── stepMonster: 사거리 밖이면 이동 intent + 좌표 접근 ──
 {
   const hero = spawnHero(stats, HOME);
@@ -117,14 +170,47 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
 }
 
 // ── stepViewers: 노잼 구간이면 시청자 감소, D/tier 반환 ──
+const viewerState = () => ({ viewers: 100, peakViewers: 100, drift: 0, combo: 0, comboT: 0 });
 {
-  const vs = { viewers: 100, peakViewers: 100, drift: 0 };
+  const vs = viewerState();
   const rnd = () => 0.5; // drift kick = 0
-  const step = stepViewers(vs, 1, 0, 1, rnd); // hpRatio 1, near 0 → D 0
+  const step = stepViewers(vs, 1, 0, 1, rnd); // hpRatio 1, near 0, 콤보 0 → D 0
   assert.strictEqual(step.D, 0);
   assert.deepStrictEqual(step.tier, hypeTier(0));
   assert.ok(vs.viewers < 100, '노잼 구간 감쇠');
   assert.strictEqual(vs.peakViewers, 100, 'peak 유지');
+}
+
+// ── 콤보: 창 안이면 이어지고, 창이 끊기면 0으로 리셋 ──
+{
+  const vs = viewerState();
+  bumpCombo(vs);
+  assert.strictEqual(vs.combo, 1);
+  bumpCombo(vs);
+  assert.strictEqual(vs.combo, 2, '창 안 연속 처치는 누적');
+
+  stepViewers(vs, 1, 0, COMBO_WINDOW / 2, () => 0.5); // 창 절반 경과
+  assert.strictEqual(vs.combo, 2, '창이 살아있으면 유지');
+  bumpCombo(vs);
+  assert.strictEqual(vs.combo, 3);
+  assert.strictEqual(vs.comboT, COMBO_WINDOW, '처치할 때마다 창 갱신');
+
+  stepViewers(vs, 1, 0, COMBO_WINDOW, () => 0.5); // 창 만료
+  assert.strictEqual(vs.combo, 0, '끊기면 리셋');
+  bumpCombo(vs);
+  assert.strictEqual(vs.combo, 1, '리셋 후엔 1부터');
+}
+
+// ── 콤보는 하이프에 실제로 얹힌다 (같은 상황에서 콤보만 다르면 시청자 증감이 갈린다) ──
+{
+  const flat = viewerState();
+  const combo = viewerState();
+  combo.combo = 8;
+  combo.comboT = COMBO_WINDOW;
+  const a = stepViewers(flat, 1, 0, 0.1, () => 0.5);
+  const b = stepViewers(combo, 1, 0, 0.1, () => 0.5);
+  assert.ok(b.D > a.D, '콤보가 위험도(=하이프)를 밀어올린다');
+  assert.ok(combo.viewers > flat.viewers, '노잼 감쇠에서 벗어난다');
 }
 
 console.log('battleSim OK');
