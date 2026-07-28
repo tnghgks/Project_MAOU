@@ -61,7 +61,7 @@ export default function DonationEvent() {
     after((SPIN_TICKS + 1) * SPIN_MS, () => reveal(three, win));
   });
 
-  useBusEvent('rhythm:result', (res) => reveal([reactionCard(res.mult)], 0));
+  useBusEvent('rhythm:result', (res) => reveal([reactionCard(!!res.highTier)], 0));
 
   if (stage === 'idle' || !don) return null;
   const dancing = stage === 'reaction' || stage === 'rhythm';

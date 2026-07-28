@@ -29,12 +29,10 @@ assert.strictEqual(
 // 3장 뽑기
 assert.strictEqual(drawCards(3).length, 3);
 
-// 리액션 보상엔 노멀이 없다. 판정이 좋으면(mult>=2) 에픽 확정.
+// 리액션 보상엔 노멀이 없다. highTier(ALL PERFECT/GREAT)면 에픽 확정.
 for (let i = 0; i < 500; i++) {
-  assert.notStrictEqual(reactionCard(0.3).rarity, 'common');
-  assert.notStrictEqual(reactionCard(1).rarity, 'common');
-  assert.strictEqual(reactionCard(2).rarity, 'epic');
-  assert.strictEqual(reactionCard(3).rarity, 'epic');
+  assert.notStrictEqual(reactionCard(false).rarity, 'common');
+  assert.strictEqual(reactionCard(true).rarity, 'epic');
 }
 
 console.log('cards OK');

@@ -18,6 +18,7 @@ export default class HudScene extends Phaser.Scene {
   modeChip!: Phaser.GameObjects.Text;
   comboText!: Phaser.GameObjects.Text;
   vignette!: Phaser.GameObjects.Rectangle;
+  alertVignette!: Phaser.GameObjects.Rectangle;
   reqText!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -62,8 +63,10 @@ export default class HudScene extends Phaser.Scene {
       .setDepth(9)
       .setVisible(false);
 
-    // 벼랑끝 비네팅
+    // 벼랑끝 비네팅 (위험도 D 기준 — 전투 긴장감)
     this.vignette = add.rectangle(CX, ARENA.y + ARENA.h / 2, ARENA.w, ARENA.h, 0xff0000, 0).setDepth(4);
+    // 시청자 경보 비네팅 (GDD 3-9 — 위 vignette와 별개, 시청자 수 기준). warn=주황, critical=빨강.
+    this.alertVignette = add.rectangle(CX, ARENA.y + ARENA.h / 2, ARENA.w, ARENA.h, 0xff9933, 0).setDepth(4);
   }
 
   update() {
@@ -99,5 +102,14 @@ export default class HudScene extends Phaser.Scene {
     // 콤보는 danger()에 얹히므로 하이프 바가 같이 차오른다
     this.comboText.setText(b.combo >= 2 ? `⚔ ${b.combo} COMBO` : '');
     this.vignette.fillAlpha = b.D >= 0.75 ? (b.D - 0.75) * 0.8 : 0;
+    if (b.alert === 'critical') {
+      this.alertVignette.fillColor = 0xff4444;
+      this.alertVignette.fillAlpha = 0.25;
+    } else if (b.alert === 'warn') {
+      this.alertVignette.fillColor = 0xff9933;
+      this.alertVignette.fillAlpha = 0.15;
+    } else {
+      this.alertVignette.fillAlpha = 0;
+    }
   }
 }

@@ -6,7 +6,7 @@ import { MONSTERS } from '../src/data/monsters.ts';
 const eps = Object.keys(EPISODES).map(Number).sort();
 assert.deepEqual(eps, [1, 2, 3]);
 assert.equal(FINAL_EP, 3);
-assert.deepEqual(eps.map(targetGold), [1000, 2000, 3000]);
+assert.deepEqual(eps.map(targetGold), [1000, 3000, 5000]);
 
 for (const ep of eps) {
   const boss = MONSTERS[bossOf(ep)];
