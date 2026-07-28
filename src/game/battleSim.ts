@@ -18,6 +18,10 @@ const HOME_THRESHOLD = 20; // 스폰에서 이 거리 이내면 정지
 const ARROW_SPEED = 300; // 화살 속도(px/s)
 const ARROW_REACH = 8; // 화살이 목표점에 "도달"했다고 보는 거리
 const ARROW_HERO_HIT = 30; // 목표점이 용사에서 이 안이면 명중
+// 대시 (용사 모드 전용). MAX_ALIVE=60 상황을 빠져나가는 유일한 수단이라 밸런스의 중심.
+export const DASH_SPEED = 3; // 대시 중 이동 속도 배율
+export const DASH_DUR = 0.18; // 대시 지속(초) — 이 동안 무적
+export const DASH_CD = 2.5; // ponytail: 회피 난이도 knob
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -32,6 +36,12 @@ export interface HeroIntent {
   moved: boolean; // 수평 이동 여부 (flip 갱신 조건)
   movingLeft: boolean;
 }
+// 용사 모드 입력. 넘기면 자동 AI(추적·후퇴·복귀)를 대체한다 — 공격만 기존대로 자동.
+export interface HeroInput {
+  dx: number;
+  dy: number;
+  dash: boolean;
+}
 export function stepHero(
   hero: HeroEntity,
   monsters: readonly MonsterEntity[],
@@ -39,15 +49,21 @@ export function stepHero(
   dt: number,
   home: { x: number; y: number },
   bounds: { minX: number; maxX: number; minY: number; maxY: number },
+  input?: HeroInput,
 ): HeroIntent {
   const H = hero;
   const alive = monsters.filter((m) => !m.dead);
   H.atkCd = Math.max(0, H.atkCd - dt);
   H.retreatT = Math.max(0, H.retreatT - dt);
   H.retreatCd = Math.max(0, H.retreatCd - dt);
+  H.dashT = Math.max(0, H.dashT - dt);
+  H.dashCd = Math.max(0, H.dashCd - dt);
+  H.invulnT = Math.max(0, H.invulnT - dt);
 
+  // 자동 회복은 수동 조작에서도 유지 — 구석 도망은 시청자 이탈로 이미 벌점이 걸려 있다
   if (nearCount === 0) H.hp = Math.min(H.maxHp, H.hp + H.maxHp * REGEN_RATE * dt);
-  if (H.hp / H.maxHp <= RETREAT_HP && H.retreatCd <= 0) {
+  // 자동 후퇴는 조작권을 뺏으므로 수동 조작 중엔 발동시키지 않는다
+  if (!input && H.hp / H.maxHp <= RETREAT_HP && H.retreatCd <= 0) {
     H.retreatT = RETREAT_DUR;
     H.retreatCd = RETREAT_CD;
   }
@@ -55,7 +71,33 @@ export function stepHero(
   let vx = 0,
     vy = 0;
   let attack: MonsterEntity | null = null;
-  if (H.retreatT > 0 && alive.length) {
+  if (input) {
+    if (input.dash && H.dashCd <= 0) {
+      H.dashT = DASH_DUR;
+      H.dashCd = DASH_CD;
+      H.invulnT = DASH_DUR; // 대시 = 관통 회피. 제자리 대시도 무적은 붙는다 (패닉 버튼)
+    }
+    const len = Math.hypot(input.dx, input.dy);
+    if (len) {
+      const spd = H.speed * (H.dashT > 0 ? DASH_SPEED : 1);
+      vx = (input.dx / len) * spd;
+      vy = (input.dy / len) * spd;
+    }
+    // 이동은 수동, 공격은 사거리 안 최근접 자동 (다수 몬스터 상황에 조준은 손이 모자란다)
+    let target: MonsterEntity | null = null,
+      best = H.range;
+    for (const m of alive) {
+      const d = dist(m, H);
+      if (d < best) {
+        best = d;
+        target = m;
+      }
+    }
+    if (target && H.atkCd <= 0) {
+      H.atkCd = 1 / H.atkSpd;
+      attack = target;
+    }
+  } else if (H.retreatT > 0 && alive.length) {
     // 몬스터 무리 반대 방향으로 도주
     let sx = 0,
       sy = 0;
@@ -133,15 +175,23 @@ export function stepArrow(a: Arrow, hero: HeroEntity, dt: number): ArrowResult {
   return 'travel';
 }
 
-// ── 시청자 시뮬 ── (viewers/peakViewers/drift 변이, 위험도·흥분도 반환)
+// ── 시청자 시뮬 ── (viewers/peakViewers/drift/combo 변이, 위험도·흥분도 반환)
+export const COMBO_WINDOW = 3; // ponytail: 이 안에 다음 처치가 나면 콤보 유지 — 난이도 knob
 export interface ViewerState {
   viewers: number;
   peakViewers: number;
   drift: number;
+  combo: number; // 처치 콤보 — danger()의 가산 항
+  comboT: number; // 콤보 유지 잔여 시간
 }
 export interface ViewerStep {
   D: number;
   tier: HypeTier;
+}
+// 처치 1회. 창이 살아있으면 이어붙이고, 끊겼으면 1부터 다시.
+export function bumpCombo(vs: ViewerState) {
+  vs.combo = vs.comboT > 0 ? vs.combo + 1 : 1;
+  vs.comboT = COMBO_WINDOW;
 }
 export function stepViewers(
   vs: ViewerState,
@@ -150,7 +200,9 @@ export function stepViewers(
   dt: number,
   rnd: () => number = Math.random,
 ): ViewerStep {
-  const D = danger(hpRatio, nearCount);
+  vs.comboT = Math.max(0, vs.comboT - dt);
+  if (vs.comboT <= 0) vs.combo = 0;
+  const D = danger(hpRatio, nearCount, vs.combo);
   const tier = hypeTier(D);
   vs.drift = viewerDrift(vs.drift, dt, rnd);
   vs.viewers = Math.max(MIN_VIEWERS, vs.viewers * (1 + (tier.rate + vs.drift) * dt));

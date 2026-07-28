@@ -49,6 +49,17 @@ button {
   font: inherit;
 }
 
+/* 용사 시점(C키): 껍데기를 양피지/금테 톤으로. 색 변수만 덮어쓴다 —
+   --top-h/--meta-h/--chrome-h를 건드리면 layout.ts가 로드 시점에 고정한 캔버스 지오메트리가 깨진다. */
+.site.hero-mode {
+  --bg: #14100a;
+  --panel: #2a2118;
+  --line: #8a6a3a;
+  --muted: #a8946e;
+  --brand: #ffcc55;
+  --bevel: inset 2px 2px 0 #6a5230, inset -2px -2px 0 #140f08;
+}
+
 /* ── 방송 플랫폼 껍데기: 상단바 / 플레이어 / 채팅 ── */
 .site {
   height: 100%;
@@ -702,6 +713,13 @@ button {
 .don-card .cdelta {
   font-size: clamp(10px, 1vw, 15px);
   color: #44ddff;
+}
+/* 특성 카드는 숫자 대신 설명 한 줄이라 좁은 카드 폭에서 접힌다 */
+.don-card.trait .cdelta {
+  font-size: clamp(9px, 0.8vw, 12px);
+  color: #ff9ada;
+  text-align: center;
+  line-height: 1.3;
 }
 .don-card.on {
   transform: translateY(-8%) scale(1.04);
