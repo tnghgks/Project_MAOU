@@ -6,8 +6,9 @@
 // Two directions this supports:
 //   - code -> 개발 Task/TodoList status (list/create-task/create-todo/update-todo, --epic 개발)
 //   - 기획 문서(GDD 등) 내용 조회/수정 (list --epic 기획, doc-blocks, update-text-block,
-//     update-table-row, delete-block) so a "기획 변경 -> 개발 Task 생성" pull flow can run
-//     through the same primitives.
+//     update-table-row, append-block, append-table-row, delete-block) so both
+//     "기획 변경 -> 코드 반영" (gdd-pull-sync) and "코드 변경 -> 기획 문서 반영" (gdd-push-sync)
+//     can run through the same primitives.
 
 import { readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
@@ -264,6 +265,53 @@ async function cmdUpdateTableRow(rowBlockId, cellsArg) {
   console.log(JSON.stringify({ rowBlockId, cells }, null, 2));
 }
 
+// 표는 생성 시점에 table_width가 고정되고, 최초 행들을 같은 요청의 children으로 넣어야 한다
+// (row 개수 0으로 만든 뒤 나중에 append-table-row로 채우는 것도 되지만, 헤더는 처음부터 있는 게 자연스럽다).
+async function cmdCreateTable(parentId, colCount, rows, after) {
+  const width = Number(colCount);
+  if (!parentId || !width || !rows.length) {
+    throw new Error('사용법: create-table <parentBlockId> <colCount> "<셀1>|<셀2>" ["<셀1>|<셀2>" ...] [--after <id>]');
+  }
+  const children = rows.map((r) => ({
+    object: 'block',
+    type: 'table_row',
+    table_row: { cells: r.split('|').map((c) => richText(c)) },
+  }));
+  const table = {
+    object: 'block',
+    type: 'table',
+    table: { table_width: width, has_column_header: true, has_row_header: false, children },
+  };
+  const body = { children: [table], ...(after ? { after } : {}) };
+  const res = await notion('PATCH', `/blocks/${parentId}/children`, body);
+  const created = res.results[0];
+  console.log(JSON.stringify({ tableBlockId: created.id, width, rows: rows.length, after: after ?? null }, null, 2));
+}
+
+async function cmdAppendBlock(parentId, type, text, after) {
+  if (!parentId || !type || text === undefined) {
+    throw new Error('사용법: append-block <parentBlockId> <type> "<텍스트>" [--after <siblingBlockId>]');
+  }
+  if (!TEXT_BLOCK_TYPES.includes(type)) {
+    throw new Error(`append-block은 텍스트 블록(${TEXT_BLOCK_TYPES.join(', ')})만 지원합니다.`);
+  }
+  const child = { object: 'block', type, [type]: { rich_text: richText(text) } };
+  const body = { children: [child], ...(after ? { after } : {}) };
+  const res = await notion('PATCH', `/blocks/${parentId}/children`, body);
+  const created = res.results[0];
+  console.log(JSON.stringify({ blockId: created.id, type, text, after: after ?? null }, null, 2));
+}
+
+async function cmdAppendTableRow(tableBlockId, cellsArg, after) {
+  if (!tableBlockId || !cellsArg) throw new Error('사용법: append-table-row <tableBlockId> "<셀1>|<셀2>|..." [--after <siblingRowBlockId>]');
+  const cells = cellsArg.split('|');
+  const child = { object: 'block', type: 'table_row', table_row: { cells: cells.map((c) => richText(c)) } };
+  const body = { children: [child], ...(after ? { after } : {}) };
+  const res = await notion('PATCH', `/blocks/${tableBlockId}/children`, body);
+  const created = res.results[0];
+  console.log(JSON.stringify({ rowBlockId: created.id, cells, after: after ?? null }, null, 2));
+}
+
 async function cmdDeleteBlock(blockId) {
   if (!blockId) throw new Error('사용법: delete-block <blockId>');
   await notion('DELETE', `/blocks/${blockId}`);
@@ -308,6 +356,15 @@ try {
     case 'update-table-row':
       await cmdUpdateTableRow(rest[0], rest[1]);
       break;
+    case 'create-table':
+      await cmdCreateTable(rest[0], rest[1], rest.slice(2), flags.after);
+      break;
+    case 'append-block':
+      await cmdAppendBlock(rest[0], rest[1], rest[2], flags.after);
+      break;
+    case 'append-table-row':
+      await cmdAppendTableRow(rest[0], rest[1], flags.after);
+      break;
     case 'delete-block':
       await cmdDeleteBlock(rest[0]);
       break;
@@ -325,6 +382,9 @@ try {
           '  node sync.mjs doc-blocks <pageId>                         # 문서 페이지 전체 블록을 id와 함께 덤프',
           '  node sync.mjs update-text-block <blockId> "<텍스트>"       # 문단/글머리표/헤딩 텍스트 교체',
           '  node sync.mjs update-table-row <rowBlockId> "<셀1>|<셀2>"  # 표의 한 행 교체',
+          '  node sync.mjs create-table <parentId> <colCount> "<셀1>|<셀2>" ["<셀1>|<셀2>" ...] [--after <id>]  # 새 표 생성 (첫 행=헤더)',
+          '  node sync.mjs append-block <parentId> <type> "<텍스트>" [--after <id>]    # 새 텍스트 블록 추가 (문단/헤딩/리스트 등). --after로 특정 블록 바로 뒤에 삽입',
+          '  node sync.mjs append-table-row <tableBlockId> "<셀1>|<셀2>" [--after <id>] # 표에 새 행 추가',
           '  node sync.mjs delete-block <blockId>                      # 블록(표 행 등) 삭제',
           '  node sync.mjs page-meta <pageId>                          # 페이지 최종 수정 시각 조회 (변경 감지용)',
         ].join('\n'),

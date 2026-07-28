@@ -10,7 +10,10 @@ Project_MAOU 코드베이스의 실제 구현 상태를 노션 워크스페이�
 건드리지 않는다** — 이 스킬은 코드 → 개발 방향 전용이다.
 
 반대 방향(GDD를 고쳤을 때 그 변경을 코드에 반영하는 것)은 별도 스킬
-`.claude/skills/notion/gdd-pull-sync`가 담당한다. 두 스킬은 같은 `../scripts/sync.mjs`를 공유한다.
+`.claude/skills/notion/gdd-pull-sync`([[gdd-pull-sync]])가 담당한다. 코드에서 먼저 바뀐 수치/로직을
+GDD 문서 내용 자체에 옮기고 싶을 때는 `.claude/skills/notion/gdd-push-sync`([[gdd-push-sync]])를 쓴다
+(이 스킬은 "개발 태스크 진행상황"만 다루고 GDD 문서 내용은 건드리지 않는다). 세 스킬 모두 같은
+`../scripts/sync.mjs`를 공유한다.
 
 ## 0. 사전 조건 확인
 
