@@ -1,6 +1,6 @@
 ---
 name: gdd-push-sync
-description: 실제 게임 코드의 최신 상태를 노션 GDD(기획 에픽) 문서에 반영한다. 코드가 기준이 되어 GDD의 수치/로직/설명을 코드에 맞게 고치고, 문서 상단의 버전과 최종 수정일을 갱신하며, GDD 안의 "변경 이력" 섹션과 로컬 state 파일에 이번 반영 내용을 기록으로 남긴다. "코드 기준으로 GDD 업데이트해줘", "GDD에 반영해줘 (코드→기획 방향)", "구현한 거 기획서에 옮겨줘", /gdd-push-sync 요청 시 사용.
+description: 실제 게임 코드의 최신 상태를 노션 GDD(기획 에픽) 문서에 반영한다. 코드가 기준이 되어 GDD의 수치/로직/설명을 코드에 맞게 고치고, 문서 상단의 버전과 최종 수정일을 갱신하며, GDD 안의 "변경 이력" 표와 [[gdd-pull-sync]]와 공유하는 state에 이번 반영 내용을 기록으로 남긴다. 시작 전에 사람이 GDD를 먼저 고쳤는지도 확인한다. "코드 기준으로 GDD 업데이트해줘", "GDD에 반영해줘 (코드→기획 방향)", "구현한 거 기획서에 옮겨줘", /gdd-push-sync 요청 시 사용.
 ---
 
 # 코드 → GDD 반영 (Push sync)
@@ -11,34 +11,48 @@ description: 실제 게임 코드의 최신 상태를 노션 GDD(기획 에픽) 
 그 간극을 감지해서 GDD 쪽을 코드에 맞게 고쳐준다.
 
 `notion/scripts/sync.mjs`를 [[gdd-pull-sync]], [[development-sync]]와 함께 재사용한다.
-별도 스크립트를 새로 만들지 않는다. `append-block` / `append-table-row` 명령이 이 스킬을 위해
-추가되었다 — GDD에 아예 없는 새 시스템/수치를 문서화할 때 쓴다.
+별도 스크립트를 새로 만들지 않는다. `append-block` / `append-table-row` / `create-table` 명령이
+이 스킬을 위해 추가되었다 — GDD에 아예 없는 새 시스템/수치를 문서화할 때 쓴다.
+
+**두 스킬이 공유하는 state**: `.claude/skills/notion/gdd-shared/.state.json` (버전, 두 스킬이
+같이 보는 GDD 편집시각 북마크, 이 스킬 전용 커밋 북마크, 통합 변경 이력)과
+`.claude/skills/notion/gdd-shared/.snapshot.txt` (마지막으로 어느 스킬이든 GDD를 다뤘던 시점의
+전체 텍스트 — [[gdd-pull-sync]]가 사람의 편집만 정밀하게 diff하는 데 쓴다). 이 스킬이 GDD를
+고치면 **반드시 끝에 스냅샷도 갱신**해야, 다음 pull-sync가 "이건 자동화가 고친 거네"라고 구분하고
+사람이 진짜로 고친 부분만 잡아낼 수 있다.
 
 GDD 페이지 ID: `3a82ca92-c5bc-80b5-b6f0-e9a35e905acd` (기획 에픽 > GDD Task)
 
-## 0. 사전 조건
+## 0. 사전 조건 + 안전 확인
 
 `node ../scripts/sync.mjs page-meta 3a82ca92-c5bc-80b5-b6f0-e9a35e905acd` 실행.
 `NOTION_TOKEN이 설정되어 있지 않습니다` 에러가 나면 `development-sync`의 SKILL.md 0단계와 동일하게
 안내하고 중단한다.
 
+`.claude/skills/notion/gdd-shared/.state.json`의 `lastGddEditedTime`과 방금 받은
+`lastEditedTime`을 비교한다. **다르면** — 이 스킬도 [[gdd-pull-sync]]도 모르는 사이 사람이
+GDD를 직접 고쳤을 수 있다는 뜻이다. 이 상태로 코드 기준으로 덮어쓰면 사람이 방금 고친 내용을
+깔아뭉갤 위험이 있으므로, 사용자에게 알리고 **먼저 [[gdd-pull-sync]]를 돌릴지, 그래도 이대로
+진행할지 확인받는다**. 같으면 그대로 진행.
+
 ## 1. 변경 여부 확인
 
-`.claude/skills/notion/gdd-push-sync/.state.json`을 읽는다 (없으면 첫 실행).
+`.claude/skills/notion/gdd-shared/.state.json`을 읽는다 (없으면 첫 실행).
 
 ```json
 {
+  "version": "v0.2",
+  "lastGddEditedTime": "2026-07-28T03:01:00.000Z",
   "lastSyncedCommit": "9d778b7",
-  "lastSyncedAt": "2026-07-28T00:00:00.000Z",
   "history": [
-    { "commit": "9d778b7", "syncedAt": "2026-07-28T00:00:00.000Z", "version": "v0.2", "summary": "긴장도 공식 상수, 히어로 패널 섹션 반영" }
+    { "direction": "push", "at": "2026-07-28T03:10:00.000Z", "commit": "9d778b7", "version": "v0.2", "summary": "..." }
   ]
 }
 ```
 
-`history`는 지금까지의 모든 sync 기록이 쌓이는 배열이다 — 노션을 열지 않아도 로컬에서
-"언제, 어떤 커밋까지, 뭘 반영했는지" 확인할 수 있게 한다. 매 실행마다 항목을 **추가만** 하고
-기존 기록은 지우지 않는다.
+`history`는 pull/push 양쪽 모두의 sync 기록이 함께 쌓이는 배열이다 (`direction`으로 구분) —
+노션을 안 열어도 로컬에서 "언제, 어느 방향으로, 뭘 반영했는지" 확인할 수 있게 한다. 매 실행마다
+항목을 **추가만** 하고 기존 기록은 지우지 않는다.
 
 `lastSyncedCommit`이 있으면 `git log <lastSyncedCommit>..HEAD -- src/game src/scenes src/ui src/data src/formulas.ts`로
 그 이후 코드 변경이 있었는지 확인한다.
@@ -52,7 +66,7 @@ GDD 페이지 ID: `3a82ca92-c5bc-80b5-b6f0-e9a35e905acd` (기획 에픽 > GDD Ta
 node ../scripts/sync.mjs doc-blocks 3a82ca92-c5bc-80b5-b6f0-e9a35e905acd
 ```
 
-전체 섹션(게임 개요/루프/핵심 시스템/육성/카드/UI/진행구조/최종화/기술설계/MVP범위)과
+전체 섹션(게임 개요/루프/핵심 시스템/육성/카드/UI/진행구조/최종화/기술설계/MVP범위/변경 이력)과
 각 블록 id를 확보한다.
 
 ## 3. 코드와 대조해 "코드가 앞서가는 지점" 찾기
@@ -85,13 +99,21 @@ node ../scripts/sync.mjs update-text-block <blockId> "<새 텍스트>"
 node ../scripts/sync.mjs update-table-row <rowBlockId> "<셀1>|<셀2>|..."
 
 # 해당 섹션에 새 문단/리스트 항목 추가 (코드에만 있던 내용을 처음 문서화할 때)
-node ../scripts/sync.mjs append-block <parentBlockId> <type> "<텍스트>"
+node ../scripts/sync.mjs append-block <parentBlockId> <type> "<텍스트>" [--after <id>]
 
 # 기존 표에 새 행 추가
-node ../scripts/sync.mjs append-table-row <tableBlockId> "<셀1>|<셀2>|..."
+node ../scripts/sync.mjs append-table-row <tableBlockId> "<셀1>|<셀2>|..." [--after <id>]
+
+# 새 표 생성 (해당 표가 아예 없을 때만)
+node ../scripts/sync.mjs create-table <parentId> <colCount> "<헤더1>|<헤더2>" "<행1셀1>|<행1셀2>" ... [--after <id>]
 ```
 
-## 6. 버전 및 최종 수정일 갱신
+## 6. GDD 정리 (cleanup)
+
+이번에 손댄 섹션 주변을 다시 훑어서, 새로 넣은 내용이 문서 다른 곳과 용어/포맷이 어긋나지 않는지
+확인한다. 어긋나면 5번과 같은 명령으로 바로 고친다. 이미 깔끔하면 아무것도 안 한다.
+
+## 7. 버전 및 최종 수정일 갱신
 
 GDD 최상단에는 `버전 v0.1 (초안) · 최종 수정 2026-07-23 · 상태 설계 확정 전 · 전제 ...` 형식의
 문단 블록이 있다 (2번에서 확보한 doc-blocks 출력 중 `버전 v`로 시작하는 블록). 실제로 GDD 내용을
@@ -106,48 +128,49 @@ GDD 최상단에는 `버전 v0.1 (초안) · 최종 수정 2026-07-23 · 상태 
 node ../scripts/sync.mjs update-text-block <versionBlockId> "버전 v0.2 (초안) · 최종 수정 2026-07-28 · 상태 설계 확정 전 · 전제 2인 / 2주 / Phaser 3 / GitHub Pages"
 ```
 
-## 7. GDD 안에 변경 이력 기록
+## 8. GDD 안에 변경 이력 기록 ([[gdd-pull-sync]]와 같은 표를 공유)
 
 GDD 문서 자체에도 무엇이 코드 기준으로 바뀌었는지 남긴다. **문서 맨 위(제목 → 버전 →
 ⚠️ 경고 문단 바로 다음)에 표 하나, 컬럼은 `날짜 | 버전 | 수정사항 | 비고`. sync 한 번 = 행 한 개**
 — 날짜·버전은 셀 하나에 값 하나만 (반복해서 여러 행에 흩뿌리지 않는다). 그 sync에서 반영한
 항목이 여러 개면 `수정사항` 셀 **하나** 안에 줄바꿈(`\n`)으로 개조식 여러 줄을 넣는다.
-표 하나에 다 모여 있어야 스캔하기 쉽고, 항목마다 행을 나누면 같은 날짜/버전이 계속 반복돼
-오히려 안 읽힌다는 사용자 피드백으로 이 형태로 정착했다 — 반드시 지킨다.
+이 표는 [[gdd-pull-sync]]도 똑같은 규칙으로 행을 추가하는 **공유 자원**이다 — 포맷을 여기서
+어기면 pull-sync 쪽 표도 지저분해진다.
 
 2번 doc-blocks 결과에서 `⚠️ 이 문서는 개발 내내 갱신된다...` 문단 바로 다음에
 `변경 이력` heading_2 + `날짜|버전|수정사항|비고` 표가 있는지 확인한다.
 
-- **없으면** (첫 push-sync 실행) 그 경고 문단 바로 뒤에 순서대로 만든다:
+- **없으면** (첫 실행) 그 경고 문단 바로 뒤에 순서대로 만든다:
   1. `append-block <pageId> heading_2 "변경 이력 (코드 → GDD 자동 반영)" --after <경고문단id>`
-  2. `create-table <pageId> 4 "날짜|버전|수정사항|비고" "<날짜>|<버전>|<개조식 중첩 불릿>|커밋 <해시>" --after <heading id>`
-     — 헤더 행 + 이번 sync 전체를 담은 데이터 행 **딱 1개**. `수정사항` 셀 안에서 항목마다
-     **상위 불릿(`• [섹션번호]`) 한 줄 + 그 아래 들여쓴 하위 불릿(`    ◦ 내용`) 한 줄**로 2줄씩
-     묶어 나열한다 (쉘에서 실행할 때 `$'...\n...'` ANSI-C 따옴표로 실제 개행을 만들어 넘긴다 —
-     `\n` 리터럴 두 글자가 아니라 진짜 줄바꿈이어야 한다). 예:
-     ```
-     • [3-2.긴장도]
-         ◦ 위험도 공식에 벼랑끝 보너스(+0.15) 문서화
-     • [3-3.도네이션]
-         ◦ 간격 표 수치 정정
-     ```
-- **이미 있으면** (두 번째 이후 실행) 새 표를 만들지 않는다. 기존 표의 마지막 행 id를 doc-blocks
-  출력에서 찾아 그 뒤에 `append-table-row <tableBlockId> "<날짜>|<버전>|<개조식 중첩 불릿>|커밋 <해시>" --after <마지막행id>`로
+  2. `create-table <pageId> 4 "날짜|버전|수정사항|비고" "<날짜>|<버전>|<개조식 중첩 불릿>|push · 커밋 <해시>" --after <heading id>`
+- **이미 있으면** 새 표를 만들지 않는다. 기존 표의 마지막 행 id를 doc-blocks 출력에서 찾아 그 뒤에
+  `append-table-row <tableBlockId> "<날짜>|<버전>|<개조식 중첩 불릿>|push · 커밋 <해시>" --after <마지막행id>`로
   이번 sync를 담은 행 1개만 추가한다. 기존 행은 절대 수정/삭제하지 않는다 — 과거 이력이므로 보존.
 
-하위 불릿(`◦`) 내용은 **개조식**(명사형으로 끝내기, "~했다/~됨" 같은 서술형 어미 지양, 짧게)으로
-쓴다 — 줄바꿈만으로는 셀 안에서 항목 경계가 흐릿해서 상위/하위 불릿 2단으로 구분한다.
-예: 상위 `"• [3-2.긴장도]"` + 하위 `"    ◦ 위험도 공식에 벼랑끝 보너스(+0.15) 문서화"` (O) /
-`"위험도 공식에 벼랑끝 보너스가 추가되었습니다"` (X, 불릿 없고 너무 길고 서술형).
+`수정사항` 셀 안에서 항목마다 **상위 불릿(`• [섹션번호]`) 한 줄 + 그 아래 들여쓴 하위 불릿
+(`    ◦ 내용`) 한 줄**로 2줄씩 묶어 나열한다 (쉘에서 실행할 때 `$'...\n...'` ANSI-C 따옴표로
+실제 개행을 만들어 넘긴다 — `\n` 리터럴 두 글자가 아니라 진짜 줄바꿈이어야 한다). 하위 불릿
+내용은 **개조식**(명사형으로 끝내기, "~했다/~됨" 같은 서술형 어미 지양, 짧게)으로 쓴다. 예:
 
-## 8. state 갱신 및 보고
+```
+• [3-2.긴장도]
+    ◦ 위험도 공식에 벼랑끝 보너스(+0.15) 문서화
+• [3-3.도네이션]
+    ◦ 간격 표 수치 정정
+```
 
-`.claude/skills/notion/gdd-push-sync/.state.json`을 갱신한다 (Write 도구로 직접 갱신):
+`비고` 셀은 방향을 명시한다: `"push · 커밋 <6번에서 이미 반영된 코드의 짧은 해시>"`.
 
-- `lastSyncedCommit`: 현재 `git rev-parse --short HEAD` 결과
-- `lastSyncedAt`: 지금 시각
-- `history`: 기존 배열에 `{ commit, syncedAt, version, summary }` 항목을 하나 추가 (7번에서
-  GDD에 남긴 요약과 동일한 내용). 기존 history 항목은 지우지 않는다.
+## 9. shared state·스냅샷 갱신 및 보고
 
-무엇을 고쳤고, 버전을 몇으로 올렸고, GDD 변경 이력 섹션에 뭐라고 남겼는지 요약해서 사용자에게
+6·7·8번까지 GDD를 계속 고쳤으므로, **끝나기 직전에 `doc-blocks`를 다시 한 번 실행**해서
+최종 상태를 얻는다. 그 결과로:
+
+- `.claude/skills/notion/gdd-shared/.snapshot.txt`를 덮어쓴다 (Write 도구) — 이래야 다음
+  [[gdd-pull-sync]] 실행이 이번에 자동으로 고친 부분을 "사람이 고친 것"으로 착각하지 않는다.
+- `.claude/skills/notion/gdd-shared/.state.json`을 갱신한다: `lastSyncedCommit`(현재
+  `git rev-parse --short HEAD`), `lastGddEditedTime`(새 `page-meta` 값), `version`(7번에서
+  정한 값), `history`에 `{ direction: "push", at, commit, version, summary }` 추가.
+
+무엇을 고쳤고, 버전을 몇으로 올렸고, GDD 변경 이력 표에 뭐라고 남겼는지 요약해서 사용자에게
 보고한다.

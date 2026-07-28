@@ -9,6 +9,7 @@ lerna-debug.log*
 #claude (keep shared skills/commands committed, ignore only personal local settings/state)
 .claude/settings.local.json
 .claude/skills/**/.state.json
+.claude/skills/**/.snapshot.txt
 
 # assets
 /assets
