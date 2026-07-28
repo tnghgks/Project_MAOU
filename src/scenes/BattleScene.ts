@@ -562,9 +562,7 @@ export default class BattleScene extends Phaser.Scene {
       hero: this.hero,
       monsters: this.monsters,
       hit: (m, dmg) => this.hitFx(m, dmg),
-      fxCircle: (x, y, r) => {
-        this.add.circle(x, y, r, 0xffffaa, 0.8).setDepth(3);
-      },
+      fxCircle: (x, y, r) => this.impactFx(x, y, r),
       heal: (ratio) => {
         this.hero.hp = Math.min(this.hero.maxHp, this.hero.hp + this.hero.maxHp * ratio);
       },
@@ -578,7 +576,15 @@ export default class BattleScene extends Phaser.Scene {
 
   hitFx(m: MonsterEntity, dmg: number) {
     this.damageMonster(m, dmg);
-    this.add.circle(m.x, m.y, 14, 0xffffaa, 0.8).setDepth(3);
+    this.impactFx(m.x, m.y, 14);
+  }
+
+  // 스킬/피격 임팩트 원 — 스스로 페이드아웃 후 파괴한다. 예전엔 이 원을 만든 쪽이 아니라
+  // fireSkill 한 곳에서만 뒤늦게 청소했는데, 그 경로를 안 타는 castSkill(직접 시전) 등에서
+  // 원이 안 지워지고 계속 쌓이는 버그(#6: 낙뢰/반사 임팩트가 안 사라짐)가 있었다.
+  impactFx(x: number, y: number, r: number) {
+    const c = this.add.circle(x, y, r, 0xffffaa, 0.8).setDepth(3);
+    this.tweens.add({ targets: c, alpha: 0, duration: 220, onComplete: () => c.destroy() });
   }
 
   damageMonster(m: MonsterEntity, dmg: number) {
