@@ -50,8 +50,9 @@ export default function App() {
           <MenuOverlay />
         </div>
       </BroadcastFrame>
-      {/* 타이틀과 컷씬은 방송 프레임까지 덮는 전체화면 */}
-      {phase === 'title' && <TitleView />}
+      {/* 타이틀과 컷씬은 방송 프레임까지 덮는 전체화면.
+          boot 동안에도 타이틀을 띄워 방송 프레임(빈 캔버스)이 잠깐 노출되는 걸 막는다. */}
+      {(phase === 'title' || phase === 'boot') && <TitleView />}
       <CutsceneView />
     </>
   );
