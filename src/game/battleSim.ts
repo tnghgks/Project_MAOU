@@ -22,6 +22,8 @@ const ARROW_HERO_HIT = 30; // 목표점이 용사에서 이 안이면 명중
 export const DASH_SPEED = 3; // 대시 중 이동 속도 배율
 export const DASH_DUR = 0.18; // 대시 지속(초) — 이 동안 무적
 export const DASH_CD = 2.5; // ponytail: 회피 난이도 knob
+// 피격 무적(i-frame). 동일 프레임에 몬스터 여럿에게 동시에 맞아도 데미지는 한 번만 들어가게.
+export const HIT_INVULN_DUR = 0.4;
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 
