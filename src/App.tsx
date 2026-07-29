@@ -10,6 +10,7 @@ import MenuOverlay from './ui/MenuOverlay.tsx';
 import TitleView from './ui/TitleView.tsx';
 import HelpPopup from './ui/HelpPopup.tsx';
 import CutsceneView from './ui/CutsceneView.tsx';
+import DevPanel from './ui/DevPanel.tsx';
 
 export default function App() {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -54,6 +55,7 @@ export default function App() {
           boot 동안에도 타이틀을 띄워 방송 프레임(빈 캔버스)이 잠깐 노출되는 걸 막는다. */}
       {(phase === 'title' || phase === 'boot') && <TitleView />}
       <CutsceneView />
+      {import.meta.env.DEV && <DevPanel />}
     </>
   );
 }

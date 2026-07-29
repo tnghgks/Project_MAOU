@@ -806,3 +806,48 @@ button {
   opacity: 0.3;
   filter: grayscale(1);
 }
+
+/* ── 개발자 패널 (DevPanel.tsx, DEV 빌드 전용) — 항상 최상단 ── */
+.dev-panel {
+  position: fixed;
+  right: 8px;
+  bottom: 8px;
+  z-index: 999;
+  font-size: 12px;
+}
+.dev-panel-toggle {
+  padding: 5px 10px;
+  background: #1a1a2c;
+  color: #ffcf3a;
+  border: 1px solid #444460;
+  cursor: pointer;
+}
+.dev-panel-body {
+  margin-top: 4px;
+  padding: 8px;
+  background: rgba(10, 10, 16, 0.95);
+  border: 1px solid #444460;
+  width: 200px;
+}
+.dev-panel-label {
+  color: #888;
+  margin: 6px 0 2px;
+}
+.dev-panel-label:first-child {
+  margin-top: 0;
+}
+.dev-panel-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.dev-panel-row button {
+  padding: 4px 8px;
+  background: #2a2a44;
+  color: #ddd;
+  border: 1px solid #444460;
+  cursor: pointer;
+}
+.dev-panel-row button:hover {
+  background: #3a3a5c;
+}
