@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { registerAnims, dirOf, makeActor, playAnim, DIRS } from '../src/game/anims.ts';
+import { registerAnims, dirOf, makeActor, playAnim, playOnce, DIRS } from '../src/game/anims.ts';
 
 // 실제 아틀라스 JSON으로 등록 로직을 돌린다. 프레임 이름 파싱이 틀리면 애니메이션이
 // 조용히 0개 만들어지고 게임은 첫 프레임에서 얼어붙은 채로 굴러간다 — 여기서 잡는다.
@@ -173,6 +173,93 @@ const GRIM = frameNames('grimhardt');
   };
   playAnim(spr as never, undefined, 'walk', 'south');
   assert.strictEqual(touched, false, '상자 스프라이트에는 아무것도 하지 않는다');
+}
+
+// ── 공격은 한 번만 재생한다 ──
+// 걷기와 같은 repeat -1로 등록되면 첫 공격에서 영원히 칼을 휘두르는 용사가 된다.
+{
+  const { scene, created } = fakeScene({ 'rian-wooden': WOODEN });
+  registerAnims(scene, 'rian-wooden');
+  const byKey = new Map(created.map((a) => [a.key, a]));
+
+  for (const dir of DIRS) {
+    const atk = byKey.get(`rian-wooden-attack-${dir}`);
+    assert.strictEqual(atk?.frames.length, 9, `공격은 ${dir}까지 9프레임 다 있다`);
+    assert.strictEqual(atk?.repeat, 0, '공격은 반복하지 않는다');
+  }
+  assert.strictEqual(byKey.get('rian-wooden-walk-south')?.repeat, -1, '걷기는 그대로 무한 반복');
+  assert.strictEqual(byKey.get('rian-wooden-idle-south')?.repeat, -1, '대기도 그대로 무한 반복');
+
+  // 9프레임을 공격 주기(atkSpd 1.0 = 1초) 안에 끝내야 다음 휘두르기와 겹치지 않는다
+  const atkRate = byKey.get('rian-wooden-attack-south')!.frameRate;
+  assert.ok(9 / atkRate <= 1, `공격 모션이 ${(9 / atkRate).toFixed(2)}초 — 기본 공격 주기를 넘는다`);
+}
+
+// ── 휘두르는 중엔 걷기·대기가 덮어쓰지 못한다 ──
+// 이게 없으면 매 프레임 도는 playAnim이 공격을 1프레임 만에 지운다.
+{
+  const swinging = (isPlaying: boolean, repeat: number) => {
+    const calls: string[] = [];
+    return {
+      calls,
+      spr: {
+        anims: { isPlaying, currentAnim: { repeat } },
+        scene: { anims: { exists: () => true } },
+        play: (k: string) => calls.push(k),
+        stop: () => ({ setFrame: (f: string) => calls.push(`frame:${f}`) }),
+      },
+    };
+  };
+
+  const mid = swinging(true, 0); // 공격 재생 중
+  playAnim(mid.spr as never, 'rian-wooden', 'walk', 'south');
+  assert.deepStrictEqual(mid.calls, [], '공격 중 걷기는 무시된다');
+
+  const done = swinging(false, 0); // 공격이 끝난 직후
+  playAnim(done.spr as never, 'rian-wooden', 'walk', 'south');
+  assert.deepStrictEqual(done.calls, ['rian-wooden-walk-south'], '끝나면 곧바로 걷기로 돌아온다');
+
+  const walking = swinging(true, -1); // 걷기 재생 중 — 반복 모션은 잠그지 않는다
+  playAnim(walking.spr as never, 'rian-wooden', 'idle', 'south');
+  assert.deepStrictEqual(walking.calls, ['rian-wooden-idle-south'], '걷기는 대기로 바로 넘어간다');
+}
+
+// ── playOnce: 공격할 때마다 처음부터 다시 ──
+{
+  const calls: string[] = [];
+  const has = new Set(['rian-wooden-attack-south']);
+  const spr = {
+    anims: { isPlaying: true, currentAnim: { repeat: 0 } },
+    scene: { anims: { exists: (k: string) => has.has(k) } },
+    play: (k: string, ignoreIfPlaying?: boolean) => calls.push(`${k}${ignoreIfPlaying ? '(유지)' : ''}`),
+    stop: () => ({ setFrame: (f: string) => calls.push(`frame:${f}`) }),
+  };
+
+  playOnce(spr as never, 'rian-wooden', 'attack', 'south');
+  playOnce(spr as never, 'rian-wooden', 'attack', 'south'); // 연타 — 두 번째도 보여야 한다
+  assert.deepStrictEqual(
+    calls,
+    ['rian-wooden-attack-south', 'rian-wooden-attack-south'],
+    '이어지는 공격이 앞 모션에 묻히면 안 된다 (재시작 플래그 없이 play)',
+  );
+
+  // 그 방향 공격 아트가 없으면 아무것도 하지 않는다 — 걷기를 끊어 세우면 그게 더 눈에 띈다
+  calls.length = 0;
+  playOnce(spr as never, 'rian-wooden', 'attack', 'north');
+  playOnce(spr as never, undefined, 'attack', 'south'); // 대체 상자
+  assert.deepStrictEqual(calls, [], '없는 모션은 조용히 넘어간다');
+}
+
+// ── 공격 아트가 없는 등급이어도 게임은 굴러간다 ──
+// rian-basic엔 Attack 폴더가 없다. 등급을 되돌렸을 때 공격마다 스프라이트가 멈추면 안 된다.
+{
+  assert.ok(
+    !BASIC.some((n) => n.startsWith('attack/')),
+    'rian-basic엔 공격 아트가 없다 — 이 전제가 깨지면 아래 검사는 의미가 없다',
+  );
+  const { scene, created } = fakeScene({ 'rian-basic': BASIC });
+  registerAnims(scene, 'rian-basic');
+  assert.ok(!created.some((a) => a.key.includes('attack')), '없는 액션을 만들어내지 않는다');
 }
 
 console.log('anims OK');

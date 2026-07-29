@@ -20,7 +20,7 @@ import {
   type SkillRarity,
   type ViewerAlert,
 } from '../formulas.ts';
-import { dirOf, playAnim, makeActor, type Dir } from '../game/anims.ts';
+import { dirOf, playAnim, playOnce, makeActor, type Dir } from '../game/anims.ts';
 import { HERO_CHAR, BOX_TEXTURE } from './BootScene.ts';
 import { gameState, heroPower } from '../game/store.ts';
 import { bus, busBind } from '../game/events.ts';
@@ -34,6 +34,7 @@ import {
   stepViewers,
   bumpCombo,
   countNear,
+  facingOf,
   SUMMON_MIN_RADIUS,
   HIT_INVULN_DUR,
   type HeroInput,
@@ -976,6 +977,12 @@ export default class BattleScene extends Phaser.Scene {
         );
         this.swingFx(H.x, H.y, H.range, Math.atan2(lead.y - H.y, lead.x - H.x));
         if (crit) this.floatText(lead.x, lead.y - 24, 'CRIT!', '#ff4444');
+        // 공격 모션도 궤적과 같은 대상을 본다. 이동 입력으로 방향을 잡으면 제자리 공격(정지 =
+        // facing null)에서 방향이 안 정해지고, 걸어가며 때릴 땐 등 뒤를 휘두르게 된다.
+        const [dir, flip] = dirOf(facingOf(lead.x - H.x, lead.y - H.y) ?? this.facingDir);
+        this.facingDir = dir;
+        this.heroSpr.setFlipX(flip);
+        playOnce(this.heroSpr, HERO_CHAR, 'attack', dir);
       }
       H.hp = Math.min(H.maxHp, H.hp + vampHeal(traits, dmg)); // 흡혈(특성) — 광역이어도 1회분
     }
