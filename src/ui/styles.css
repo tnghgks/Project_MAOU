@@ -629,10 +629,11 @@ button {
 }
 
 /* ── 도네이션 이벤트 팝업 (게임 일시정지 중) ──
-   bottom 11.1% = 캔버스 리듬 레인(y 640~720 / 720). 리액션 중 노트가 가려지면 안 된다. */
+   기본은 전체 화면(소환 바까지) 덮음. reaction/rhythm 단계에서만 하단을 틔운다
+   (bottom 11.1% = 캔버스 리듬 레인 y 640~720 / 720, 노트가 가려지면 안 되므로). */
 .don-event {
   position: absolute;
-  inset: 0 0 11.1% 0;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -640,6 +641,9 @@ button {
   gap: clamp(10px, 1.6vw, 22px);
   background: rgba(6, 6, 12, 0.82);
   animation: don-in 0.18s ease;
+}
+.don-event.dancing {
+  inset: 0 0 11.1% 0;
 }
 .don-event.jackpot {
   background: rgba(48, 8, 40, 0.88);

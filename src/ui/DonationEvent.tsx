@@ -67,7 +67,7 @@ export default function DonationEvent() {
   const dancing = stage === 'reaction' || stage === 'rhythm';
 
   return (
-    <div className={don.jackpot ? 'don-event jackpot' : 'don-event'}>
+    <div className={['don-event', don.jackpot && 'jackpot', dancing && 'dancing'].filter(Boolean).join(' ')}>
       <p className="don-head">
         🎁 {don.donor} · {don.amount.toLocaleString()}G {don.jackpot && <b>대박 후원!!</b>}
       </p>
