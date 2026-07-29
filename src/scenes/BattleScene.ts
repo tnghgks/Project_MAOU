@@ -26,6 +26,7 @@ import {
   bumpCombo,
   countNear,
   SUMMON_MIN_RADIUS,
+  HIT_INVULN_DUR,
   type HeroInput,
 } from '../game/battleSim.ts';
 import { heroAtkMult, vampHeal, thornsDmg, TRAITS } from '../data/traits.ts';
@@ -715,11 +716,12 @@ export default class BattleScene extends Phaser.Scene {
     };
   }
 
-  // 용사 피격 단일 진입점 — 무적(대시) 판정을 한 곳에 모은다. 근접·화살 양쪽이 여기로 온다.
+  // 용사 피격 단일 진입점 — 무적(대시/피격 직후) 판정을 한 곳에 모은다. 근접·화살 양쪽이 여기로 온다.
   // 반환값 = 실제로 맞았는가 (반격 특성이 이걸 보고 반사한다).
   hurtHero(dmg: number): boolean {
     if (this.hero.invulnT > 0) return false;
     this.hero.hp -= dmg;
+    this.hero.invulnT = HIT_INVULN_DUR; // 같은 프레임에 몬스터 여럿이 때려도 한 번만 맞는다
     this.noHitT = 0;
     return true;
   }
