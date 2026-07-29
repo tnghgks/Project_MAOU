@@ -569,6 +569,11 @@ button {
 .shop .lv {
   color: #99a;
 }
+/* 현재 스탯 값 — 도네 카드로 오른 분은 Lv에 안 잡히므로 이 숫자로만 보인다 */
+.shop .cur {
+  color: #ffdd44;
+  font-variant-numeric: tabular-nums;
+}
 .owned {
   font-size: clamp(10px, 0.95vw, 14px);
   color: #8888aa;
@@ -629,10 +634,12 @@ button {
 }
 
 /* ── 도네이션 이벤트 팝업 (게임 일시정지 중) ──
-   bottom 11.1% = 캔버스 리듬 레인(y 640~720 / 720). 리액션 중 노트가 가려지면 안 된다. */
+   기본은 화면 전체를 덮는다. 리듬 단계에서만 노트가 보이도록 하단을 비우는데,
+   그 높이는 DonationEvent가 layout 상수로 계산해 inline bottom으로 넣는다 —
+   CSS에 %를 박아뒀더니 레인 위치가 바뀌자 어긋난 채로 남았다(#10). */
 .don-event {
   position: absolute;
-  inset: 0 0 11.1% 0;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
