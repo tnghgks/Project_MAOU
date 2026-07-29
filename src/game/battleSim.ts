@@ -43,6 +43,14 @@ export interface HeroIntent {
   swung: boolean; // 쿨다운이 돌아 공격 자체는 발동했는가 — 사거리 안에 대상이 없어도(attacks가 비어도) true일 수 있다
   facing: Facing | null; // null = 정지 (씬이 걷기 애니메이션을 멈춘다)
 }
+// 속도 벡터 → 바라보는 방향. 용사·몬스터가 공유한다.
+// 대각선은 수평 우선 — 측면 뷰가 4방향 중 가장 잘 읽힌다.
+export function facingOf(vx: number, vy: number): Facing | null {
+  if (vx === 0 && vy === 0) return null;
+  if (Math.abs(vx) >= Math.abs(vy)) return vx < 0 ? 'west' : 'east';
+  return vy < 0 ? 'north' : 'south';
+}
+
 // 용사 모드 입력. 넘기면 자동 AI(추적·후퇴·복귀)를 대체한다 — 공격만 기존대로 자동.
 export interface HeroInput {
   dx: number;
@@ -182,23 +190,12 @@ export function stepHero(
   }
   H.x = clamp(H.x + vx * dt, bounds.minX, bounds.maxX);
   H.y = clamp(H.y + vy * dt, bounds.minY, bounds.maxY);
-  // 대각선은 수평 우선 — 측면 뷰가 4방향 중 가장 잘 읽힌다
-  const facing: Facing | null =
-    vx === 0 && vy === 0
-      ? null
-      : Math.abs(vx) >= Math.abs(vy)
-        ? vx < 0
-          ? 'west'
-          : 'east'
-        : vy < 0
-          ? 'north'
-          : 'south';
-  return { attacks, swung, facing };
+  return { attacks, swung, facing: facingOf(vx, vy) };
 }
 
 // ── 몬스터 AI ── (사망/스프라이트 처리는 씬 소유: suicide도 씬이 m.dead 세팅)
 export type MonsterIntent =
-  | { kind: 'move'; flipLeft: boolean }
+  | { kind: 'move'; facing: Facing }
   | { kind: 'melee'; dmg: number; suicide: boolean }
   | { kind: 'arrow'; x: number; y: number; tx: number; ty: number; dmg: number }
   | { kind: 'idle' };
@@ -212,9 +209,12 @@ export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): Mon
   }
   const d = dist(m, H);
   if (d > m.def.range) {
-    m.x += ((H.x - m.x) / d) * m.def.speed * dt;
-    m.y += ((H.y - m.y) / d) * m.def.speed * dt;
-    return { kind: 'move', flipLeft: H.x < m.x };
+    const vx = ((H.x - m.x) / d) * m.def.speed;
+    const vy = ((H.y - m.y) / d) * m.def.speed;
+    m.x += vx * dt;
+    m.y += vy * dt;
+    // 용사 쪽으로 이동 중이므로 속도가 0일 수 없다 (d > range > 0)
+    return { kind: 'move', facing: facingOf(vx, vy) ?? 'south' };
   }
   if (m.atkCd <= 0) {
     m.atkCd = m.def.atkCd;

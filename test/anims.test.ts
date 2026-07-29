@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { registerAnims, dirOf, DIRS } from '../src/game/anims.ts';
+import { registerAnims, dirOf, makeActor, playAnim, DIRS } from '../src/game/anims.ts';
 
 // 실제 아틀라스 JSON으로 등록 로직을 돌린다. 프레임 이름 파싱이 틀리면 애니메이션이
 // 조용히 0개 만들어지고 게임은 첫 프레임에서 얼어붙은 채로 굴러간다 — 여기서 잡는다.
@@ -86,6 +86,65 @@ const GRIM = frameNames('grimhardt');
   assert.deepStrictEqual(dirOf('east'), ['east', false]);
   assert.deepStrictEqual(dirOf('north'), ['north', false]);
   assert.deepStrictEqual(dirOf('south'), ['south', false]);
+}
+
+// ── makeActor: 아틀라스가 있으면 스프라이트, 없으면 대체 상자 ──
+// 아트가 아직 안 붙은 몬스터 때문에 게임이 깨지면 안 된다는 게 이 함수의 존재 이유다.
+{
+  interface MadeSprite {
+    args: unknown[];
+    displaySize?: [number, number];
+  }
+  const spriteScene = (loaded: string[]) => {
+    const made: MadeSprite[] = [];
+    const scene = {
+      textures: { exists: (k: string) => loaded.includes(k) },
+      add: {
+        sprite: (...args: unknown[]) => {
+          const s: MadeSprite = { args };
+          made.push(s);
+          return { setDisplaySize: (w: number, h: number) => ((s.displaySize = [w, h]), s) };
+        },
+      },
+    };
+    return { scene: scene as never, made };
+  };
+
+  // 아틀라스 로드됨 → 그 텍스처의 walk/south/0, 상자 크기 무시
+  {
+    const { scene, made } = spriteScene(['rian']);
+    const a = makeActor(scene, 10, 20, 'rian', 40, 'box');
+    assert.deepStrictEqual(made[0].args, [10, 20, 'rian', 'walk/south/0']);
+    assert.strictEqual(a.char, 'rian', '아틀라스를 쓰면 char가 남는다');
+    assert.strictEqual(made[0].displaySize, undefined, '원본 크기 그대로 (리샘플 없음)');
+  }
+  // char 미지정(아직 아트 없음) → 대체 상자
+  {
+    const { scene, made } = spriteScene(['rian']);
+    const a = makeActor(scene, 1, 2, undefined, 26, 'box');
+    assert.deepStrictEqual(made[0].args, [1, 2, 'box']);
+    assert.deepStrictEqual(made[0].displaySize, [26, 26], '상자는 def.size로 그린다');
+    assert.strictEqual(a.char, undefined, '상자면 char가 없다 → playAnim이 no-op');
+  }
+  // char는 선언했지만 아틀라스 파일이 없다(패킹 전/로드 실패) → 초록 missing 텍스처가 아니라 상자
+  {
+    const { scene, made } = spriteScene([]);
+    const a = makeActor(scene, 0, 0, 'slime', 16, 'box');
+    assert.deepStrictEqual(made[0].args, [0, 0, 'box'], '선언만 있고 파일이 없으면 상자로 떨어진다');
+    assert.strictEqual(a.char, undefined);
+  }
+}
+
+// ── playAnim: char 없는 상자는 건드리지 않는다 (setFrame을 부르면 터진다) ──
+{
+  let touched = false;
+  const spr = {
+    scene: { anims: { exists: () => true } },
+    play: () => (touched = true),
+    stop: () => ({ setFrame: () => (touched = true) }),
+  };
+  playAnim(spr as never, undefined, 'walk', 'south');
+  assert.strictEqual(touched, false, '상자 스프라이트에는 아무것도 하지 않는다');
 }
 
 console.log('anims OK');

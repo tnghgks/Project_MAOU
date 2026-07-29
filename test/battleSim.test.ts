@@ -153,7 +153,7 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   assert.strictEqual(hero.dashCd, cdBefore - 0.05, '쿨 중엔 재발동 없이 감산만');
 }
 
-// ── stepMonster: 사거리 밖이면 이동 intent + 좌표 접근 ──
+// ── stepMonster: 사거리 밖이면 이동 intent + 좌표 접근, 용사 쪽을 바라본다 ──
 {
   const hero = spawnHero(stats, HOME);
   const m = mon('golem', HOME.x + 200, HOME.y); // range 30보다 훨씬 밖
@@ -161,6 +161,16 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   const intent = stepMonster(m, hero, 0.1);
   assert.strictEqual(intent.kind, 'move');
   assert.ok(m.x < before, '용사 쪽으로 접근');
+  assert.strictEqual(intent.kind === 'move' && intent.facing, 'west', '용사가 왼쪽이면 서쪽을 본다');
+}
+
+// ── stepMonster: 세로로 접근하면 남/북을 본다 (몬스터도 4방향) ──
+{
+  const hero = spawnHero(stats, HOME);
+  const above = stepMonster(mon('golem', HOME.x, HOME.y - 200), hero, 0.1); // 용사가 아래
+  const below = stepMonster(mon('golem', HOME.x, HOME.y + 200), hero, 0.1); // 용사가 위
+  assert.strictEqual(above.kind === 'move' && above.facing, 'south');
+  assert.strictEqual(below.kind === 'move' && below.facing, 'north');
 }
 
 // ── stepMonster: 근접 몬스터는 melee, 원거리는 arrow ──

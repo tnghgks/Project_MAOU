@@ -46,7 +46,10 @@ export interface MonsterEntity {
   x: number;
   y: number;
   atkCd: number;
-  spr: Phaser.GameObjects.Image;
+  spr: Phaser.GameObjects.Sprite;
+  /** 실제로 로드된 아틀라스 키. 스폰 시점에 확정한다 — def.char가 있어도 파일이 없으면
+   *  undefined가 되고, 그때 spr은 대체 상자다. 매 프레임 textures.exists를 다시 묻지 않으려고 캐시한다. */
+  char?: string;
   dead?: boolean;
   stunT?: number; // 기절/빙결 남은 시간 — stepMonster가 이 동안 AI를 건너뛴다
   dotT?: number; // 화상/출혈 남은 시간

@@ -1,12 +1,18 @@
 import Phaser from 'phaser';
 import { loadGame, gameState } from '../game/store.ts';
-import { MONSTERS } from '../data/monsters.ts';
+import { MONSTERS, type MonsterDef } from '../data/monsters.ts';
 import { registerAnims } from '../game/anims.ts';
 
-// 애니메이션 캐릭터 = assets/character/<이름>/ 폴더 하나 = 아틀라스 1장.
-// 여기에 한 줄 추가하면 로드·애니메이션 등록이 같이 따라온다 (프레임 수는 아틀라스에서 읽는다).
-export const CHARACTERS = ['rian', 'grimhardt'] as const;
-export type CharKey = (typeof CHARACTERS)[number];
+export const HERO_CHAR = 'rian'; // 용사 아틀라스
+
+// 로드할 아틀라스 = 용사 + MONSTERS 테이블의 char 값. 목록을 따로 유지하지 않는다 —
+// 몬스터에 아트를 붙이는 건 monsters.ts에 char 한 줄이고, 로드·등록은 여기서 따라온다.
+export const CHARACTERS = [
+  ...new Set([HERO_CHAR, ...(Object.values(MONSTERS) as MonsterDef[]).flatMap((m) => m.char ?? [])]),
+];
+
+// 아틀라스 없는 캐릭터가 쓰는 대체 상자. 테두리만 흰색이라 tint가 테두리 색으로 먹는다.
+export const BOX_TEXTURE = 'box';
 
 export default class BootScene extends Phaser.Scene {
   constructor() {
@@ -14,19 +20,31 @@ export default class BootScene extends Phaser.Scene {
   }
 
   preload() {
-    // Kenney Tiny Dungeon (CC0), 16×16. 몬스터 스프라이트는 data 테이블에서 파일명 참조.
+    // Kenney Tiny Dungeon (CC0), 16×16.
     this.load.image('hero', 'assets/hero.png'); // 정지 초상화 전용 (HeroPanel · 도네이션 팝업)
     this.load.image('arrow', 'assets/arrow.png');
     // 캐릭터당 아틀라스 1장 — `npm run assets`(scripts/pack.js)가 assets/character/ 를 패킹한 결과.
+    // 아직 안 만든 아틀라스는 로드가 실패해도 그냥 두고, 씬이 대체 상자로 그린다.
+    this.load.on(Phaser.Loader.Events.FILE_LOAD_ERROR, (f: Phaser.Loader.File) =>
+      console.warn(`[assets] ${f.key} 로드 실패 (${f.url}) — 대체 상자로 그린다`),
+    );
     for (const k of CHARACTERS) this.load.atlas(k, `assets/character/${k}.png`, `assets/character/${k}.json`);
     // 아레나 배경 타일셋 (광산, 16×16 spacing 1). 맵 자체는 game/arenaMap.ts가 에피소드 시드로 생성.
     this.load.image('tiles', 'assets/tilemap.png');
-    for (const [k, m] of Object.entries(MONSTERS)) this.load.image(`m_${k}`, `assets/${m.sprite}`);
   }
 
   create() {
+    // 대체 상자: 속은 비고 테두리만 흰색 → tint가 테두리에 먹어 몬스터별로 색이 구분된다.
+    // 통짜 사각형이 아니라 테두리인 이유는 "아직 아트가 안 붙었다"가 한눈에 보이게 하려는 것.
+    const g = this.make.graphics({ x: 0, y: 0 }, false);
+    g.fillStyle(0x11111a, 0.85).fillRect(0, 0, 16, 16);
+    g.lineStyle(2, 0xffffff, 1).strokeRect(1, 1, 14, 14);
+    g.generateTexture(BOX_TEXTURE, 16, 16);
+    g.destroy();
+
     // 애니메이션은 게임 전역 — BattleScene은 화마다 재생성되므로 여기서 한 번만 등록한다.
-    for (const k of CHARACTERS) registerAnims(this, k);
+    // 로드에 실패한 아틀라스는 건너뛴다 (registerAnims가 없는 텍스처를 만지지 않도록).
+    for (const k of CHARACTERS) if (this.textures.exists(k)) registerAnims(this, k);
     loadGame();
     gameState().setPhase('title'); // 메뉴는 React가 렌더
   }

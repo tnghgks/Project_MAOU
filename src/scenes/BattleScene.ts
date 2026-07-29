@@ -20,7 +20,8 @@ import {
   type SkillRarity,
   type ViewerAlert,
 } from '../formulas.ts';
-import { dirOf, playAnim, type Dir } from '../game/anims.ts';
+import { dirOf, playAnim, makeActor, type Dir } from '../game/anims.ts';
+import { HERO_CHAR, BOX_TEXTURE } from './BootScene.ts';
 import { gameState, heroPower } from '../game/store.ts';
 import { bus, busBind } from '../game/events.ts';
 import { ARENA, CANVAS, SUMMON_Y, CX, arenaBounds } from '../game/layout.ts';
@@ -131,8 +132,7 @@ const HP_BAR_W = 48; // ponytail: 체력바 크기 knob
 const HP_BAR_H = 8;
 const KNOCKBACK_RADIUS = 120; // ponytail: 방패 밀치기 발동 반경(px) — GDD엔 확률만 있고 거리는 없어 여기서 정한다
 const KNOCKBACK_DIST = 60; // 밀려나는 거리(px)
-const HERO_CHAR = 'rian'; // 용사가 쓰는 아틀라스 (BootScene.CHARACTERS 중 하나)
-// 용사 원본은 92×92 캔버스에 인물 ~20×46px (몬스터는 16×16 원본에 size/16 스케일).
+// 용사 원본은 92×92 캔버스에 인물 ~20×46px.
 // 1 = 리샘플 없음 = pixelArt 필터에서 가장 깨끗하다. ponytail: 화면상 크기 knob, 줄이면 축소 시 픽셀이 떤다.
 const HERO_SCALE = 1;
 const SHAKE_HOLD = 999_999; // critical 흔들림은 단계가 바뀔 때까지 유지 (reset으로 끈다). warn은 흔들지 않는다
@@ -236,7 +236,7 @@ export default class BattleScene extends Phaser.Scene {
       if (gameState().mode !== 'hero') gameState().toggleMode();
       this.setSummonVisible(false);
     }
-    this.heroSpr = this.add.sprite(this.hero.x, this.hero.y, HERO_CHAR, 'walk/south/0').setScale(HERO_SCALE);
+    this.heroSpr = makeActor(this, this.hero.x, this.hero.y, HERO_CHAR, 48, BOX_TEXTURE).spr.setScale(HERO_SCALE);
     // 대기 모션은 별도 스프라이트 없이 트윈으로. y는 매 프레임 덮어써지므로 scaleY만 건드린다.
     this.tweens.add({
       targets: this.heroSpr,
@@ -353,7 +353,7 @@ export default class BattleScene extends Phaser.Scene {
   // 소환 카드 1장: 초상화 + 종류 정보 + 주기/수량 슬라이더. 카드 본체 클릭 = ON/OFF.
   buildCard(t: MonsterId, i: number): SummonSlot {
     const add = this.add;
-    const def = MONSTERS[t];
+    const def: MonsterDef = MONSTERS[t];
     const x = CARD.x + i * (CARD.w + CARD.gap);
     const y = CARD.y;
 
@@ -367,12 +367,12 @@ export default class BattleScene extends Phaser.Scene {
         .setDepth(7)
         .setStrokeStyle(1, 0x4a4a5e),
     );
-    this.reg(
-      add
-        .image(x + 30, y + 30, `m_${t}`)
-        .setDisplaySize(40, 40)
-        .setDepth(8),
-    );
+    // 초상화는 아틀라스의 정면 정지컷(rotations/south). 아트가 없으면 아레나와 같은 대체 상자.
+    const portrait =
+      def.char && this.textures.exists(def.char)
+        ? add.image(x + 30, y + 30, def.char, 'rotations/south')
+        : add.image(x + 30, y + 30, BOX_TEXTURE).setTint(def.tint ?? 0xffffff);
+    this.reg(portrait.setDisplaySize(40, 40).setDepth(8));
     this.reg(add.text(x + 60, y + 10, def.name, { fontSize: '13px', fontStyle: 'bold', color: '#ffffff' }).setDepth(8));
     this.reg(
       add
@@ -499,9 +499,9 @@ export default class BattleScene extends Phaser.Scene {
 
   doSummon(t: MonsterId, x: number, y: number): MonsterEntity {
     const def: MonsterDef = MONSTERS[t];
-    const spr = this.add.image(x, y, `m_${t}`).setScale(def.size / 16);
+    const { spr, char } = makeActor(this, x, y, def.char, def.size, BOX_TEXTURE);
     if (def.tint) spr.setTint(def.tint);
-    const m: MonsterEntity = { type: t, def, hp: def.hp, x, y, atkCd: 0, spr };
+    const m: MonsterEntity = { type: t, def, hp: def.hp, x, y, atkCd: 0, spr, char };
     this.monsters.push(m);
     return m;
   }
@@ -1015,10 +1015,13 @@ export default class BattleScene extends Phaser.Scene {
       }
       const intent = stepMonster(m, H, dt); // 결정은 순수, 씬은 스프라이트/피격만 적용
       switch (intent.kind) {
-        case 'move':
+        case 'move': {
           m.spr.setPosition(m.x, m.y);
-          m.spr.setFlipX(intent.flipLeft);
+          const [dir, flip] = dirOf(intent.facing);
+          m.spr.setFlipX(flip);
+          playAnim(m.spr, m.char, 'walk', dir); // char 없으면(=대체 상자) no-op
           break;
+        }
         case 'arrow': {
           const spr = this.add.image(intent.x, intent.y, 'arrow').setDepth(2).setScale(0.7);
           spr.setRotation(Math.atan2(intent.ty - intent.y, intent.tx - intent.x) + Math.PI / 2);
