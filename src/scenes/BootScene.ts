@@ -3,12 +3,19 @@ import { loadGame, gameState } from '../game/store.ts';
 import { MONSTERS, type MonsterDef } from '../data/monsters.ts';
 import { registerAnims } from '../game/anims.ts';
 
-export const HERO_CHAR = 'rian'; // 용사 아틀라스
+// 용사 아틀라스는 장비 등급마다 한 장이다 (assets/character/rian/Rian-Basic → rian-basic).
+// 약한 것부터 순서대로. 철검을 붙일 땐 Rian-Iron 폴더를 넣고 여기에 'rian-iron' 한 줄만 더한다 —
+// 프레임 이름(walk/south/0 …)은 등급이 달라도 같으므로 아틀라스 키만 갈아끼우면 그림이 바뀐다.
+export const HERO_TIERS = ['rian-basic', 'rian-wooden'] as const;
+export type HeroTier = (typeof HERO_TIERS)[number];
 
-// 로드할 아틀라스 = 용사 + MONSTERS 테이블의 char 값. 목록을 따로 유지하지 않는다 —
+export const HERO_CHAR: HeroTier = HERO_TIERS[1]; // 지금 쓰는 등급
+
+// 로드할 아틀라스 = 용사 전 등급 + MONSTERS 테이블의 char 값. 목록을 따로 유지하지 않는다 —
 // 몬스터에 아트를 붙이는 건 monsters.ts에 char 한 줄이고, 로드·등록은 여기서 따라온다.
+// 등급은 안 쓰는 것까지 미리 받는다 (한 장에 100KB 남짓이고, 런 도중 교체가 로드를 기다리면 안 된다).
 export const CHARACTERS = [
-  ...new Set([HERO_CHAR, ...(Object.values(MONSTERS) as MonsterDef[]).flatMap((m) => m.char ?? [])]),
+  ...new Set([...HERO_TIERS, ...(Object.values(MONSTERS) as MonsterDef[]).flatMap((m) => m.char ?? [])]),
 ];
 
 // 아틀라스 없는 캐릭터가 쓰는 대체 상자. 테두리만 흰색이라 tint가 테두리 색으로 먹는다.
