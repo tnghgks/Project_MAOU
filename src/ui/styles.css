@@ -629,9 +629,8 @@ button {
 }
 
 /* ── 도네이션 이벤트 팝업 (게임 일시정지 중) ──
-   기본은 전체 화면(소환 바까지) 덮음. reaction/rhythm 단계에서만 하단을 틔우는데,
-   그 높이는 DonationEvent가 layout 상수로 계산해 inline bottom으로 넣는다 —
-   여기에 %를 박아뒀더니 레인이 y 584로 내려간 뒤에도 640 기준으로 남아 어긋났다. */
+   항상 전체 화면을 덮는다. 리듬 레인이 RhythmLane으로 옮겨가 팝업 안쪽(춤추는 영역)에서
+   그려지므로, 예전처럼 캔버스 레인을 비춰주려고 하단에 구멍을 뚫어둘 필요가 없다. */
 .don-event {
   position: absolute;
   inset: 0;
@@ -681,6 +680,78 @@ button {
   to {
     transform: translateY(-14%) rotate(14deg) scaleX(-1);
   }
+}
+
+/* ── 리듬 스테이지/레인 (dim 팝업 "춤추는 영역" 안) ──
+   .rhythm-stage: 용사(hero-dance)가 flex로 가로/세로 중앙에 서는, 노트 유무와 무관하게
+   크기가 고정된 박스. RhythmLane(.rhythm-lane)은 그 위에 절대위치로 겹쳐 그려지고,
+   판정 지점은 항상 스테이지 중앙(50%) — 곧 용사 몸통 위치라 "몸에 닿으면 눌러라"가 성립한다. */
+.rhythm-stage {
+  position: relative;
+  width: clamp(280px, 60vw, 820px);
+  height: clamp(64px, 8vw, 120px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rhythm-lane {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.rhythm-target {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 56px;
+  height: 56px;
+  margin: -28px 0 0 -28px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  opacity: 0.8;
+}
+.rhythm-note {
+  position: absolute;
+  top: 50%;
+  width: 32px;
+  height: 32px;
+  margin-top: -16px;
+  margin-left: -16px;
+  border-radius: 50%;
+  background: var(--color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 14px;
+  color: #000;
+  animation: rhythm-fly var(--dur) linear forwards;
+}
+@keyframes rhythm-fly {
+  from {
+    transform: translateX(var(--dist));
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+.rhythm-flash {
+  position: absolute;
+  left: 50%;
+  top: -10px;
+  transform: translateX(-50%);
+  font-size: clamp(12px, 1.3vw, 18px);
+  font-weight: 700;
+}
+.rhythm-flash.perfect {
+  color: #ffee44;
+}
+.rhythm-flash.good {
+  color: #66ff88;
+}
+.rhythm-flash.miss {
+  color: #ff5555;
 }
 
 .don-cards {
@@ -734,4 +805,49 @@ button {
 .don-card.lose {
   opacity: 0.3;
   filter: grayscale(1);
+}
+
+/* ── 개발자 패널 (DevPanel.tsx, DEV 빌드 전용) — 항상 최상단 ── */
+.dev-panel {
+  position: fixed;
+  right: 8px;
+  bottom: 8px;
+  z-index: 999;
+  font-size: 12px;
+}
+.dev-panel-toggle {
+  padding: 5px 10px;
+  background: #1a1a2c;
+  color: #ffcf3a;
+  border: 1px solid #444460;
+  cursor: pointer;
+}
+.dev-panel-body {
+  margin-top: 4px;
+  padding: 8px;
+  background: rgba(10, 10, 16, 0.95);
+  border: 1px solid #444460;
+  width: 200px;
+}
+.dev-panel-label {
+  color: #888;
+  margin: 6px 0 2px;
+}
+.dev-panel-label:first-child {
+  margin-top: 0;
+}
+.dev-panel-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.dev-panel-row button {
+  padding: 4px 8px;
+  background: #2a2a44;
+  color: #ddd;
+  border: 1px solid #444460;
+  cursor: pointer;
+}
+.dev-panel-row button:hover {
+  background: #3a3a5c;
 }

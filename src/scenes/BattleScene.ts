@@ -188,18 +188,16 @@ export default class BattleScene extends Phaser.Scene {
     this.heroSpr = this.add.image(this.hero.x, this.hero.y, 'hero').setScale(1.3);
     this.heroHpBar = this.add.graphics().setDepth(3); // 몬스터·화살 위로
 
-    // 병렬 씬: HUD(캔버스 수치) + HeroPanel(용사 스탯) + Rhythm(리듬 판정).
-    // 순서 = 렌더 순서. Rhythm이 마지막이어야 리듬 레인이 하단 패널을 덮는다.
+    // 병렬 씬: HUD(캔버스 수치) + HeroPanel(용사 스탯). 리듬 판정은 RhythmLane(React)이 담당.
     this.scene.launch('Hud');
     this.scene.launch('HeroPanel');
-    this.scene.launch('Rhythm');
 
     // 리듬 결과는 씬이 멈춰 있는 동안 도착한다 — 스킬 발동은 재개 시점(endDonation)까지 미룬다
     busBind(this, 'rhythm:result', (res) => {
       this.pendingSkill = res;
     });
     busBind(this, 'donation:end', ({ card }) => this.endDonation(card));
-    // Hud/Rhythm 중지는 App 디렉터가 담당 (shutdown 중 형제 씬 stop은 신뢰 불가)
+    // Hud 중지는 App 디렉터가 담당 (shutdown 중 형제 씬 stop은 신뢰 불가)
 
     // 입력: 슬라이더 드래그(카드 밖으로 나가도 추적) + 숫자키 = 해당 카드 ON/OFF
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
@@ -214,7 +212,7 @@ export default class BattleScene extends Phaser.Scene {
       Phaser.Input.Keyboard.Key
     >;
     // 숫자키는 모드에 따라 두 역할: 마왕=소환 카드 토글 / 용사=스킬 시전.
-    // 도네이션 중엔 이 씬이 pause라 QWER(RhythmScene)와 동시 발화하지 않는다.
+    // 도네이션 중엔 이 씬이 pause라 QWER(RhythmLane)와 동시 발화하지 않는다.
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
       if (e.key === 'c' || e.key === 'C') return this.switchMode();
       const digit = parseInt(e.key, 10);

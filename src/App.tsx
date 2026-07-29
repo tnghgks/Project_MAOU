@@ -10,6 +10,7 @@ import MenuOverlay from './ui/MenuOverlay.tsx';
 import TitleView from './ui/TitleView.tsx';
 import HelpPopup from './ui/HelpPopup.tsx';
 import CutsceneView from './ui/CutsceneView.tsx';
+import DevPanel from './ui/DevPanel.tsx';
 
 export default function App() {
   const parentRef = useRef<HTMLDivElement>(null);
@@ -30,8 +31,8 @@ export default function App() {
     const game = gameRef.current;
     if (!game) return;
     if (phase === 'broadcast')
-      game.scene.start('Battle'); // Battle이 Hud/HeroPanel/Rhythm launch
-    else for (const k of ['Battle', 'Hud', 'HeroPanel', 'Rhythm']) if (game.scene.isActive(k)) game.scene.stop(k);
+      game.scene.start('Battle'); // Battle이 Hud/HeroPanel launch
+    else for (const k of ['Battle', 'Hud', 'HeroPanel']) if (game.scene.isActive(k)) game.scene.stop(k);
   }, [phase]);
 
   // 캔버스와 오버레이는 플레이어 영역(.screen) 안 — 채팅/사이드바는 BroadcastFrame가 소유
@@ -54,6 +55,7 @@ export default function App() {
           boot 동안에도 타이틀을 띄워 방송 프레임(빈 캔버스)이 잠깐 노출되는 걸 막는다. */}
       {(phase === 'title' || phase === 'boot') && <TitleView />}
       <CutsceneView />
+      {import.meta.env.DEV && <DevPanel />}
     </>
   );
 }
