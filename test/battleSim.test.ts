@@ -62,7 +62,7 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   intent = stepHero(hero, [], 0, 1, HOME, arenaBounds); // 누적 2s ≥ REGEN_DELAY
   assert.strictEqual(hero.hp, 55, '50 + 100*0.05*1 (유예 지난 뒤 회복)');
   assert.deepStrictEqual(intent.attacks, []);
-  assert.strictEqual(intent.moved, false, '스폰에 있으면 이동 없음');
+  assert.strictEqual(intent.facing, null, '스폰에 있으면 이동 없음 = 대기');
 }
 
 // ── stepHero: HP 25% 이하 + 몬스터 있으면 후퇴 발동, 반대 방향 이동 ──
@@ -74,7 +74,7 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   assert.ok(hero.retreatT > 0, '후퇴 타이머 발동');
   assert.strictEqual(hero.retreatCd > 0, true, '후퇴 쿨다운 세팅');
   assert.ok(hero.x < HOME.x, '몬스터 반대(왼쪽)로 도주');
-  assert.strictEqual(intent.movingLeft, true);
+  assert.strictEqual(intent.facing, 'west');
 }
 
 // ── stepHero: 사거리 안 대상 → 공격 intent + 쿨다운 세팅 ──
@@ -105,7 +105,19 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   const intent = stepHero(hero, [m], 1, 0.1, HOME, arenaBounds, { dx: -1, dy: 0, dash: false });
   assert.strictEqual(hero.x, HOME.x - stats.speed * 0.1, '입력 방향(왼쪽)으로 speed*dt');
   assert.deepStrictEqual(intent.attacks, [], '사거리 밖이면 공격 없음');
-  assert.strictEqual(intent.movingLeft, true);
+  assert.strictEqual(intent.facing, 'west');
+}
+
+// ── stepHero(용사 모드): 4방향 facing — 수직 이동도 잡히고, 대각선은 수평 우선 ──
+{
+  const dir = (dx: number, dy: number) =>
+    stepHero(spawnHero(stats, HOME), [], 0, 0.1, HOME, arenaBounds, { dx, dy, dash: false }).facing;
+  assert.strictEqual(dir(0, 1), 'south');
+  assert.strictEqual(dir(0, -1), 'north', '수직 이동이 정지로 잡히던 버그');
+  assert.strictEqual(dir(-1, 0), 'west');
+  assert.strictEqual(dir(1, 0), 'east');
+  assert.strictEqual(dir(1, 1), 'east', '동률 대각선은 수평 우선');
+  assert.strictEqual(dir(0, 0), null, '입력 없으면 대기');
 }
 
 // ── stepHero(용사 모드): HP 25% 이하여도 자동 후퇴가 조작권을 뺏지 않는다 ──

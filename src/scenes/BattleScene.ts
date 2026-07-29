@@ -20,6 +20,7 @@ import {
   type SkillRarity,
   type ViewerAlert,
 } from '../formulas.ts';
+import { dirOf, playAnim, type Dir } from '../game/anims.ts';
 import { gameState, heroPower } from '../game/store.ts';
 import { bus, busBind } from '../game/events.ts';
 import { ARENA, CANVAS, SUMMON_Y, CX, arenaBounds } from '../game/layout.ts';
@@ -130,6 +131,10 @@ const HP_BAR_W = 48; // ponytail: 체력바 크기 knob
 const HP_BAR_H = 8;
 const KNOCKBACK_RADIUS = 120; // ponytail: 방패 밀치기 발동 반경(px) — GDD엔 확률만 있고 거리는 없어 여기서 정한다
 const KNOCKBACK_DIST = 60; // 밀려나는 거리(px)
+const HERO_CHAR = 'rian'; // 용사가 쓰는 아틀라스 (BootScene.CHARACTERS 중 하나)
+// 용사 원본은 92×92 캔버스에 인물 ~20×46px (몬스터는 16×16 원본에 size/16 스케일).
+// 1 = 리샘플 없음 = pixelArt 필터에서 가장 깨끗하다. ponytail: 화면상 크기 knob, 줄이면 축소 시 픽셀이 떤다.
+const HERO_SCALE = 1;
 const SHAKE_HOLD = 999_999; // critical 흔들림은 단계가 바뀔 때까지 유지 (reset으로 끈다). warn은 흔들지 않는다
 
 export default class BattleScene extends Phaser.Scene {
@@ -165,7 +170,8 @@ export default class BattleScene extends Phaser.Scene {
   summonObjs: Phaser.GameObjects.GameObject[] = []; // 소환 바 오브젝트 전부 — 용사 모드에선 통째로 숨긴다
   keys!: Record<string, Phaser.Input.Keyboard.Key>; // 용사 이동/대시 (폴링)
   skillCd: Partial<Record<SkillId, number>> = {}; // 용사 모드 직접 시전 쿨타임 (HeroPanelScene이 읽는다)
-  heroSpr!: Phaser.GameObjects.Image;
+  heroSpr!: Phaser.GameObjects.Sprite;
+  facingDir: Dir = 'south'; // 마지막으로 바라본 방향 — 정지 시 이 방향 대기 모션으로 선다
   heroHpBar!: Phaser.GameObjects.Graphics;
   pendingSkill: SkillOutcome | null = null; // 리액션 리듬 결과 — 전투 재개 시점에 발동
   chatT = 0;
@@ -230,7 +236,16 @@ export default class BattleScene extends Phaser.Scene {
       if (gameState().mode !== 'hero') gameState().toggleMode();
       this.setSummonVisible(false);
     }
-    this.heroSpr = this.add.image(this.hero.x, this.hero.y, 'hero').setScale(2.3);
+    this.heroSpr = this.add.sprite(this.hero.x, this.hero.y, HERO_CHAR, 'walk/south/0').setScale(HERO_SCALE);
+    // 대기 모션은 별도 스프라이트 없이 트윈으로. y는 매 프레임 덮어써지므로 scaleY만 건드린다.
+    this.tweens.add({
+      targets: this.heroSpr,
+      scaleY: HERO_SCALE * 1.06,
+      duration: 700,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
     this.heroHpBar = this.add.graphics().setDepth(3); // 몬스터·화살 위로
 
     // 병렬 씬: HUD(캔버스 수치) + HeroPanel(용사 스탯). 리듬 판정은 RhythmLane(React)이 담당.
@@ -966,7 +981,14 @@ export default class BattleScene extends Phaser.Scene {
     }
     this.heroSpr.setPosition(H.x, H.y);
     this.heroSpr.setAlpha(H.invulnT > 0 ? 0.5 : 1); // 대시 무적을 눈에 보이게
-    if (intent.moved) this.heroSpr.setFlipX(intent.movingLeft);
+    if (intent.facing) {
+      const [dir, flip] = dirOf(intent.facing);
+      this.facingDir = dir;
+      this.heroSpr.setFlipX(flip);
+      playAnim(this.heroSpr, HERO_CHAR, 'walk', dir);
+    } else {
+      playAnim(this.heroSpr, HERO_CHAR, 'idle', this.facingDir); // 대기 모션이 없는 방향은 걷기 0번 프레임
+    }
 
     const ratio = clamp(H.hp / H.maxHp, 0, 1);
     this.heroHpBar

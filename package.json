@@ -5,14 +5,15 @@
   "homepage": "https://tnghgks.github.io/Project_MAOU",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "npm run assets && vite",
+    "build": "npm run assets && tsc && vite build",
     "preview": "vite preview",
-    "test": "tsx test/formulas.test.ts && tsx test/cards.test.ts && tsx test/store.test.ts && tsx test/critical.test.ts && tsx test/nicknames.test.ts && tsx test/skills.test.ts && tsx test/battleSim.test.ts && tsx test/progression.test.ts && tsx test/arenaMap.test.ts && tsx test/requests.test.ts && tsx test/cutscenes.test.ts && tsx test/traits.test.ts",
+    "test": "tsx test/formulas.test.ts && tsx test/cards.test.ts && tsx test/store.test.ts && tsx test/critical.test.ts && tsx test/nicknames.test.ts && tsx test/skills.test.ts && tsx test/battleSim.test.ts && tsx test/anims.test.ts && tsx test/progression.test.ts && tsx test/arenaMap.test.ts && tsx test/requests.test.ts && tsx test/cutscenes.test.ts && tsx test/traits.test.ts",
     "format": "prettier --write src test",
     "format:check": "prettier --check src test",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "deploy": "gh-pages -d dist",
+    "assets": "node scripts/pack.js"
   },
   "prettier": {
     "printWidth": 120,

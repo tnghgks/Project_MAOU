@@ -36,11 +36,12 @@ export function countNear(monsters: readonly MonsterEntity[], hero: HeroEntity):
 }
 
 // ── 용사 AI ──
+// 스프라이트는 3장(남/동/북)만 만들고 서쪽은 동쪽을 flipX — 씬이 west→east+flip으로 매핑한다.
+export type Facing = 'south' | 'east' | 'west' | 'north';
 export interface HeroIntent {
   attacks: MonsterEntity[]; // 이번 프레임 휘두르기에 맞은 전원 (씬이 damageMonster로 처리)
   swung: boolean; // 쿨다운이 돌아 공격 자체는 발동했는가 — 사거리 안에 대상이 없어도(attacks가 비어도) true일 수 있다
-  moved: boolean; // 수평 이동 여부 (flip 갱신 조건)
-  movingLeft: boolean;
+  facing: Facing | null; // null = 정지 (씬이 걷기 애니메이션을 멈춘다)
 }
 // 용사 모드 입력. 넘기면 자동 AI(추적·후퇴·복귀)를 대체한다 — 공격만 기존대로 자동.
 export interface HeroInput {
@@ -181,7 +182,18 @@ export function stepHero(
   }
   H.x = clamp(H.x + vx * dt, bounds.minX, bounds.maxX);
   H.y = clamp(H.y + vy * dt, bounds.minY, bounds.maxY);
-  return { attacks, swung, moved: vx !== 0, movingLeft: vx < 0 };
+  // 대각선은 수평 우선 — 측면 뷰가 4방향 중 가장 잘 읽힌다
+  const facing: Facing | null =
+    vx === 0 && vy === 0
+      ? null
+      : Math.abs(vx) >= Math.abs(vy)
+        ? vx < 0
+          ? 'west'
+          : 'east'
+        : vy < 0
+          ? 'north'
+          : 'south';
+  return { attacks, swung, facing };
 }
 
 // ── 몬스터 AI ── (사망/스프라이트 처리는 씬 소유: suicide도 씬이 m.dead 세팅)
