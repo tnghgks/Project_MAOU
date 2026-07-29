@@ -35,7 +35,7 @@ export default function UpgradeView() {
       </p>
       <p className="owned">전투력이 오를수록 시청자 요청의 목표치도 커진다</p>
       <ul className="shop">
-        <UpgradeShopList gold={gold} upgradeLevels={upgradeLevels} onBuy={buy} />
+        <UpgradeShopList gold={gold} upgradeLevels={upgradeLevels} hero={hero} onBuy={buy} />
         {locked.length > 0 && (
           <li>
             <button className="skill" disabled={gold < SKILL_COST} onClick={learn}>

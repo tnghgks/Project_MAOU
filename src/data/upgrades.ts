@@ -25,3 +25,7 @@ export const SKILL_COST = 500; // 스킬 습득 고정
 
 export const upgradeCost = (key: UpgradeKey, level: number) =>
   Math.round(UPGRADES[key].baseCost * Math.pow(UPGRADES[key].mult, level));
+
+// 지금 스탯 값 (표시용). 도네이션 카드는 upgradeLevels를 안 올리므로 Lv만 보여주면
+// 카드로 오른 능력치가 상태창·육성 화면 어디에도 안 나타난다(#13). 두 화면이 이걸 같이 쓴다.
+export const statOf = (key: UpgradeKey, hero: HeroStats) => Math.round(hero[UPGRADES[key].stat] * 100) / 100;

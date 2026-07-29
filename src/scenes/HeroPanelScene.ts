@@ -3,7 +3,7 @@ import { clamp } from '../formulas.ts';
 import { gameState, heroPower } from '../game/store.ts';
 import { DASH_CD } from '../game/battleSim.ts';
 import { CANVAS, SUMMON_Y, CX } from '../game/layout.ts';
-import { UPGRADES, type UpgradeKey } from '../data/upgrades.ts';
+import { UPGRADES, statOf, type UpgradeKey } from '../data/upgrades.ts';
 import { SKILLS } from '../data/skills.ts';
 import { TRAITS, heroAtkMult } from '../data/traits.ts';
 import type BattleScene from './BattleScene.ts';
@@ -71,7 +71,8 @@ export default class HeroPanelScene extends Phaser.Scene {
     objs.push(add.line(0, 0, COL2 - 20, H0 + 12, COL2 - 20, CANVAS.H - 12, 0x5a4628).setOrigin(0));
     objs.push(add.text(COL2, H0 + 14, '특성', { fontSize: '13px', fontStyle: 'bold', color: '#ffcc55' }));
     this.powerText = add.text(COL2 + 44, H0 + 15, '', { fontSize: '12px', color: '#ffdd88' });
-    this.traitText = add.text(COL2, H0 + 36, '', { fontSize: '12px', color: '#c8b48a', lineSpacing: 3 });
+    // 11px — Lv 뒤에 현재 값이 붙어 12px면 3열이 스킬 칸(COL3)을 넘본다
+    this.traitText = add.text(COL2, H0 + 36, '', { fontSize: '11px', color: '#c8b48a', lineSpacing: 3 });
     this.statText = add.text(COL2, H0 + 82, '', { fontSize: '11px', color: '#8a7a5a' });
     objs.push(this.powerText, this.traitText, this.statText);
 
@@ -118,7 +119,10 @@ export default class HeroPanelScene extends Phaser.Scene {
     // 획득 특성은 전투력 옆에 — 강화 레벨 두 줄 밑에 끼우면 스킬 칸을 침범한다
     const owned = S.traits.map((t) => `${TRAITS[t].icon}${TRAITS[t].name}`).join(' ');
     this.powerText.setText(`전투력 ×${heroPower(S.hero).toFixed(2)}${owned ? '   ' + owned : ''}`);
-    const traits = (Object.keys(UPGRADES) as UpgradeKey[]).map((k) => `${UPGRADES[k].name} Lv.${S.upgradeLevels[k]}`);
+    // Lv 뒤에 현재 값도 붙인다 — 도네 카드 상승분은 Lv를 안 올려서 Lv만 보면 반영이 안 된 것처럼 보인다(#13)
+    const traits = (Object.keys(UPGRADES) as UpgradeKey[]).map(
+      (k) => `${UPGRADES[k].name} Lv.${S.upgradeLevels[k]}·${statOf(k, S.hero)}`,
+    );
     this.traitText.setText([traits.slice(0, TRAITS_PER_ROW), traits.slice(TRAITS_PER_ROW)].map((r) => r.join('   ')));
     // 공격력은 광전사 보정을 얹은 실효값 — HP가 깎일수록 이 숫자가 올라가는 게 보여야 특성이 읽힌다
     const mult = heroAtkMult(S.traits, ratio);
