@@ -1,0 +1,53 @@
+import Phaser from 'phaser';
+import type { SkillOutcome } from '../formulas.ts';
+import type { Card } from '../data/cards.ts';
+
+// 순간적으로 터지는 사건 버스 (지속값은 store). 이벤트 계약은 BusEvents가 강제.
+//
+// 도네이션 1회 = 한 사이클, 진행 주체는 React(DonationEvent):
+//   Battle ─donation:arrive→ React (Battle/Hud 일시정지)
+//     └ 대박이면 React ─rhythm:start→ Rhythm ─rhythm:result→ React(카드 등급) + Battle(스킬 예약)
+//   React ─donation:end→ Battle (강화 적용 + 재개)
+export interface ChatLine {
+  who: string;
+  msg: string;
+  color: string;
+}
+export interface Donation {
+  amount: number;
+  donor: string;
+  jackpot: boolean;
+}
+
+export interface BusEvents {
+  'chat:line': ChatLine;
+  'donation:arrive': Donation;
+  'donation:end': { card: Card };
+  'rhythm:start': null;
+  'rhythm:result': SkillOutcome;
+}
+
+// ponytail: Phaser EventEmitter는 제네릭이 없어 as로 타입만 씌움 — 런타임은 그대로
+interface TypedBus {
+  on<K extends keyof BusEvents>(event: K, fn: (payload: BusEvents[K]) => void, context?: unknown): this;
+  off<K extends keyof BusEvents>(event: K, fn?: (payload: BusEvents[K]) => void, context?: unknown): this;
+  emit<K extends keyof BusEvents>(event: K, payload: BusEvents[K]): boolean;
+}
+
+export const bus = new Phaser.Events.EventEmitter() as unknown as TypedBus;
+
+// 씬이 bus를 구독하는 유일한 경로. shutdown(씬 정지)과 destroy(game.destroy — HMR/언마운트) 양쪽에서 푼다.
+// game.destroy는 shutdown을 쏘지 않는다: shutdown만 걸면 죽은 씬이 계속 콜백을 받아
+// this.scene.manager === null로 던지고, 그 예외가 뒤이은 살아있는 씬의 핸들러까지 막는다.
+export function busBind<K extends keyof BusEvents>(
+  scene: Phaser.Scene,
+  event: K,
+  fn: (payload: BusEvents[K]) => void,
+): void {
+  bus.on(event, fn);
+  const off = () => {
+    bus.off(event, fn);
+  };
+  scene.events.once('shutdown', off);
+  scene.events.once('destroy', off);
+}

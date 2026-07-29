@@ -1,0 +1,42 @@
+{
+  "name": "maou-channel",
+  "private": true,
+  "version": "0.0.1",
+  "homepage": "https://tnghgks.github.io/Project_MAOU",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "tsx test/formulas.test.ts && tsx test/cards.test.ts && tsx test/store.test.ts && tsx test/critical.test.ts && tsx test/nicknames.test.ts && tsx test/skills.test.ts && tsx test/battleSim.test.ts && tsx test/progression.test.ts && tsx test/arenaMap.test.ts && tsx test/requests.test.ts && tsx test/cutscenes.test.ts && tsx test/traits.test.ts",
+    "format": "prettier --write src test",
+    "format:check": "prettier --check src test",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist"
+  },
+  "prettier": {
+    "printWidth": 120,
+    "singleQuote": true,
+    "semi": true,
+    "trailingComma": "all",
+    "arrowParens": "always"
+  },
+  "dependencies": {
+    "galmuri": "^2.40.3",
+    "phaser": "^3.80.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.3.4",
+    "gh-pages": "^6.3.0",
+    "prettier": "^3.9.6",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "vite": "^5.4.0"
+  }
+}
