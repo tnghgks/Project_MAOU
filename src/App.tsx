@@ -30,8 +30,8 @@ export default function App() {
     const game = gameRef.current;
     if (!game) return;
     if (phase === 'broadcast')
-      game.scene.start('Battle'); // Battle이 Hud/HeroPanel/Rhythm launch
-    else for (const k of ['Battle', 'Hud', 'HeroPanel', 'Rhythm']) if (game.scene.isActive(k)) game.scene.stop(k);
+      game.scene.start('Battle'); // Battle이 Hud/HeroPanel launch
+    else for (const k of ['Battle', 'Hud', 'HeroPanel']) if (game.scene.isActive(k)) game.scene.stop(k);
   }, [phase]);
 
   // 캔버스와 오버레이는 플레이어 영역(.screen) 안 — 채팅/사이드바는 BroadcastFrame가 소유

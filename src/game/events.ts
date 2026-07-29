@@ -6,7 +6,7 @@ import type { Card } from '../data/cards.ts';
 //
 // 도네이션 1회 = 한 사이클, 진행 주체는 React(DonationEvent):
 //   Battle ─donation:arrive→ React (Battle/Hud 일시정지)
-//     └ 대박이면 React ─rhythm:start→ Rhythm ─rhythm:result→ React(카드 등급) + Battle(스킬 예약)
+//     └ 대박이면 React ─rhythm:start→ RhythmLane ─rhythm:result→ React(카드 등급) + Battle(스킬 예약)
 //   React ─donation:end→ Battle (강화 적용 + 재개)
 export interface ChatLine {
   who: string;

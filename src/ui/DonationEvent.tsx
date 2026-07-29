@@ -4,7 +4,7 @@ import { useBusEvent } from './useBusEvent.ts';
 import { drawCards, reactionCard, RARITY, type Card } from '../data/cards.ts';
 import { missingTraits } from '../data/traits.ts';
 import { gameState } from '../game/store.ts';
-import { CANVAS, SUMMON_Y } from '../game/layout.ts';
+import RhythmLane from './RhythmLane.tsx';
 
 // 도네이션 1회의 진행 주체. 이 팝업이 떠 있는 동안 Battle/Hud는 멈춰 있고,
 // 카드가 확정되면 'donation:end'로 강화 적용 + 재개를 요청한다 (events.ts 사이클 주석 참고).
@@ -15,11 +15,6 @@ const REACTION_MS = 1400; // 춤 연출 → 노트 시작
 const SPIN_MS = 110; // 카드 커서 한 칸
 const SPIN_TICKS = 13;
 const REVEAL_MS = 1500; // 당첨 카드 노출
-
-// 리액션 중 비워둘 하단 높이 = 캔버스 리듬 레인(SUMMON_Y~H) 비율. 상수에서 뽑아 레인이 옮겨가도 따라간다.
-// ponytail: 캔버스 세로 레터박스는 무시 — layout.fitWidth가 창 비율에 맞춰 폭을 잡아 보통 0이고,
-// MAX_W(2560)에 걸리는 초광폭 창에서만 몇 px 어긋난다. 정확히 맞추려면 canvas rect를 읽어야 한다.
-const LANE_PCT = ((CANVAS.H - SUMMON_Y) / CANVAS.H) * 100;
 
 export default function DonationEvent() {
   const [stage, setStage] = useState<Stage>('idle');
@@ -73,18 +68,24 @@ export default function DonationEvent() {
   const dancing = stage === 'reaction' || stage === 'rhythm';
 
   return (
-    <div
-      className={don.jackpot ? 'don-event jackpot' : 'don-event'}
-      style={dancing ? { bottom: `${LANE_PCT}%` } : undefined}
-    >
+    <div className={don.jackpot ? 'don-event jackpot' : 'don-event'}>
       <p className="don-head">
         🎁 {don.donor} · {don.amount.toLocaleString()}G {don.jackpot && <b>대박 후원!!</b>}
       </p>
       {dancing ? (
         <div className="don-reaction">
-          {/* ponytail: 영상 자리 — 용사 스프라이트 CSS 춤. 리액션 영상 에셋 생기면 <video>로 교체 */}
-          <img className="hero-dance" src={`${import.meta.env.BASE_URL}assets/hero.png`} alt="" />
-          <p className="don-tip">{stage === 'reaction' ? '용사가 신나서 춤춘다!' : '⌨ QWER 노트를 맞춰라!'}</p>
+          {/* rhythm-stage: 용사가 flex로 가로 중앙에 서고, RhythmLane은 그 위에 절대위치로 겹쳐
+              그려진다 — 판정 지점(50%)이 곧 용사 몸통 위치. 노트 유무와 무관하게 크기가 고정돼
+              있어 노트가 스폰될 때 팝업 레이아웃이 밀리지 않는다. */}
+          <div className="rhythm-stage">
+            {/* ponytail: 영상 자리 — 용사 스프라이트 CSS 춤. 리액션 영상 에셋 생기면 <video>로 교체 */}
+            <img className="hero-dance" src={`${import.meta.env.BASE_URL}assets/hero.png`} alt="" />
+            {/* reaction 단계부터 미리 마운트 — rhythm:start emit 전에 리스너가 붙어있어야 한다 */}
+            <RhythmLane />
+          </div>
+          <p className="don-tip">
+            {stage === 'reaction' ? '용사가 신나서 춤춘다!' : '⌨ 노트가 용사 몸에 닿으면 QWER을 눌러라!'}
+          </p>
         </div>
       ) : (
         <div className="don-cards">
