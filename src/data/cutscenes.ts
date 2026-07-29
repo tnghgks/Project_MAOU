@@ -14,6 +14,7 @@ export const CUTSCENES: Record<string, Cutscene> = {
     title: '프롤로그',
     lines: ['마왕성의 재정은 파탄났다.', '남은 수익 모델은 단 하나 — 방송.', '"오늘부터 마왕 채널, 개국합니다."'],
     tone: 'dark',
+    src: `${import.meta.env.VITE_BUCKET_BASE_URL || ''}/cutscenes/intro.mp4`,
   },
 
   'stage-1': { title: '1화 — 첫 방송', lines: ['구독자 0명.', '그리고 성문 앞에 도착한 용사 한 명.'] },
