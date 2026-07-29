@@ -4,6 +4,7 @@ import { useBusEvent } from './useBusEvent.ts';
 import { drawCards, reactionCard, RARITY, type Card } from '../data/cards.ts';
 import { missingTraits } from '../data/traits.ts';
 import { gameState } from '../game/store.ts';
+import { CANVAS, SUMMON_Y } from '../game/layout.ts';
 
 // 도네이션 1회의 진행 주체. 이 팝업이 떠 있는 동안 Battle/Hud는 멈춰 있고,
 // 카드가 확정되면 'donation:end'로 강화 적용 + 재개를 요청한다 (events.ts 사이클 주석 참고).
@@ -14,6 +15,11 @@ const REACTION_MS = 1400; // 춤 연출 → 노트 시작
 const SPIN_MS = 110; // 카드 커서 한 칸
 const SPIN_TICKS = 13;
 const REVEAL_MS = 1500; // 당첨 카드 노출
+
+// 리액션 중 비워둘 하단 높이 = 캔버스 리듬 레인(SUMMON_Y~H) 비율. 상수에서 뽑아 레인이 옮겨가도 따라간다.
+// ponytail: 캔버스 세로 레터박스는 무시 — layout.fitWidth가 창 비율에 맞춰 폭을 잡아 보통 0이고,
+// MAX_W(2560)에 걸리는 초광폭 창에서만 몇 px 어긋난다. 정확히 맞추려면 canvas rect를 읽어야 한다.
+const LANE_PCT = ((CANVAS.H - SUMMON_Y) / CANVAS.H) * 100;
 
 export default function DonationEvent() {
   const [stage, setStage] = useState<Stage>('idle');
@@ -67,7 +73,10 @@ export default function DonationEvent() {
   const dancing = stage === 'reaction' || stage === 'rhythm';
 
   return (
-    <div className={['don-event', don.jackpot && 'jackpot', dancing && 'dancing'].filter(Boolean).join(' ')}>
+    <div
+      className={don.jackpot ? 'don-event jackpot' : 'don-event'}
+      style={dancing ? { bottom: `${LANE_PCT}%` } : undefined}
+    >
       <p className="don-head">
         🎁 {don.donor} · {don.amount.toLocaleString()}G {don.jackpot && <b>대박 후원!!</b>}
       </p>

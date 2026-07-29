@@ -43,6 +43,16 @@ assert.strictEqual(gameState().gold, 300); // 500 - 200
 assert.strictEqual(gameState().hero.maxHp, 180); // 100 + 80
 assert.strictEqual(gameState().upgradeLevels.hp, 1);
 
+// grantCard: 레벨은 그대로여도 statOf가 오른 값을 돌려줘야 한다 (#13 — 화면이 Lv만 보면 반영이 안 보였다)
+{
+  const { statOf } = await import('../src/data/upgrades.ts');
+  const before = statOf('atk', gameState().hero);
+  const lv = gameState().upgradeLevels.atk;
+  gameState().grantCard({ key: 'atk', rarity: 'rare', name: '검술 수련', stat: 'atk', delta: 30 });
+  assert.strictEqual(statOf('atk', gameState().hero), before + 30, '카드 상승분이 표시 값에 반영');
+  assert.strictEqual(gameState().upgradeLevels.atk, lv, '상점 가격은 구매 이력만 따라간다');
+}
+
 // learnSkill: 골드 차감 + 추가
 gameStore.setState({ gold: 500, skills: ['낙뢰'] });
 assert.strictEqual(gameState().learnSkill('시간정지', 500), true);
