@@ -32,4 +32,5 @@ jobs:
       - name: Build and deploy
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_BUCKET_BASE_URL: ${{ vars.VITE_BUCKET_BASE_URL }}
         run: npm run deploy -- -r "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
