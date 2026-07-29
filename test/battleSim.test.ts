@@ -45,7 +45,7 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   hero.hp = 50;
   const intent = stepHero(hero, [], 0, 1, HOME, arenaBounds); // dt=1, 몬스터 없음
   assert.strictEqual(hero.hp, 60, '50 + 100*0.1*1');
-  assert.strictEqual(intent.attack, null);
+  assert.deepStrictEqual(intent.attacks, []);
   assert.strictEqual(intent.moved, false, '스폰에 있으면 이동 없음');
 }
 
@@ -66,8 +66,20 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   const hero = spawnHero(stats, HOME);
   const m = mon('golem', HOME.x + 50, HOME.y); // 거리 50 ≤ range 60
   const intent = stepHero(hero, [m], 1, 0.1, HOME, arenaBounds);
-  assert.strictEqual(intent.attack, m, '사거리 안이면 공격 대상 반환');
+  assert.deepStrictEqual(intent.attacks, [m], '사거리 안이면 공격 대상 반환');
   assert.strictEqual(hero.atkCd, 1 / stats.atkSpd, '공격 쿨다운 = 1/atkSpd');
+}
+
+// ── stepHero: 휘두르기는 광역 — 사거리 안 전원이 맞고 밖/사망은 제외 ──
+{
+  const hero = spawnHero(stats, HOME);
+  const a = mon('golem', HOME.x + 50, HOME.y); // 거리 50 ≤ range 60
+  const b = mon('slime', HOME.x - 40, HOME.y + 30); // 거리 50 ≤ 60 (반대편도 포함)
+  const far = mon('slime', HOME.x + 120, HOME.y); // 사거리 밖
+  const dead = mon('slime', HOME.x + 10, HOME.y);
+  dead.dead = true;
+  const intent = stepHero(hero, [a, b, far, dead], 2, 0.1, HOME, arenaBounds);
+  assert.deepStrictEqual(intent.attacks, [a, b], '사거리 안 생존 몬스터 전원');
 }
 
 // ── stepHero(용사 모드): 입력 방향으로만 이동, 자동 추적 없음 ──
@@ -76,7 +88,7 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   const m = mon('golem', HOME.x + 200, HOME.y); // 오른쪽 SEEK_RANGE(300) 안 — 자동이면 다가갔을 거리
   const intent = stepHero(hero, [m], 1, 0.1, HOME, arenaBounds, { dx: -1, dy: 0, dash: false });
   assert.strictEqual(hero.x, HOME.x - stats.speed * 0.1, '입력 방향(왼쪽)으로 speed*dt');
-  assert.strictEqual(intent.attack, null, '사거리 밖이면 공격 없음');
+  assert.deepStrictEqual(intent.attacks, [], '사거리 밖이면 공격 없음');
   assert.strictEqual(intent.movingLeft, true);
 }
 
@@ -95,7 +107,7 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   const hero = spawnHero(stats, HOME);
   const m = mon('golem', HOME.x + 50, HOME.y); // 거리 50 ≤ range 60
   const intent = stepHero(hero, [m], 1, 0.1, HOME, arenaBounds, { dx: 0, dy: 1, dash: false });
-  assert.strictEqual(intent.attack, m, '이동은 수동이어도 공격은 자동');
+  assert.deepStrictEqual(intent.attacks, [m], '이동은 수동이어도 공격은 자동');
   assert.strictEqual(hero.atkCd, 1 / stats.atkSpd);
 }
 

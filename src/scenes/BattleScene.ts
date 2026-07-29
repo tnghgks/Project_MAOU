@@ -587,6 +587,17 @@ export default class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: c, alpha: 0, duration: 220, onComplete: () => c.destroy() });
   }
 
+  // 칼 궤적 — angle(rad) 방향 호가 훑고 지나간다. impactFx와 같은 자기 청소 규칙.
+  swingFx(x: number, y: number, r: number, angle: number) {
+    const g = this.add.graphics({ x, y }).setDepth(4);
+    g.lineStyle(6, 0xffffee, 0.9);
+    g.beginPath();
+    g.arc(0, 0, r, angle - 0.8, angle + 0.8);
+    g.strokePath();
+    g.setRotation(0.7);
+    this.tweens.add({ targets: g, rotation: -0.7, alpha: 0, duration: 160, onComplete: () => g.destroy() });
+  }
+
   damageMonster(m: MonsterEntity, dmg: number) {
     m.hp -= dmg;
     m.spr.setAlpha(0.5);
@@ -733,10 +744,15 @@ export default class BattleScene extends Phaser.Scene {
     const H = this.hero;
     // 결정 로직은 battleSim.stepHero(순수). 씬은 결과를 스프라이트에 반영 + 공격만 처리.
     const intent = stepHero(H, this.monsters, nearCount, dt, { x: CX, y: 300 }, arenaBounds, this.heroInput());
-    if (intent.attack) {
+    if (intent.attacks.length) {
       const dmg = this.heroDamage();
-      this.damageMonster(intent.attack, dmg);
-      H.hp = Math.min(H.maxHp, H.hp + vampHeal(gameState().traits, dmg)); // 흡혈
+      for (const m of intent.attacks) this.hitFx(m, dmg);
+      // 궤적은 최근접 대상 쪽으로 — 스프라이트가 보는 방향은 이동 입력에 묶여 있어 타격감과 어긋난다
+      const lead = intent.attacks.reduce((a, b) =>
+        Phaser.Math.Distance.Between(b.x, b.y, H.x, H.y) < Phaser.Math.Distance.Between(a.x, a.y, H.x, H.y) ? b : a,
+      );
+      this.swingFx(H.x, H.y, H.range, Math.atan2(lead.y - H.y, lead.x - H.x));
+      H.hp = Math.min(H.maxHp, H.hp + vampHeal(gameState().traits, dmg)); // 흡혈 — 광역이어도 1회분
     }
     this.heroSpr.setPosition(H.x, H.y);
     this.heroSpr.setAlpha(H.invulnT > 0 ? 0.5 : 1); // 대시 무적을 눈에 보이게

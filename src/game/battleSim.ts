@@ -32,7 +32,7 @@ export function countNear(monsters: readonly MonsterEntity[], hero: HeroEntity):
 
 // ── 용사 AI ──
 export interface HeroIntent {
-  attack: MonsterEntity | null; // 이번 프레임 근접 공격 대상 (씬이 damageMonster로 처리)
+  attacks: MonsterEntity[]; // 이번 프레임 휘두르기에 맞은 전원 (씬이 damageMonster로 처리)
   moved: boolean; // 수평 이동 여부 (flip 갱신 조건)
   movingLeft: boolean;
 }
@@ -70,7 +70,9 @@ export function stepHero(
 
   let vx = 0,
     vy = 0;
-  let attack: MonsterEntity | null = null;
+  // 근접은 단일 타겟이 아니라 휘두르기 — 사거리 안 전원이 맞는다
+  let attacks: MonsterEntity[] = [];
+  const swing = () => alive.filter((m) => dist(m, H) <= H.range);
   if (input) {
     if (input.dash && H.dashCd <= 0) {
       H.dashT = DASH_DUR;
@@ -95,7 +97,7 @@ export function stepHero(
     }
     if (target && H.atkCd <= 0) {
       H.atkCd = 1 / H.atkSpd;
-      attack = target;
+      attacks = swing();
     }
   } else if (H.retreatT > 0 && alive.length) {
     // 몬스터 무리 반대 방향으로 도주
@@ -126,7 +128,7 @@ export function stepHero(
         vy = ((target.y - H.y) / d) * H.speed;
       } else if (H.atkCd <= 0) {
         H.atkCd = 1 / H.atkSpd;
-        attack = target;
+        attacks = swing();
       }
     } else if (dist(H, home) > HOME_THRESHOLD) {
       // 대상 없으면 스폰으로 천천히 복귀
@@ -137,7 +139,7 @@ export function stepHero(
   }
   H.x = clamp(H.x + vx * dt, bounds.minX, bounds.maxX);
   H.y = clamp(H.y + vy * dt, bounds.minY, bounds.maxY);
-  return { attack, moved: vx !== 0, movingLeft: vx < 0 };
+  return { attacks, moved: vx !== 0, movingLeft: vx < 0 };
 }
 
 // ── 몬스터 AI ── (사망/스프라이트 처리는 씬 소유: suicide도 씬이 m.dead 세팅)
