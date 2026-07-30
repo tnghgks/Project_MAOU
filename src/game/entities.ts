@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import type { HeroStats } from './store.ts';
 import type { MonsterId, MonsterDef } from '../data/monsters.ts';
+import type { Facing } from './battleSim.ts';
 
 // 전투 중 시뮬레이션 엔티티 타입 (씬 로컬). 스토어의 HeroStats(영구 스탯)와 별개로
 // 매 프레임 변이되는 런타임 상태(x/y/hp/쿨다운)를 담는다 — 의도적 이중 모델(React 리렌더 회피).
@@ -37,6 +38,9 @@ export interface HeroEntity {
   timeSlashT: number; // 시공간 베기: 남은 피해 증폭 창(초)
   firstAtkDone: boolean; // 거합도: 이번 전투 첫 공격을 이미 썼는가
   phoenixUsed: boolean; // 불사조의 깃털: 이번 런에 이미 발동했는가
+  /** 마지막으로 향한 방향. 용사 모드 공격 판정의 기준이라 시뮬이 들고 있어야 한다 —
+   *  씬의 facingDir은 서/동을 flipX로 합쳐 3방향이라 여기서 쓸 수 없다. */
+  facing: Facing;
 }
 
 export interface MonsterEntity {
@@ -98,6 +102,7 @@ export function spawnHero(s: HeroStats, at: { x: number; y: number }): HeroEntit
     timeSlashT: 0,
     firstAtkDone: false,
     phoenixUsed: false,
+    facing: 'south',
   };
 }
 

@@ -970,19 +970,23 @@ export default class BattleScene extends Phaser.Scene {
         this.cameras.main.flash(300, 200, 220, 255);
         this.floatText(H.x, H.y - 60, '⏳ 시공간 베기!', '#88ddff');
       }
-      if (intent.attacks.length) {
-        // 궤적은 최근접 대상 쪽으로 — 스프라이트가 보는 방향은 이동 입력에 묶여 있어 타격감과 어긋난다
-        const lead = intent.attacks.reduce((a, b) =>
-          Phaser.Math.Distance.Between(b.x, b.y, H.x, H.y) < Phaser.Math.Distance.Between(a.x, a.y, H.x, H.y) ? b : a,
+      // 참격 축은 시뮬이 정한 값 하나 — 씬이 대상 좌표로 각도를 다시 구하면 판정과 연출이 어긋난다.
+      if (intent.swingAngle !== null) {
+        this.swingFx(H.x, H.y, H.range, intent.swingAngle);
+        // 공격 모션도 같은 축을 본다 — 궤적과 스프라이트가 따로 놀면 타격감이 어긋난다
+        const [dir, flip] = dirOf(
+          facingOf(Math.cos(intent.swingAngle), Math.sin(intent.swingAngle)) ?? this.facingDir,
         );
-        this.swingFx(H.x, H.y, H.range, Math.atan2(lead.y - H.y, lead.x - H.x));
-        if (crit) this.floatText(lead.x, lead.y - 24, 'CRIT!', '#ff4444');
-        // 공격 모션도 궤적과 같은 대상을 본다. 이동 입력으로 방향을 잡으면 제자리 공격(정지 =
-        // facing null)에서 방향이 안 정해지고, 걸어가며 때릴 땐 등 뒤를 휘두르게 된다.
-        const [dir, flip] = dirOf(facingOf(lead.x - H.x, lead.y - H.y) ?? this.facingDir);
         this.facingDir = dir;
         this.heroSpr.setFlipX(flip);
         playOnce(this.heroSpr, HERO_CHAR, 'attack', dir);
+      }
+      // CRIT 표시는 최근접 피격 대상 위에
+      if (crit && intent.attacks.length) {
+        const lead = intent.attacks.reduce((a, b) =>
+          Phaser.Math.Distance.Between(b.x, b.y, H.x, H.y) < Phaser.Math.Distance.Between(a.x, a.y, H.x, H.y) ? b : a,
+        );
+        this.floatText(lead.x, lead.y - 24, 'CRIT!', '#ff4444');
       }
       H.hp = Math.min(H.maxHp, H.hp + vampHeal(traits, dmg)); // 흡혈(특성) — 광역이어도 1회분
     }

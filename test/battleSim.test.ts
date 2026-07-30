@@ -86,16 +86,27 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   assert.strictEqual(hero.atkCd, 1 / stats.atkSpd, '공격 쿨다운 = 1/atkSpd');
 }
 
-// ── stepHero: 휘두르기는 광역 — 사거리 안 전원이 맞고 밖/사망은 제외 ──
+// ── stepHero: 휘두르기는 광역이되 바라보는 쪽 180°만 ──
+// 방향 = 최근접 대상. 그 반대편(내적 < 0)은 사거리 안이어도 안 맞는다.
 {
   const hero = spawnHero(stats, HOME);
-  const a = mon('golem', HOME.x + 50, HOME.y); // 거리 50 ≤ range 60
-  const b = mon('slime', HOME.x - 40, HOME.y + 30); // 거리 50 ≤ 60 (반대편도 포함)
+  const near = mon('golem', HOME.x + 40, HOME.y); // 최근접 → 이쪽을 본다
+  const side = mon('slime', HOME.x, HOME.y + 50); // 정확히 90° 옆 (내적 0) — 경계는 포함
+  const behind = mon('slime', HOME.x - 40, HOME.y + 30); // 거리 50 ≤ 60 이지만 등 뒤
   const far = mon('slime', HOME.x + 120, HOME.y); // 사거리 밖
   const dead = mon('slime', HOME.x + 10, HOME.y);
   dead.dead = true;
-  const intent = stepHero(hero, [a, b, far, dead], 2, 0.1, HOME, arenaBounds);
-  assert.deepStrictEqual(intent.attacks, [a, b], '사거리 안 생존 몬스터 전원');
+  const intent = stepHero(hero, [near, side, behind, far, dead], 2, 0.1, HOME, arenaBounds);
+  assert.deepStrictEqual(intent.attacks, [near, side], '앞 180°(경계 포함)만 — 등 뒤는 안 맞는다');
+}
+
+// ── stepHero: 등 뒤 단독 대상도 맞는다 — 방향은 그 대상 쪽으로 잡히므로 ──
+// 180° 제한이 "왼쪽 몬스터를 영영 못 때린다"로 새면 안 된다.
+{
+  const hero = spawnHero(stats, HOME);
+  const left = mon('golem', HOME.x - 50, HOME.y);
+  const intent = stepHero(hero, [left], 1, 0.1, HOME, arenaBounds);
+  assert.deepStrictEqual(intent.attacks, [left], '유일한 대상이면 어느 쪽이든 그쪽을 본다');
 }
 
 // ── stepHero(용사 모드): 입력 방향으로만 이동, 자동 추적 없음 ──
@@ -130,13 +141,37 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   assert.ok(hero.x > HOME.x, '입력대로 몬스터 쪽(오른쪽)으로 전진');
 }
 
-// ── stepHero(용사 모드): 사거리 안이면 이동 중에도 자동 공격 ──
+// ── stepHero(용사 모드): 사거리 안 + 바라보는 쪽이면 이동 중에도 자동 공격 ──
 {
   const hero = spawnHero(stats, HOME);
   const m = mon('golem', HOME.x + 50, HOME.y); // 거리 50 ≤ range 60
-  const intent = stepHero(hero, [m], 1, 0.1, HOME, arenaBounds, { dx: 0, dy: 1, dash: false });
+  const intent = stepHero(hero, [m], 1, 0.1, HOME, arenaBounds, { dx: 1, dy: 0, dash: false });
   assert.deepStrictEqual(intent.attacks, [m], '이동은 수동이어도 공격은 자동');
+  assert.strictEqual(intent.swingAngle, 0, '참격 축 = 바라보는 쪽(동쪽 = 0rad)');
   assert.strictEqual(hero.atkCd, 1 / stats.atkSpd);
+}
+
+// ── stepHero(용사 모드): 조준은 무조건 바라보는 쪽 — 등 뒤는 안 맞고 쿨다운도 안 쓴다 ──
+// 자동 조준이 남아 있으면 오른쪽을 보고 있어도 왼쪽 몬스터를 때려 조작감이 어긋난다.
+{
+  const hero = spawnHero(stats, HOME);
+  const back = mon('golem', HOME.x - 50, HOME.y); // 사거리 안이지만 등 뒤
+  const intent = stepHero(hero, [back], 1, 0.1, HOME, arenaBounds, { dx: 1, dy: 0, dash: false });
+  assert.deepStrictEqual(intent.attacks, [], '등 뒤는 안 맞는다');
+  assert.strictEqual(intent.swingAngle, null, '헛스윙 자체를 안 한다');
+  assert.strictEqual(hero.atkCd, 0, '쿨다운이 날아가지 않는다');
+}
+
+// ── stepHero(용사 모드): 정지 중에도 마지막 방향으로 공격 ──
+// 입력이 0이면 facingOf가 null이라, 방향 상태를 안 들고 있으면 제자리 공격이 통째로 죽는다.
+{
+  const hero = spawnHero(stats, HOME);
+  const left = mon('golem', HOME.x - 50, HOME.y);
+  stepHero(hero, [left], 1, 0.1, HOME, arenaBounds, { dx: -1, dy: 0, dash: false }); // 서쪽을 본다
+  hero.atkCd = 0; // 쿨다운만 되돌리고 방향은 유지
+  const intent = stepHero(hero, [left], 1, 0.1, HOME, arenaBounds, { dx: 0, dy: 0, dash: false });
+  assert.deepStrictEqual(intent.attacks, [left], '멈춰도 마지막 방향(서)으로 휘두른다');
+  assert.strictEqual(intent.swingAngle, Math.PI, '서쪽 = π');
 }
 
 // ── stepHero(용사 모드): 대시 = 속도 배율 + 무적, 쿨 중엔 재발동 없음 ──

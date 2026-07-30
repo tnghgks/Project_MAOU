@@ -42,7 +42,17 @@ export interface HeroIntent {
   attacks: MonsterEntity[]; // 이번 프레임 휘두르기에 맞은 전원 (씬이 damageMonster로 처리)
   swung: boolean; // 쿨다운이 돌아 공격 자체는 발동했는가 — 사거리 안에 대상이 없어도(attacks가 비어도) true일 수 있다
   facing: Facing | null; // null = 정지 (씬이 걷기 애니메이션을 멈춘다)
+  /** 휘두른 방향(rad). null = 이번 프레임엔 공격 없음. 판정 반원의 중심축이자 씬의 참격 각도 —
+   *  씬이 대상 좌표로 각도를 다시 구하면 판정과 연출이 어긋날 수 있어 여기서 한 번만 정한다. */
+  swingAngle: number | null;
 }
+// 4방향 → 단위 벡터. 용사 모드 조준축.
+const FACING_VEC: Record<Facing, [number, number]> = {
+  east: [1, 0],
+  west: [-1, 0],
+  north: [0, -1],
+  south: [0, 1],
+};
 // 속도 벡터 → 바라보는 방향. 용사·몬스터가 공유한다.
 // 대각선은 수평 우선 — 측면 뷰가 4방향 중 가장 잘 읽힌다.
 export function facingOf(vx: number, vy: number): Facing | null {
@@ -107,10 +117,13 @@ export function stepHero(
 
   let vx = 0,
     vy = 0;
-  // 근접은 단일 타겟이 아니라 휘두르기 — 사거리 안 전원이 맞는다
+  // 근접은 단일 타겟이 아니라 휘두르기 — 사거리 안에서 (ux,uy) 쪽 180°가 맞는다.
+  // 반평면 판정은 내적 ≥ 0 — atan2 각도 차이와 달리 ±π 경계에서 뒤집히지 않는다.
   let attacks: MonsterEntity[] = [];
   let swung = false;
-  const swing = () => alive.filter((m) => dist(m, H) <= H.range);
+  let swingAngle: number | null = null;
+  const swing = (ux: number, uy: number) =>
+    alive.filter((m) => dist(m, H) <= H.range && (m.x - H.x) * ux + (m.y - H.y) * uy >= 0);
   if (input) {
     if (input.dash && H.dashCd <= 0) {
       H.dashT = DASH_DUR;
@@ -123,21 +136,18 @@ export function stepHero(
       vx = (input.dx / len) * spd;
       vy = (input.dy / len) * spd;
     }
-    // 이동은 수동, 공격은 사거리 안 최근접 자동 (다수 몬스터 상황에 조준은 손이 모자란다)
-    let target: MonsterEntity | null = null,
-      best = H.range;
-    for (const m of alive) {
-      const d = dist(m, H);
-      if (d < best) {
-        best = d;
-        target = m;
-      }
-    }
-    if (target && H.atkCd <= 0) {
+    // 조준은 바라보는 쪽 고정 — 자동 조준이 등 뒤 몬스터로 방향을 틀면 조작감이 어긋난다.
+    // 정지하면 마지막 방향이 남으므로(facingOf가 null) 제자리 공격도 방향이 정해진다.
+    H.facing = facingOf(vx, vy) ?? H.facing;
+    const [ux, uy] = FACING_VEC[H.facing];
+    const hits = swing(ux, uy);
+    // 앞이 비었으면 휘두르지 않는다 — 등 뒤 몬스터 때문에 쿨다운만 날리는 헛스윙이 된다
+    if (hits.length && H.atkCd <= 0) {
       H.atkCd = 1 / (H.atkSpd * buffMult);
       H.atkCount++;
       swung = true;
-      attacks = swing();
+      attacks = hits;
+      swingAngle = Math.atan2(uy, ux);
     }
   } else if (H.retreatT > 0 && alive.length) {
     // 몬스터 무리 반대 방향으로 도주
@@ -167,10 +177,13 @@ export function stepHero(
         vx = ((target.x - H.x) / d) * H.speed * buffMult;
         vy = ((target.y - H.y) / d) * H.speed * buffMult;
       } else if (H.atkCd <= 0) {
+        // 자동 AI는 대상 쪽을 그대로 축으로 쓴다 — 스스로 붙은 대상이라 정면이 곧 그 방향이다
         H.atkCd = 1 / (H.atkSpd * buffMult);
         H.atkCount++;
         swung = true;
-        attacks = swing();
+        const [ux, uy] = [target.x - H.x, target.y - H.y];
+        attacks = swing(ux, uy);
+        swingAngle = Math.atan2(uy, ux);
       }
     } else if (dist(H, home) > HOME_THRESHOLD) {
       // 대상 없으면 스폰으로 천천히 복귀
@@ -190,7 +203,7 @@ export function stepHero(
   }
   H.x = clamp(H.x + vx * dt, bounds.minX, bounds.maxX);
   H.y = clamp(H.y + vy * dt, bounds.minY, bounds.maxY);
-  return { attacks, swung, facing: facingOf(vx, vy) };
+  return { attacks, swung, facing: facingOf(vx, vy), swingAngle };
 }
 
 // ── 몬스터 AI ── (사망/스프라이트 처리는 씬 소유: suicide도 씬이 m.dead 세팅)
