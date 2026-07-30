@@ -21,6 +21,10 @@ export const CHARACTERS = [
 // 아틀라스 없는 캐릭터가 쓰는 대체 상자. 테두리만 흰색이라 tint가 테두리 색으로 먹는다.
 export const BOX_TEXTURE = 'box';
 
+// 휘두를 때마다 나가는 참격. 색상은 행으로 고른다 — 다른 색이 필요하면 FX_BASH_ROW만 바꾼다.
+export const FX_BASH = 'fx-bash';
+const FX_BASH_ROW = 5; // 0-based. 5 = 흰색 ponytail: 색상 knob
+
 export default class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot');
@@ -38,6 +42,8 @@ export default class BootScene extends Phaser.Scene {
     for (const k of CHARACTERS) this.load.atlas(k, `assets/character/${k}.png`, `assets/character/${k}.json`);
     // 아레나 배경 타일셋 (광산, 16×16 spacing 1). 맵 자체는 game/arenaMap.ts가 에피소드 시드로 생성.
     this.load.image('tiles', 'assets/tilemap.png');
+    // 참격 이펙트. 640×576 = 64×64 프레임 10열 × 9행(= 색상 9종). 6행이 흰색 → 50~59.
+    this.load.spritesheet(FX_BASH, 'assets/impact/skill/bash.png', { frameWidth: 64, frameHeight: 64 });
   }
 
   create() {
@@ -52,6 +58,11 @@ export default class BootScene extends Phaser.Scene {
     // 애니메이션은 게임 전역 — BattleScene은 화마다 재생성되므로 여기서 한 번만 등록한다.
     // 로드에 실패한 아틀라스는 건너뛴다 (registerAnims가 없는 텍스처를 만지지 않도록).
     for (const k of CHARACTERS) if (this.textures.exists(k)) registerAnims(this, k);
+    this.anims.create({
+      key: FX_BASH,
+      frames: this.anims.generateFrameNumbers(FX_BASH, { start: FX_BASH_ROW * 10, end: FX_BASH_ROW * 10 + 9 }),
+      frameRate: 30, // 10프레임 = 0.33초. 공격 모션(0.5초)보다 짧게 끝나야 잔상이 안 남는다
+    });
     loadGame();
     gameState().setPhase('title'); // 메뉴는 React가 렌더
   }

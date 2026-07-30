@@ -21,7 +21,7 @@ import {
   type ViewerAlert,
 } from '../formulas.ts';
 import { dirOf, playAnim, playOnce, makeActor, type Dir } from '../game/anims.ts';
-import { HERO_CHAR, BOX_TEXTURE } from './BootScene.ts';
+import { HERO_CHAR, BOX_TEXTURE, FX_BASH } from './BootScene.ts';
 import { gameState, heroPower } from '../game/store.ts';
 import { bus, busBind } from '../game/events.ts';
 import { ARENA, CANVAS, SUMMON_Y, CX, arenaBounds } from '../game/layout.ts';
@@ -684,14 +684,22 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   // 칼 궤적 — angle(rad) 방향 호가 훑고 지나간다. impactFx와 같은 자기 청소 규칙.
+  // 판정은 반경 r 반원인데 시트 프레임(64px) 안에 여백이 있어 그대로 r*2를 주면 작아 보인다.
+  // ponytail: 눈으로 맞추는 배율 knob — 판정보다 커 보이면 줄인다
+  static readonly FX_BASH_SCALE = 3;
+
   swingFx(x: number, y: number, r: number, angle: number) {
-    const g = this.add.graphics({ x, y }).setDepth(4);
-    g.lineStyle(6, 0xffffee, 0.9);
-    g.beginPath();
-    g.arc(0, 0, r, angle - 0.8, angle + 0.8);
-    g.strokePath();
-    g.setRotation(0.7);
-    this.tweens.add({ targets: g, rotation: -0.7, alpha: 0, duration: 160, onComplete: () => g.destroy() });
+    // 용사 중앙에서 시작해 사거리를 덮는다. 초승달이 대상 쪽으로 볼록해야 베는 것처럼 보이는데
+    // 시트 원본은 볼록한 쪽이 -x라 π를 더한다.
+    this.add
+      .sprite(x, y, FX_BASH)
+      .setDepth(4)
+      .setRotation(angle + Math.PI)
+      .setDisplaySize(r * BattleScene.FX_BASH_SCALE, r * BattleScene.FX_BASH_SCALE)
+      .play(FX_BASH)
+      .once(Phaser.Animations.Events.ANIMATION_COMPLETE, (_a: unknown, _f: unknown, s: Phaser.GameObjects.Sprite) =>
+        s.destroy(),
+      );
   }
 
   // silent = 도트(화상/출혈) 틱 전용 — 매 프레임 발생해 콤보에 끼면 실력 지표가 왜곡된다.

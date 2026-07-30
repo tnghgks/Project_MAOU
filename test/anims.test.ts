@@ -262,4 +262,13 @@ const GRIM = frameNames('grimhardt');
   assert.ok(!created.some((a) => a.key.includes('attack')), '없는 액션을 만들어내지 않는다');
 }
 
+// ── 참격 시트 격자 ──
+// BootScene은 흰색을 `행 5 × 10열`로 집는다. 시트가 바뀌면 조용히 다른 색이 나가므로 여기서 잡는다.
+{
+  const png = readFileSync('public/assets/impact/skill/bash.png');
+  const [w, h] = [png.readUInt32BE(16), png.readUInt32BE(20)];
+  assert.strictEqual(w / 64, 10, 'bash.png는 64px 프레임 10열 — 열 수가 바뀌면 색상 행 계산이 틀어진다');
+  assert.ok(h / 64 > 5, '흰색은 6번째 행(0-based 5)');
+}
+
 console.log('anims OK');
