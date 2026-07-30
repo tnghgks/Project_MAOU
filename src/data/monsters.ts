@@ -13,6 +13,10 @@ export interface MonsterDef {
    *  비어 있거나 아틀라스 로드에 실패하면 대체 상자가 뜬다 — 게임은 그대로 돌아간다.
    *  아트가 준비되면 여기 한 줄만 채우면 로드·애니메이션 등록이 전부 따라온다. */
   char?: string;
+  /** idle 스프라이트 시트 한 장(가로 한 줄)으로 온 몬스터 — 값은 프레임 한 칸 크기(px).
+   *  이게 있으면 char는 아틀라스가 아니라 public/assets/character/<char>.png 시트로 읽는다.
+   *  방향·액션 구분이 없어 걷든 서든 같은 루프가 돈다 (일반 몬스터는 이 정도면 충분하다). */
+  sheet?: number;
   unlock: number;
   ranged?: boolean;
   suicide?: boolean;
@@ -23,10 +27,10 @@ export interface MonsterDef {
 // char가 빈 줄은 아직 아트가 없어 대체 상자로 뜬다 — 아틀라스가 나오면 char만 채우면 된다.
 // prettier-ignore
 export const MONSTERS = {
-  slime:  { name: '슬라임',      hp: 20,  dmg: 3,  atkCd: 1.0, speed: 60,  range: 24,  gold: 5,  size: 16, unlock: 1 },
+  slime:  { name: '슬라임',      hp: 20,  dmg: 3,  atkCd: 1.0, speed: 60,  range: 24,  gold: 5,  size: 16, unlock: 1, char: 'slime', sheet: 32 },
   archer: { name: '고블린 궁수', hp: 15,  dmg: 4,  atkCd: 2.0, speed: 70,  range: 240, gold: 8,  size: 15, unlock: 1, ranged: true, char: 'goblinarcher' },
   golem:  { name: '골렘',        hp: 120, dmg: 8,  atkCd: 1.5, speed: 35,  range: 30,  gold: 20, size: 26, unlock: 1 },
-  bat:    { name: '폭탄 박쥐',   hp: 10,  dmg: 20, atkCd: 0.1, speed: 120, range: 22,  gold: 12, size: 14, unlock: 2, suicide: true },
+  bat:    { name: '폭탄 박쥐',   hp: 10,  dmg: 20, atkCd: 0.1, speed: 120, range: 22,  gold: 12, size: 14, unlock: 2, suicide: true, char: 'bombbat', sheet: 64 },
   knight: { name: '정예 기사',   hp: 300, dmg: 15, atkCd: 1.2, speed: 45,  range: 34,  gold: 60, size: 28, unlock: 3 },
 
   // 보스 — unlock 99라 소환 버튼에 안 뜬다. 목표 골드 달성 시 BattleScene이 직접 소환한다.

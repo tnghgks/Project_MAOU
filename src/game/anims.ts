@@ -69,6 +69,19 @@ export function playOnce(spr: Phaser.GameObjects.Sprite, key: string | undefined
   if (spr.scene.anims.exists(want)) spr.play(want);
 }
 
+// idle 시트 한 장으로 온 캐릭터(일반 몬스터). 아트에 방향도 액션도 없으니 런타임이 무엇을
+// 물어도 같은 프레임을 돌려준다 — 조합을 전부 등록해 두면 playAnim·BattleScene은 아틀라스
+// 캐릭터와 똑같이 굴러간다. 프레임 순서 = 시트의 가로 순서.
+export function registerSheetAnims(scene: Phaser.Scene, key: string) {
+  const frames = scene.anims.generateFrameNumbers(key, {});
+  for (const action of ['walk', 'idle'])
+    for (const dir of DIRS) {
+      const animKey = `${key}-${action}-${dir}`;
+      if (!scene.anims.exists(animKey))
+        scene.anims.create({ key: animKey, frames, frameRate: FRAME_RATE.idle, repeat: -1 });
+    }
+}
+
 // 캐릭터 스프라이트 하나. 아틀라스가 로드돼 있으면 원본 크기 그대로(리샘플 없음 = pixelArt에서
 // 가장 깨끗하다), 없으면 boxSize 크기의 대체 상자. 반환된 `char`가 undefined면 상자다.
 export function makeActor(
@@ -79,6 +92,11 @@ export function makeActor(
   boxSize: number,
   boxTexture: string,
 ): { spr: Phaser.GameObjects.Sprite; char?: string } {
-  if (char && scene.textures.exists(char)) return { spr: scene.add.sprite(x, y, char, 'walk/south/0'), char };
+  // 시트 캐릭터는 프레임 이름이 번호뿐이다 — walk/south/0을 달라고 하면 Phaser가 시트 전체를
+  // 한 장으로 그린다. 그 이름이 없으면 첫 프레임으로 시작한다.
+  if (char && scene.textures.exists(char)) {
+    const first = scene.textures.get(char).has('walk/south/0') ? 'walk/south/0' : undefined;
+    return { spr: scene.add.sprite(x, y, char, first), char };
+  }
   return { spr: scene.add.sprite(x, y, boxTexture).setDisplaySize(boxSize, boxSize) };
 }

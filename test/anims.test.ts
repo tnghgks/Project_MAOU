@@ -1,6 +1,6 @@
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
-import { registerAnims, dirOf, makeActor, playAnim, playOnce, DIRS } from '../src/game/anims.ts';
+import { registerAnims, registerSheetAnims, dirOf, makeActor, playAnim, playOnce, DIRS } from '../src/game/anims.ts';
 
 // 실제 아틀라스 JSON으로 등록 로직을 돌린다. 프레임 이름 파싱이 틀리면 애니메이션이
 // 조용히 0개 만들어지고 게임은 첫 프레임에서 얼어붙은 채로 굴러간다 — 여기서 잡는다.
@@ -20,6 +20,8 @@ function fakeScene(atlases: Record<string, string[]>) {
     anims: {
       exists: (k: string) => created.some((a) => a.key === k),
       create: (cfg: FakeAnim) => created.push(cfg),
+      // 시트는 프레임 이름이 번호뿐 — Phaser가 텍스처에서 전부 긁어오는 걸 흉내낸다
+      generateFrameNumbers: (k: string) => (atlases[k] ?? []).map((frame) => ({ key: k, frame })),
     },
   };
   return { scene: scene as never, created };
@@ -108,6 +110,23 @@ const GRIM = frameNames('grimhardt');
   assert.strictEqual(created.length, n, '두 번 불러도 늘지 않는다');
 }
 
+// ── idle 시트 한 장(일반 몬스터): 어느 액션·방향을 물어도 그 루프가 돈다 ──
+// BattleScene은 이동할 때 walk-<방향>을 부른다. 그 조합이 하나라도 빠지면 그 방향에서만
+// 몬스터가 정지 프레임으로 굳는다 — 조합을 다 세어 본다.
+{
+  const { scene, created } = fakeScene({ goblin: ['0', '1', '2', '3'] });
+  registerSheetAnims(scene, 'goblin');
+  const byKey = new Map(created.map((a) => [a.key, a]));
+  for (const dir of DIRS)
+    for (const action of ['walk', 'idle']) {
+      const a = byKey.get(`goblin-${action}-${dir}`);
+      assert.strictEqual(a?.frames.length, 4, `goblin-${action}-${dir}가 시트 4프레임을 다 쓴다`);
+      assert.strictEqual(a?.repeat, -1, '시트 루프는 무한 반복');
+    }
+  registerSheetAnims(scene, 'goblin');
+  assert.strictEqual(created.length, DIRS.length * 2, '두 번 불러도 늘지 않는다');
+}
+
 // ── 서쪽 = 동쪽 + flipX ──
 {
   assert.deepStrictEqual(dirOf('west'), ['east', true]);
@@ -123,10 +142,14 @@ const GRIM = frameNames('grimhardt');
     args: unknown[];
     displaySize?: [number, number];
   }
-  const spriteScene = (loaded: string[]) => {
+  // loaded = 아틀라스 키들, sheets = 시트 키들(프레임 이름이 번호뿐이라 walk/south/0이 없다)
+  const spriteScene = (loaded: string[], sheets: string[] = []) => {
     const made: MadeSprite[] = [];
     const scene = {
-      textures: { exists: (k: string) => loaded.includes(k) },
+      textures: {
+        exists: (k: string) => loaded.includes(k) || sheets.includes(k),
+        get: (k: string) => ({ has: (f: string) => loaded.includes(k) && f === 'walk/south/0' }),
+      },
       add: {
         sprite: (...args: unknown[]) => {
           const s: MadeSprite = { args };
@@ -145,6 +168,13 @@ const GRIM = frameNames('grimhardt');
     assert.deepStrictEqual(made[0].args, [10, 20, 'rian-basic', 'walk/south/0']);
     assert.strictEqual(a.char, 'rian-basic', '아틀라스를 쓰면 char가 남는다');
     assert.strictEqual(made[0].displaySize, undefined, '원본 크기 그대로 (리샘플 없음)');
+  }
+  // 시트 캐릭터 → 첫 프레임으로 시작. walk/south/0을 달라고 하면 시트 전체가 한 장으로 그려진다
+  {
+    const { scene, made } = spriteScene([], ['goblin']);
+    const a = makeActor(scene, 5, 6, 'goblin', 20, 'box');
+    assert.deepStrictEqual(made[0].args, [5, 6, 'goblin', undefined], '시트는 프레임 이름을 주지 않는다');
+    assert.strictEqual(a.char, 'goblin');
   }
   // char 미지정(아직 아트 없음) → 대체 상자
   {
