@@ -508,6 +508,8 @@ export default class BattleScene extends Phaser.Scene {
     const def: MonsterDef = MONSTERS[t];
     const { spr, char } = makeActor(this, x, y, def.char, def.size, BOX_TEXTURE);
     if (def.tint) spr.setTint(def.tint);
+    // 곱셈이라 대체 상자(setDisplaySize로 이미 스케일이 들어간)에도 그대로 먹는다
+    if (def.scale) spr.setScale(spr.scaleX * def.scale, spr.scaleY * def.scale);
     const m: MonsterEntity = { type: t, def, hp: def.hp, x, y, atkCd: 0, spr, char };
     this.monsters.push(m);
     return m;
