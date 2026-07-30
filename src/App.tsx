@@ -6,6 +6,7 @@ import { gameStore } from './game/store.ts';
 import BroadcastFrame from './ui/BroadcastFrame.tsx';
 import DonationToast from './ui/DonationToast.tsx';
 import DonationEvent from './ui/DonationEvent.tsx';
+import ComboMeter from './ui/ComboMeter.tsx';
 import MenuOverlay from './ui/MenuOverlay.tsx';
 import TitleView from './ui/TitleView.tsx';
 import HelpPopup from './ui/HelpPopup.tsx';
@@ -46,6 +47,7 @@ export default function App() {
               <DonationToast />
               <DonationEvent />
               <HelpPopup />
+              <ComboMeter />
             </>
           )}
           <MenuOverlay />

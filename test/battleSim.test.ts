@@ -39,12 +39,14 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   assert.strictEqual(countNear([near, far, dead], hero), 1);
 }
 
-// ── stepHero: 근접 0마리면 초당 REGEN_RATE(0.1) 회복 ──
+// ── stepHero: 근접 0마리 지속이 REGEN_DELAY(1.5s)를 넘어야 REGEN_RATE(0.05) 회복 시작 ──
 {
   const hero = spawnHero(stats, HOME);
   hero.hp = 50;
-  const intent = stepHero(hero, [], 0, 1, HOME, arenaBounds); // dt=1, 몬스터 없음
-  assert.strictEqual(hero.hp, 60, '50 + 100*0.1*1');
+  let intent = stepHero(hero, [], 0, 1, HOME, arenaBounds); // dt=1, 몬스터 없음 (유예 아직)
+  assert.strictEqual(hero.hp, 50, '유예 시간(1.5s) 전엔 회복 없음');
+  intent = stepHero(hero, [], 0, 1, HOME, arenaBounds); // 누적 2s ≥ REGEN_DELAY
+  assert.strictEqual(hero.hp, 55, '50 + 100*0.05*1 (유예 지난 뒤 회복)');
   assert.deepStrictEqual(intent.attacks, []);
   assert.strictEqual(intent.moved, false, '스폰에 있으면 이동 없음');
 }
@@ -211,18 +213,6 @@ const viewerState = () => ({ viewers: 100, peakViewers: 100, drift: 0, combo: 0,
   assert.strictEqual(vs.combo, 0, '끊기면 리셋');
   bumpCombo(vs);
   assert.strictEqual(vs.combo, 1, '리셋 후엔 1부터');
-}
-
-// ── 콤보는 하이프에 실제로 얹힌다 (같은 상황에서 콤보만 다르면 시청자 증감이 갈린다) ──
-{
-  const flat = viewerState();
-  const combo = viewerState();
-  combo.combo = 8;
-  combo.comboT = COMBO_WINDOW;
-  const a = stepViewers(flat, 1, 0, 0.1, () => 0.5);
-  const b = stepViewers(combo, 1, 0, 0.1, () => 0.5);
-  assert.ok(b.D > a.D, '콤보가 위험도(=하이프)를 밀어올린다');
-  assert.ok(combo.viewers > flat.viewers, '노잼 감쇠에서 벗어난다');
 }
 
 console.log('battleSim OK');

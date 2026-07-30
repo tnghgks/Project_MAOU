@@ -9,7 +9,8 @@ import type { HeroEntity, MonsterEntity, Arrow } from './entities.ts';
 export const SUMMON_MIN_RADIUS = 150; // 용사 반경 이 안에는 소환 금지
 export const NEAR_RADIUS = 200; // 위험도·회복 판정용 "근접" 반경
 const SEEK_RANGE = 300; // 용사가 노리는 최대 탐지 거리
-const REGEN_RATE = 0.1; // 근접 0마리일 때 초당 회복 비율
+const REGEN_RATE = 0.05; // 근접 0마리일 때 초당 회복 비율
+const REGEN_DELAY = 1.5; // 근접 0마리가 이 시간(초) 이상 유지돼야 회복 시작 — 스치듯 벌린 거리로는 안 참다
 const RETREAT_HP = 0.25; // 이 비율 이하로 떨어지면 후퇴
 const RETREAT_DUR = 2; // 후퇴 지속(초)
 const RETREAT_CD = 6; // 후퇴 쿨다운(초)
@@ -63,7 +64,12 @@ export function stepHero(
   H.invulnT = Math.max(0, H.invulnT - dt);
 
   // 자동 회복은 수동 조작에서도 유지 — 구석 도망은 시청자 이탈로 이미 벌점이 걸려 있다
-  if (nearCount === 0) H.hp = Math.min(H.maxHp, H.hp + H.maxHp * REGEN_RATE * dt);
+  if (nearCount === 0) {
+    H.safeT += dt;
+    if (H.safeT >= REGEN_DELAY) H.hp = Math.min(H.maxHp, H.hp + H.maxHp * REGEN_RATE * dt);
+  } else {
+    H.safeT = 0;
+  }
   // 자동 후퇴는 조작권을 뺏으므로 수동 조작 중엔 발동시키지 않는다
   if (!input && H.hp / H.maxHp <= RETREAT_HP && H.retreatCd <= 0) {
     H.retreatT = RETREAT_DUR;
@@ -180,12 +186,12 @@ export function stepArrow(a: Arrow, hero: HeroEntity, dt: number): ArrowResult {
 }
 
 // ── 시청자 시뮬 ── (viewers/peakViewers/drift/combo 변이, 위험도·흥분도 반환)
-export const COMBO_WINDOW = 3; // ponytail: 이 안에 다음 처치가 나면 콤보 유지 — 난이도 knob
+export const COMBO_WINDOW = 2; // ponytail: 이 안에 다음 처치가 나면 콤보 유지 — 난이도 knob
 export interface ViewerState {
   viewers: number;
   peakViewers: number;
   drift: number;
-  combo: number; // 처치 콤보 — danger()의 가산 항
+  combo: number; // 처치 콤보 — ComboMeter 표시 + FULL 도네이션 확률 보정용 (danger()엔 반영 안 함)
   comboT: number; // 콤보 유지 잔여 시간
 }
 export interface ViewerStep {
@@ -206,7 +212,7 @@ export function stepViewers(
 ): ViewerStep {
   vs.comboT = Math.max(0, vs.comboT - dt);
   if (vs.comboT <= 0) vs.combo = 0;
-  const D = danger(hpRatio, nearCount, vs.combo);
+  const D = danger(hpRatio, nearCount);
   const tier = hypeTier(D);
   vs.drift = viewerDrift(vs.drift, dt, rnd);
   vs.viewers = Math.max(MIN_VIEWERS, vs.viewers * (1 + (tier.rate + vs.drift) * dt));

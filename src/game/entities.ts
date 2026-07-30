@@ -19,6 +19,7 @@ export interface HeroEntity {
   dashT: number; // 대시 남은 시간 (용사 모드)
   dashCd: number;
   invulnT: number; // 무적 남은 시간 — hurtHero가 읽는다
+  safeT: number; // 근접 몬스터 0마리 지속 시간 — REGEN_DELAY 넘어야 자동 회복 시작
 }
 
 export interface MonsterEntity {
@@ -58,6 +59,7 @@ export function spawnHero(s: HeroStats, at: { x: number; y: number }): HeroEntit
     dashT: 0,
     dashCd: 0,
     invulnT: 0,
+    safeT: 0,
   };
 }
 

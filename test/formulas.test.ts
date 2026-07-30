@@ -3,8 +3,6 @@ import {
   danger,
   BRINK_BONUS,
   BRINK_HP,
-  COMBO_BONUS,
-  COMBO_FULL,
   hypeTier,
   donationInterval,
   rollDonation,
@@ -24,12 +22,6 @@ assert.ok(Math.abs(danger(0, 10) - (1 + BRINK_BONUS)) < 1e-9);
 // 벼랑끝: 경계 바로 위/아래에서 보너스가 켜진다
 assert.ok(Math.abs(danger(BRINK_HP, 0) - danger(BRINK_HP + 0.01, 0)) > BRINK_BONUS * 0.9);
 assert.ok(danger(BRINK_HP, 0) > danger(BRINK_HP + 0.01, 0), 'HP 30% 이하를 유지하면 더 재밌어야 한다');
-
-// 콤보: COMBO_FULL에서 가산 최대, 그 이상은 안 늘어난다
-assert.strictEqual(danger(1, 0, COMBO_FULL), COMBO_BONUS);
-assert.strictEqual(danger(1, 0, COMBO_FULL * 3), COMBO_BONUS);
-assert.ok(Math.abs(danger(1, 0, COMBO_FULL / 2) - COMBO_BONUS / 2) < 1e-9);
-assert.strictEqual(danger(1, 0, 0), danger(1, 0), '콤보 0 = 기존 동작');
 
 // 구간 경계
 assert.strictEqual(hypeTier(0.1).rate, -0.01);

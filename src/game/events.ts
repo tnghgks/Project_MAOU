@@ -25,6 +25,10 @@ export interface BusEvents {
   'donation:end': { card: Card };
   'rhythm:start': null;
   'rhythm:result': SkillOutcome;
+  'combo:hit': { combo: number };
+  'combo:reset': null;
+  'battle:pause': null;
+  'battle:resume': null;
 }
 
 // ponytail: Phaser EventEmitter는 제네릭이 없어 as로 타입만 씌움 — 런타임은 그대로
