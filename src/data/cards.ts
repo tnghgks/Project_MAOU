@@ -58,18 +58,34 @@ export function rollRarity(rnd: () => number = Math.random, pool: Rarity[] = ALL
   return pool[pool.length - 1]; // rnd()가 1에 붙는 극단만 방어
 }
 
+// 통에서 하나 뽑기 — 이미 뽑은 원소는 통이 다시 채워지기 전까진 안 나온다(같은 판 안 중복 방지).
+// 다 뽑아 통이 비면 그 자리에서 즉시 리필 — pool 크기가 1이어도(예: 미보유 특성 1개) 예전처럼 계속 뽑힌다.
+function drawUnique<T>(pool: readonly T[], used: Set<T>, rnd: () => number): T {
+  let avail = pool.filter((x) => !used.has(x));
+  if (!avail.length) {
+    used.clear();
+    avail = pool as T[];
+  }
+  const picked = pick(avail, rnd);
+  used.add(picked);
+  return picked;
+}
+
 // 일반 도네: 카드 3장 노출 → 그중 1장이 랜덤 당첨.
 // traits = 아직 없는 특성 목록(호출부가 계산). 비어 있으면 기존과 완전히 동일하게 굴러간다.
+// #19: 예전엔 매장을 독립적으로 뽑아 같은 카드(같은 특성·같은 강화)가 중복 노출될 수 있었다.
 export function drawCards(
   n: number,
   traits: TraitId[] = [],
   rnd: () => number = Math.random,
   pool: Rarity[] = ALL,
 ): Card[] {
+  const usedTraits = new Set<TraitId>();
+  const usedKeys = new Set<UpgradeKey>();
   return Array.from({ length: n }, () =>
     traits.length && rnd() < TRAIT_CHANCE
-      ? traitCard(pick(traits, rnd))
-      : makeCard(pick(KEYS, rnd), rollRarity(rnd, pool)),
+      ? traitCard(drawUnique(traits, usedTraits, rnd))
+      : makeCard(drawUnique(KEYS, usedKeys, rnd), rollRarity(rnd, pool)),
   );
 }
 
