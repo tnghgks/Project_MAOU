@@ -848,6 +848,101 @@ button {
   border: 1px solid #444460;
   cursor: pointer;
 }
+/* ── 처치 콤보 (ComboMeter.tsx) — 아레나 좌측 중앙, 컨트롤 중 시야 안에 들어오는 위치 ── */
+.combo-meter {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  pointer-events: none;
+}
+.combo-badge {
+  position: relative;
+  width: clamp(56px, 6vw, 84px);
+  height: clamp(56px, 6vw, 84px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.combo-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg); /* 12시 방향에서 시작해 시계방향으로 빠짐 */
+}
+.combo-ring-track {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.15);
+  stroke-width: 3;
+}
+.combo-ring-fill {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 125.6; /* 2*pi*20 */
+  animation: combo-deplete var(--window) linear forwards;
+}
+@keyframes combo-deplete {
+  0% {
+    stroke-dashoffset: 0;
+    stroke: #ffaa33;
+  }
+  70% {
+    stroke: #ffaa33;
+  }
+  70.01% {
+    stroke: #ff4444; /* 남은 시간 30% 미만 — 끊기기 직전 경고색 */
+  }
+  100% {
+    stroke-dashoffset: 125.6;
+    stroke: #ff4444;
+  }
+}
+.combo-num {
+  position: relative; /* 링(position: absolute)보다 항상 앞에 그려지도록 */
+  z-index: 1;
+  font-size: clamp(28px, 3.2vw, 44px);
+  font-weight: 800;
+  color: #ffaa33;
+  -webkit-text-stroke: 2px #1a1a24;
+  text-shadow:
+    0 0 10px rgba(255, 170, 51, 0.6),
+    0 2px 2px rgba(0, 0, 0, 0.8);
+  animation: combo-pop 200ms ease-out;
+}
+@keyframes combo-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.4);
+  }
+  70% {
+    transform: scale(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.combo-label {
+  font-size: clamp(11px, 1.1vw, 14px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #ffdca0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+.combo-full {
+  font-size: clamp(12px, 1.3vw, 16px);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #ff4444;
+  text-shadow: 0 0 8px rgba(255, 68, 68, 0.7);
+  animation: combo-pop 200ms ease-out;
+}
+
 .dev-panel-row button:hover {
   background: #3a3a5c;
 }

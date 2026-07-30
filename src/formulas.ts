@@ -2,20 +2,16 @@
 export const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
 // 위험도 D (GDD 3-2)
-// 기본 두 항(HP·근접 수)에 용사 직접 조작에서만 실질적으로 붙는 두 보너스를 더한다.
-// 자동 AI는 콤보를 못 쌓고 RETREAT_HP(25%)에서 도망치므로 둘 다 사실상 용사 모드 전용 스코어링이다.
-export const BRINK_HP = 0.3; // ponytail: "벼랑끝을 버티는 중"으로 인정하는 선
+// HP·근접 몬스터 수만으로 결정 — 둘 다 "지금 얼마나 몰렸는가"를 재는 항목이라야 한다.
+// 콤보는 컨트롤 실력 지표라 위험도(=긴장감) 축과 성격이 달라 뺐다 — COMBO_FULL은 아래 도네이션 보정으로 이동.
+export const BRINK_HP = 0.15; // ponytail: "벼랑끝을 버티는 중"으로 인정하는 선
 export const BRINK_BONUS = 0.15; // 유지만 해도 한 티어 위로 밀어올린다
-export const COMBO_FULL = 8; // 이 콤보에서 가산 최대
-export const COMBO_BONUS = 0.3;
-export function danger(hpRatio: number, nearCount: number, combo = 0): number {
-  return (
-    (1 - hpRatio) * 0.6 +
-    Math.min(nearCount / 10, 1) * 0.4 +
-    (hpRatio <= BRINK_HP ? BRINK_BONUS : 0) +
-    Math.min(combo / COMBO_FULL, 1) * COMBO_BONUS
-  );
+export function danger(hpRatio: number, nearCount: number): number {
+  return (1 - hpRatio) * 0.6 + Math.min(nearCount / 10, 1) * 0.4 + (hpRatio <= BRINK_HP ? BRINK_BONUS : 0);
 }
+
+export const COMBO_FULL = 12; // 이 콤보부터 "FULL" — ComboMeter 표시 + 도네이션 확률 보정 기준
+export const COMBO_DONATION_CUT = 2.5; // FULL 콤보 중 도네이션이 터지면 다음 간격을 이만큼 당긴다 (체감 미미하게)
 
 // 위험도 구간 → 시청자 변화율(초당 비율)과 라벨
 export interface HypeTier {

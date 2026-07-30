@@ -8,6 +8,8 @@ import {
   viewerAlert,
   MIN_VIEWERS,
   CRIT_TIME,
+  COMBO_FULL,
+  COMBO_DONATION_CUT,
   type HypeTier,
   type SkillOutcome,
   type SkillRarity,
@@ -105,7 +107,7 @@ export default class BattleScene extends Phaser.Scene {
   alert: ViewerAlert = 'normal'; // HudScene가 읽어 시청자 수 색을 바꾼다
   audience: string[] = []; // 현재 접속 중인 시청자 닉네임 — 채팅·후원자가 여기서만 나온다
   drift = 0; // 시청자 증감률에 얹히는 흔들림 (기계적인 지수곡선 방지)
-  combo = 0; // 처치 콤보 — stepViewers가 danger()에 얹는다 (용사 모드에서만 쌓인다)
+  combo = 0; // 처치 콤보 — ComboMeter가 읽고, FULL이면 도네이션 확률도 보정된다 (용사 모드에서만 쌓인다)
   comboT = 0;
   modeCd!: number; // 시점 전환 쿨타임 잔여
   noHitT!: number; // 마지막 피격 이후 경과(초) — "노 데미지" 요청이 읽는다
@@ -457,9 +459,11 @@ export default class BattleScene extends Phaser.Scene {
     // 보스 등장 컷씬 — 도네이션과 같은 방식으로 전투를 멈추고 React에 넘긴다
     this.scene.pause('Hud');
     this.scene.pause();
+    bus.emit('battle:pause', null); // ComboMeter 등 React UI도 같이 멈춰야 한다
     gameState().playCuts(bossCut(gameState().episode), () => {
       this.scene.resume();
       this.scene.resume('Hud');
+      bus.emit('battle:resume', null);
     });
   }
 
@@ -476,12 +480,14 @@ export default class BattleScene extends Phaser.Scene {
     // Rhythm은 계속 돌려야 한다 (리액션 이벤트의 QWER 판정 담당)
     this.scene.pause('Hud');
     this.scene.pause();
+    bus.emit('battle:pause', null); // ComboMeter 등 React UI도 같이 멈춰야 한다
   }
 
   // 카드 확정 → 강화 적용 후 재개. 리액션이었다면 예약된 스킬도 여기서 터진다.
   endDonation(card: Card) {
     this.scene.resume();
     this.scene.resume('Hud');
+    bus.emit('battle:resume', null);
     if (card.trait) {
       // 특성 카드는 스탯이 아니라 전투 규칙을 준다 — grantCard/applyLiveUpgrade 경로를 안 탄다
       gameState().grantTrait(card.trait);
@@ -612,7 +618,7 @@ export default class BattleScene extends Phaser.Scene {
       // 콤보는 용사 모드 전용 — 카드를 켜두고 방치하면 쌓이는 자동 소환 처치까지 세면 의미가 없다
       if (gameState().mode === 'hero') {
         bumpCombo(this);
-        if (this.combo >= 2) this.floatText(m.x, m.y - 20, `${this.combo} COMBO`, '#ffaa33');
+        bus.emit('combo:hit', { combo: this.combo });
       }
     }
   }
@@ -658,7 +664,9 @@ export default class BattleScene extends Phaser.Scene {
       this.donateT -= dt;
       if (this.donateT <= 0) {
         this.fireDonation();
-        this.donateT = donationInterval(this.viewers);
+        // FULL 콤보 중 터진 도네이션은 다음 간격을 살짝 당겨준다 (체감 미미한 보상)
+        const cut = this.combo >= COMBO_FULL ? COMBO_DONATION_CUT : 0;
+        this.donateT = donationInterval(this.viewers) - cut;
       }
     }
 
@@ -732,6 +740,11 @@ export default class BattleScene extends Phaser.Scene {
     this.hero.hp -= dmg;
     this.hero.invulnT = HIT_INVULN_DUR; // 같은 프레임에 몬스터 여럿이 때려도 한 번만 맞는다
     this.noHitT = 0;
+    if (this.combo > 0) {
+      this.combo = 0;
+      this.comboT = 0;
+      bus.emit('combo:reset', null); // 콤보 = 무피격 실력 지표라 맞는 순간 끊긴다
+    }
     return true;
   }
 

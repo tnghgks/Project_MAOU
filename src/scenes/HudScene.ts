@@ -16,7 +16,6 @@ export default class HudScene extends Phaser.Scene {
   hypeBar!: Phaser.GameObjects.Rectangle;
   hypeLabel!: Phaser.GameObjects.Text;
   modeChip!: Phaser.GameObjects.Text;
-  comboText!: Phaser.GameObjects.Text;
   vignette!: Phaser.GameObjects.Rectangle;
   alertVignette!: Phaser.GameObjects.Rectangle;
   reqText!: Phaser.GameObjects.Text;
@@ -47,8 +46,6 @@ export default class HudScene extends Phaser.Scene {
     this.hypeLabel = add.text(670, 10, '', { fontSize: '16px', color: '#ffffff' }).setDepth(6);
     // 시점 칩 — 지금 무엇을 조작 중인지가 상단바에서 항상 보여야 한다
     this.modeChip = add.text(790, 11, '', { fontSize: '14px', fontStyle: 'bold' }).setDepth(6);
-    // 처치 콤보 (용사 모드에서만 쌓인다) — 하이프 바 바로 옆이라 인과가 눈에 보인다
-    this.comboText = add.text(970, 10, '', { fontSize: '17px', fontStyle: 'bold', color: '#ffaa33' }).setDepth(6);
 
     // 시청자 요청 배너 (아레나 상단 중앙 — critText는 좌측이라 안 겹친다)
     this.reqText = add
@@ -99,8 +96,6 @@ export default class HudScene extends Phaser.Scene {
     this.modeChip
       .setText((hero ? '⚔ 용사 시점 [C]' : '👑 마왕 시점 [C]') + cd)
       .setColor(b.modeCd > 0 ? '#6a6a80' : hero ? '#ffcc55' : '#8a8ab0');
-    // 콤보는 danger()에 얹히므로 하이프 바가 같이 차오른다
-    this.comboText.setText(b.combo >= 2 ? `⚔ ${b.combo} COMBO` : '');
     this.vignette.fillAlpha = b.D >= 0.75 ? (b.D - 0.75) * 0.8 : 0;
     if (b.alert === 'critical') {
       this.alertVignette.fillColor = 0xff4444;

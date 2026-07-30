@@ -213,16 +213,4 @@ const viewerState = () => ({ viewers: 100, peakViewers: 100, drift: 0, combo: 0,
   assert.strictEqual(vs.combo, 1, '리셋 후엔 1부터');
 }
 
-// ── 콤보는 하이프에 실제로 얹힌다 (같은 상황에서 콤보만 다르면 시청자 증감이 갈린다) ──
-{
-  const flat = viewerState();
-  const combo = viewerState();
-  combo.combo = 8;
-  combo.comboT = COMBO_WINDOW;
-  const a = stepViewers(flat, 1, 0, 0.1, () => 0.5);
-  const b = stepViewers(combo, 1, 0, 0.1, () => 0.5);
-  assert.ok(b.D > a.D, '콤보가 위험도(=하이프)를 밀어올린다');
-  assert.ok(combo.viewers > flat.viewers, '노잼 감쇠에서 벗어난다');
-}
-
 console.log('battleSim OK');

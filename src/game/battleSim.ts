@@ -180,12 +180,12 @@ export function stepArrow(a: Arrow, hero: HeroEntity, dt: number): ArrowResult {
 }
 
 // ── 시청자 시뮬 ── (viewers/peakViewers/drift/combo 변이, 위험도·흥분도 반환)
-export const COMBO_WINDOW = 3; // ponytail: 이 안에 다음 처치가 나면 콤보 유지 — 난이도 knob
+export const COMBO_WINDOW = 2; // ponytail: 이 안에 다음 처치가 나면 콤보 유지 — 난이도 knob
 export interface ViewerState {
   viewers: number;
   peakViewers: number;
   drift: number;
-  combo: number; // 처치 콤보 — danger()의 가산 항
+  combo: number; // 처치 콤보 — ComboMeter 표시 + FULL 도네이션 확률 보정용 (danger()엔 반영 안 함)
   comboT: number; // 콤보 유지 잔여 시간
 }
 export interface ViewerStep {
@@ -206,7 +206,7 @@ export function stepViewers(
 ): ViewerStep {
   vs.comboT = Math.max(0, vs.comboT - dt);
   if (vs.comboT <= 0) vs.combo = 0;
-  const D = danger(hpRatio, nearCount, vs.combo);
+  const D = danger(hpRatio, nearCount);
   const tier = hypeTier(D);
   vs.drift = viewerDrift(vs.drift, dt, rnd);
   vs.viewers = Math.max(MIN_VIEWERS, vs.viewers * (1 + (tier.rate + vs.drift) * dt));
