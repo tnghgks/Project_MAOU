@@ -39,12 +39,14 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   assert.strictEqual(countNear([near, far, dead], hero), 1);
 }
 
-// ── stepHero: 근접 0마리면 초당 REGEN_RATE(0.1) 회복 ──
+// ── stepHero: 근접 0마리 지속이 REGEN_DELAY(1.5s)를 넘어야 REGEN_RATE(0.05) 회복 시작 ──
 {
   const hero = spawnHero(stats, HOME);
   hero.hp = 50;
-  const intent = stepHero(hero, [], 0, 1, HOME, arenaBounds); // dt=1, 몬스터 없음
-  assert.strictEqual(hero.hp, 60, '50 + 100*0.1*1');
+  let intent = stepHero(hero, [], 0, 1, HOME, arenaBounds); // dt=1, 몬스터 없음 (유예 아직)
+  assert.strictEqual(hero.hp, 50, '유예 시간(1.5s) 전엔 회복 없음');
+  intent = stepHero(hero, [], 0, 1, HOME, arenaBounds); // 누적 2s ≥ REGEN_DELAY
+  assert.strictEqual(hero.hp, 55, '50 + 100*0.05*1 (유예 지난 뒤 회복)');
   assert.deepStrictEqual(intent.attacks, []);
   assert.strictEqual(intent.moved, false, '스폰에 있으면 이동 없음');
 }

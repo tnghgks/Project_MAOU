@@ -62,7 +62,7 @@ export interface GameState {
 }
 
 const SAVE_KEY = 'maou.save';
-export const BASE_HERO: HeroStats = { maxHp: 100, atk: 10, atkSpd: 1.0, speed: 100, range: 60 }; // GDD 3-6 1화 시작값
+export const BASE_HERO: HeroStats = { maxHp: 70, atk: 10, atkSpd: 0.7, speed: 60, range: 60 }; // GDD 3-6 1화 시작값
 
 // 용사 종합 전투력 — 시작값을 1.00으로 보는 배수. 요청 난이도와 화면 표시가 이 하나만 본다.
 // 가중 기하평균이라 지수 합이 1 → 모든 스탯이 x배면 전투력도 x배. 곱이라 한 스탯만 몰아줘도 폭주하지 않는다.

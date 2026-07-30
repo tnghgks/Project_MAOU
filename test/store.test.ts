@@ -28,7 +28,7 @@ gameStore.setState({ gold: 9999, episode: 4, hero: { ...gameState().hero, maxHp:
 gameState().resetRun();
 assert.strictEqual(gameState().gold, 0);
 assert.strictEqual(gameState().episode, 1);
-assert.strictEqual(gameState().hero.maxHp, 100);
+assert.strictEqual(gameState().hero.maxHp, BASE_HERO.maxHp);
 assert.strictEqual(gameState().viewers, 0);
 assert.deepStrictEqual(gameState().skills, ['낙뢰']);
 assert.deepStrictEqual(JSON.parse(store['maou.save']).skills, ['낙뢰']); // localStorage에서도 제거
@@ -40,7 +40,7 @@ assert.strictEqual(gameState().applyUpgrade('hp'), false); // 200G 필요
 gameStore.setState({ gold: 500 });
 assert.strictEqual(gameState().applyUpgrade('hp'), true);
 assert.strictEqual(gameState().gold, 300); // 500 - 200
-assert.strictEqual(gameState().hero.maxHp, 180); // 100 + 80
+assert.strictEqual(gameState().hero.maxHp, BASE_HERO.maxHp + 80);
 assert.strictEqual(gameState().upgradeLevels.hp, 1);
 
 // grantCard: 레벨은 그대로여도 statOf가 오른 값을 돌려줘야 한다 (#13 — 화면이 Lv만 보면 반영이 안 보였다)

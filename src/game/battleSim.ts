@@ -9,7 +9,8 @@ import type { HeroEntity, MonsterEntity, Arrow } from './entities.ts';
 export const SUMMON_MIN_RADIUS = 150; // 용사 반경 이 안에는 소환 금지
 export const NEAR_RADIUS = 200; // 위험도·회복 판정용 "근접" 반경
 const SEEK_RANGE = 300; // 용사가 노리는 최대 탐지 거리
-const REGEN_RATE = 0.1; // 근접 0마리일 때 초당 회복 비율
+const REGEN_RATE = 0.05; // 근접 0마리일 때 초당 회복 비율
+const REGEN_DELAY = 1.5; // 근접 0마리가 이 시간(초) 이상 유지돼야 회복 시작 — 스치듯 벌린 거리로는 안 참다
 const RETREAT_HP = 0.25; // 이 비율 이하로 떨어지면 후퇴
 const RETREAT_DUR = 2; // 후퇴 지속(초)
 const RETREAT_CD = 6; // 후퇴 쿨다운(초)
@@ -63,7 +64,12 @@ export function stepHero(
   H.invulnT = Math.max(0, H.invulnT - dt);
 
   // 자동 회복은 수동 조작에서도 유지 — 구석 도망은 시청자 이탈로 이미 벌점이 걸려 있다
-  if (nearCount === 0) H.hp = Math.min(H.maxHp, H.hp + H.maxHp * REGEN_RATE * dt);
+  if (nearCount === 0) {
+    H.safeT += dt;
+    if (H.safeT >= REGEN_DELAY) H.hp = Math.min(H.maxHp, H.hp + H.maxHp * REGEN_RATE * dt);
+  } else {
+    H.safeT = 0;
+  }
   // 자동 후퇴는 조작권을 뺏으므로 수동 조작 중엔 발동시키지 않는다
   if (!input && H.hp / H.maxHp <= RETREAT_HP && H.retreatCd <= 0) {
     H.retreatT = RETREAT_DUR;
