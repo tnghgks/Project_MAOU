@@ -1,54 +1,56 @@
+import { TRAITS, TRAIT_IDS, type TraitId } from './traits.ts';
+import { STAT_CARDS, STAT_CARD_IDS, type StatCardId } from './cardStats.ts';
 import type { HeroStats } from '../game/store.ts';
-import { UPGRADES, type UpgradeKey } from './upgrades.ts';
-import { TRAITS, type TraitId } from './traits.ts';
 
-// 도네이션 보상 카드 = 기존 강화 5종에 등급 배율만 얹은 것.
-// 별도 스탯 테이블을 두지 않는다 — 강화 밸런스는 upgrades.ts 한 곳에서만 만진다.
-export type Rarity = 'common' | 'rare' | 'epic';
+// 도네이션 보상 카드. 카드마다 등급이 고정(rarity)이며 — 강화 5종처럼 등급 배율을 곱하는 게 아니라
+// 카드 자체가 스탯 mods(전투기획서 원본 수치)나 특성(trait) 하나를 그대로 준다.
+export type Rarity = 'common' | 'uncommon' | 'magic' | 'epic' | 'legend';
 
 // prettier-ignore
 export const RARITY = {
-  common: { label: '노멀', mult: 1,   weight: 68, color: '#9aa8bd' },
-  rare:   { label: '레어', mult: 2.5, weight: 27, color: '#4fa3ff' },
-  epic:   { label: '에픽', mult: 5,   weight: 5,  color: '#ff66cc' },
-} satisfies Record<string, { label: string; mult: number; weight: number; color: string }>;
+  common:   { label: '일반', weight: 50, color: '#8fd17a' },
+  uncommon: { label: '고급', weight: 27, color: '#4fa3ff' },
+  magic:    { label: '희귀', weight: 14, color: '#b366ff' },
+  epic:     { label: '영웅', weight: 7,  color: '#ffcc33' },
+  legend:   { label: '전설', weight: 2,  color: '#ff4444' },
+} satisfies Record<Rarity, { label: string; weight: number; color: string }>;
 
-// trait이 있으면 특성 카드 — key/stat/delta는 안 쓰인다(스탯이 아니라 전투 규칙을 준다).
-// 별도 카드 타입을 만들지 않는 이유: 뽑기·연출·확정 경로가 전부 같고 분기는 endDonation 한 줄이면 끝난다.
+const ALL: Rarity[] = ['common', 'uncommon', 'magic', 'epic', 'legend'];
+
+// mode: 'flat' = hero[stat]에 그대로 가산 · 'pctCurrent' = 습득 시점 현재값의 value%를 가산 (cardStats.ts 참고)
+export interface StatMod {
+  stat: keyof HeroStats;
+  mode: 'flat' | 'pctCurrent';
+  value: number;
+}
+
+// trait이 있으면 특성 카드(mods는 항상 빈 배열) — 없으면 스탯 카드. 뽑기·연출·확정 경로가 전부
+// 같고 분기는 endDonation 한 줄이면 끝나므로 별도 카드 타입을 만들지 않는다.
 export interface Card {
-  key: UpgradeKey;
+  id: StatCardId | TraitId;
   rarity: Rarity;
   name: string;
-  stat: keyof HeroStats;
-  delta: number;
+  desc: string;
+  mods: StatMod[];
   trait?: TraitId;
-  desc?: string;
 }
 
-const KEYS = Object.keys(UPGRADES) as UpgradeKey[];
-const pick = <T>(arr: T[], rnd: () => number) => arr[Math.floor(rnd() * arr.length)];
+const pick = <T>(arr: readonly T[], rnd: () => number) => arr[Math.floor(rnd() * arr.length)];
 
-export function makeCard(key: UpgradeKey, rarity: Rarity): Card {
-  const u = UPGRADES[key];
-  return {
-    key,
-    rarity,
-    name: u.name,
-    stat: u.stat,
-    delta: Math.round(u.delta * RARITY[rarity].mult * 100) / 100,
-  };
+export function statCard(id: StatCardId): Card {
+  const c = STAT_CARDS[id];
+  return { id, rarity: c.rarity, name: `${c.icon} ${c.name}`, desc: c.desc, mods: c.mods };
 }
 
-// 특성 카드는 항상 에픽 — 런 한 번에 많아야 3장 나오는 규칙 변경이라 등급을 굴릴 이유가 없다
 export function traitCard(id: TraitId): Card {
   const t = TRAITS[id];
-  return { key: 'atk', rarity: 'epic', name: `${t.icon} ${t.name}`, stat: 'atk', delta: 0, trait: id, desc: t.desc };
+  return { id, rarity: t.rarity, name: `${t.icon} ${t.name}`, desc: t.desc, mods: [], trait: id };
 }
 
-const ALL: Rarity[] = ['common', 'rare', 'epic'];
-export const TRAIT_CHANCE = 0.14; // ponytail: 미보유 특성이 있을 때 카드 한 장이 특성일 확률
+const isStatCard = (id: StatCardId | TraitId): id is StatCardId => id in STAT_CARDS;
+const idToCard = (id: StatCardId | TraitId): Card => (isStatCard(id) ? statCard(id) : traitCard(id));
 
-// 가중 추첨. pool을 좁히면 그 안에서만 뽑는다 (리액션 보상은 노멀을 빼는 식).
+// 가중 추첨. pool을 좁히면 그 안에서만 뽑는다 (리액션 보상은 노멀급을 빼는 식).
 export function rollRarity(rnd: () => number = Math.random, pool: Rarity[] = ALL): Rarity {
   let t = rnd() * pool.reduce((s, r) => s + RARITY[r].weight, 0);
   for (const r of pool) {
@@ -56,6 +58,15 @@ export function rollRarity(rnd: () => number = Math.random, pool: Rarity[] = ALL
     if (t < 0) return r;
   }
   return pool[pool.length - 1]; // rnd()가 1에 붙는 극단만 방어
+}
+
+// 등급별 카드 풀 — 특성은 이미 보유한 건 제외(중복 획득 방지). legend는 스탯 카드가 없어(0장)
+// 특성 2종만 보유해버리면 그 등급이 통째로 빈다 — drawCards가 그런 등급은 애초에 안 굴린다.
+function bucketsFor(ownedTraits: readonly TraitId[]): Record<Rarity, (StatCardId | TraitId)[]> {
+  const b: Record<Rarity, (StatCardId | TraitId)[]> = { common: [], uncommon: [], magic: [], epic: [], legend: [] };
+  for (const id of STAT_CARD_IDS) b[STAT_CARDS[id].rarity].push(id);
+  for (const id of TRAIT_IDS) if (!ownedTraits.includes(id)) b[TRAITS[id].rarity].push(id);
+  return b;
 }
 
 // 통에서 하나 뽑기 — 이미 뽑은 원소는 통이 다시 채워지기 전까진 안 나온다(같은 판 안 중복 방지).
@@ -71,25 +82,29 @@ function drawUnique<T>(pool: readonly T[], used: Set<T>, rnd: () => number): T {
   return picked;
 }
 
-// 일반 도네: 카드 3장 노출 → 그중 1장이 랜덤 당첨.
-// traits = 아직 없는 특성 목록(호출부가 계산). 비어 있으면 기존과 완전히 동일하게 굴러간다.
-// #19: 예전엔 매장을 독립적으로 뽑아 같은 카드(같은 특성·같은 강화)가 중복 노출될 수 있었다.
+// 일반 도네: 카드 n장 노출 → 그중 1장이 랜덤 당첨.
+// ownedTraits = 이미 보유한 특성(호출부가 계산) — 그만큼 특성 풀에서 빠진다.
+// #19: 등급별로 독립된 used-Set을 둔다 — 한 Set을 공유하면 한 등급 풀이 바닥나 리필될 때
+// 다른 등급에서 이미 뽑은 카드까지 다시 뽑힐 수 있다.
 export function drawCards(
   n: number,
-  traits: TraitId[] = [],
+  ownedTraits: TraitId[] = [],
   rnd: () => number = Math.random,
   pool: Rarity[] = ALL,
 ): Card[] {
-  const usedTraits = new Set<TraitId>();
-  const usedKeys = new Set<UpgradeKey>();
-  return Array.from({ length: n }, () =>
-    traits.length && rnd() < TRAIT_CHANCE
-      ? traitCard(drawUnique(traits, usedTraits, rnd))
-      : makeCard(drawUnique(KEYS, usedKeys, rnd), rollRarity(rnd, pool)),
-  );
+  const buckets = bucketsFor(ownedTraits);
+  const rarityPool = pool.filter((r) => buckets[r].length > 0);
+  if (!rarityPool.length) return []; // 이론상 도달 안 함(공용 카드 10종은 항상 common에 있다)
+  const used: Partial<Record<Rarity, Set<StatCardId | TraitId>>> = {};
+  return Array.from({ length: n }, () => {
+    const r = rollRarity(rnd, rarityPool);
+    const set = used[r] ?? (used[r] = new Set());
+    return idToCard(drawUnique(buckets[r], set, rnd));
+  });
 }
 
-// 리액션(리듬) 보상: 노멀이 안 나온다. highTier(ALL PERFECT/GREAT)면 에픽 확정.
-export function reactionCard(highTier: boolean, rnd: () => number = Math.random): Card {
-  return makeCard(pick(KEYS, rnd), rollRarity(rnd, highTier ? ['epic'] : ['rare', 'epic']));
+// 리액션(리듬) 보상: 노멀급이 안 나온다. highTier(ALL PERFECT)면 상위 두 등급으로 더 좁힌다.
+export function reactionCard(highTier: boolean, ownedTraits: TraitId[] = [], rnd: () => number = Math.random): Card {
+  const pool: Rarity[] = highTier ? ['epic', 'legend'] : ['uncommon', 'magic', 'epic', 'legend'];
+  return drawCards(1, ownedTraits, rnd, pool)[0];
 }

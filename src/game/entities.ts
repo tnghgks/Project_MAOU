@@ -13,6 +13,15 @@ export interface HeroEntity {
   atkSpd: number;
   speed: number;
   range: number;
+  // 도네이션 카드 확장 스탯 — HeroStats와 1:1, spawnHero가 복사한다.
+  defense: number;
+  dodge: number;
+  critChance: number;
+  critMult: number;
+  lifesteal: number;
+  knockback: number;
+  regenFlat: number;
+  goldBonus: number;
   atkCd: number;
   retreatT: number; // 자동 AI 전용 — 수동 조작 중엔 안 쓴다
   retreatCd: number;
@@ -20,6 +29,14 @@ export interface HeroEntity {
   dashCd: number;
   invulnT: number; // 무적 남은 시간 — hurtHero가 읽는다
   safeT: number; // 근접 몬스터 0마리 지속 시간 — REGEN_DELAY 넘어야 자동 회복 시작
+  regenTickT: number; // 응급 처치(regenFlat) 고정 회복까지 남은 시간 — 안전 상태 벗어나면 리셋
+  // 특성 카드 전용 런타임 상태 — traits.ts 파생 함수가 읽고 BattleScene이 프레임마다 갱신.
+  atkCount: number; // 누적 공격 횟수 — 3번째/10번째마다 발동하는 특성용
+  moveBuffStack: number; // 무한의 검무: 이동 중 쌓이는 공속·이속 가산 배율(0~0.5)
+  moveIdleT: number; // 무한의 검무: 정지 지속 시간 — 1초 넘으면 스택 초기화
+  timeSlashT: number; // 시공간 베기: 남은 피해 증폭 창(초)
+  firstAtkDone: boolean; // 거합도: 이번 전투 첫 공격을 이미 썼는가
+  phoenixUsed: boolean; // 불사조의 깃털: 이번 런에 이미 발동했는가
 }
 
 export interface MonsterEntity {
@@ -31,6 +48,9 @@ export interface MonsterEntity {
   atkCd: number;
   spr: Phaser.GameObjects.Image;
   dead?: boolean;
+  stunT?: number; // 기절/빙결 남은 시간 — stepMonster가 이 동안 AI를 건너뛴다
+  dotT?: number; // 화상/출혈 남은 시간
+  dotDps?: number; // 위 dot의 초당 피해
 }
 
 export interface Arrow {
@@ -53,6 +73,14 @@ export function spawnHero(s: HeroStats, at: { x: number; y: number }): HeroEntit
     atkSpd: s.atkSpd,
     speed: s.speed,
     range: s.range,
+    defense: s.defense,
+    dodge: s.dodge,
+    critChance: s.critChance,
+    critMult: s.critMult,
+    lifesteal: s.lifesteal,
+    knockback: s.knockback,
+    regenFlat: s.regenFlat,
+    goldBonus: s.goldBonus,
     atkCd: 0,
     retreatT: 0,
     retreatCd: 0,
@@ -60,6 +88,13 @@ export function spawnHero(s: HeroStats, at: { x: number; y: number }): HeroEntit
     dashCd: 0,
     invulnT: 0,
     safeT: 0,
+    regenTickT: 0,
+    atkCount: 0,
+    moveBuffStack: 0,
+    moveIdleT: 0,
+    timeSlashT: 0,
+    firstAtkDone: false,
+    phoenixUsed: false,
   };
 }
 

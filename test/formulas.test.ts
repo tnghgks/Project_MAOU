@@ -6,6 +6,9 @@ import {
   hypeTier,
   donationInterval,
   rollDonation,
+  clampDonation,
+  DONATION_MIN_RATIO,
+  DONATION_MAX_RATIO,
   judge,
   skillResult,
   viewerDrift,
@@ -23,10 +26,10 @@ assert.ok(Math.abs(danger(0, 10) - (1 + BRINK_BONUS)) < 1e-9);
 assert.ok(Math.abs(danger(BRINK_HP, 0) - danger(BRINK_HP + 0.01, 0)) > BRINK_BONUS * 0.9);
 assert.ok(danger(BRINK_HP, 0) > danger(BRINK_HP + 0.01, 0), 'HP 30% 이하를 유지하면 더 재밌어야 한다');
 
-// 구간 경계
-assert.strictEqual(hypeTier(0.1).rate, -0.01);
-assert.strictEqual(hypeTier(0.5).rate, 0.03);
-assert.strictEqual(hypeTier(0.9).rate, 0.05);
+// 구간 경계 (2026-07-30: 하락은 완만하게, 상승은 뚜렷하게)
+assert.strictEqual(hypeTier(0.1).rate, -0.003);
+assert.strictEqual(hypeTier(0.5).rate, 0.05);
+assert.strictEqual(hypeTier(0.9).rate, 0.08);
 
 // 도네 간격: 30 - 5*log10(v), [10,25] 클램프
 assert.strictEqual(donationInterval(10), 25); // 10명 = 상한
@@ -47,6 +50,20 @@ assert.ok(roll.amount > 30 && roll.amount < 60, `amount=${roll.amount}`);
   const big = rollDonation(12, () => seq[i++]);
   assert.ok(big.jackpot);
   assert.ok(Math.abs(big.amount - roll.amount * JACKPOT_MULT) <= 1, `big=${big.amount}`);
+}
+
+// 도네 상하한: 현재 업그레이드 가격 범위(cheapest~priciest)의 [20%, 150%]로 클램프
+{
+  const cheap = 180,
+    pricey = 300; // 예: 초기 상태 speed(180)~atkSpd(300)
+  assert.strictEqual(clampDonation(1, cheap, pricey), Math.round(cheap * DONATION_MIN_RATIO), '너무 적으면 하한');
+  assert.strictEqual(
+    clampDonation(999999, cheap, pricey),
+    Math.round(pricey * DONATION_MAX_RATIO),
+    '너무 많으면 상한',
+  );
+  const mid = Math.round((cheap + pricey) / 2);
+  assert.strictEqual(clampDonation(mid, cheap, pricey), mid, '범위 안이면 그대로');
 }
 
 // ── 시청자 증감 흔들림 ──

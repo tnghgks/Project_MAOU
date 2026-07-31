@@ -4,8 +4,13 @@ import {
   hypeTier,
   donationInterval,
   rollDonation,
+  clampDonation,
   stepCritical,
   viewerAlert,
+  rollChance,
+  critMultiplier,
+  mitigate,
+  goldWithBonus,
   MIN_VIEWERS,
   CRIT_TIME,
   COMBO_FULL,
@@ -31,11 +36,48 @@ import {
   HIT_INVULN_DUR,
   type HeroInput,
 } from '../game/battleSim.ts';
-import { heroAtkMult, vampHeal, thornsDmg, TRAITS } from '../data/traits.ts';
+import {
+  hasTrait,
+  heroAtkMult,
+  timeSlashMult,
+  vampHeal,
+  thornsDmg,
+  warriorBloodHeal,
+  defenseBonus,
+  applyDot,
+  applyStun,
+  TRAITS,
+  HEAVY_STRIKE_EVERY,
+  HEAVY_STRIKE_MULT,
+  HEAVY_STRIKE_STUN,
+  THORN_BLADE_CHANCE,
+  THORN_BLADE_DOT_T,
+  THORN_BLADE_DPS_RATIO,
+  WIND_SLASH_DMG_RATIO,
+  WAR_CRY_STUN,
+  FLAME_SWORD_DOT_T,
+  FLAME_SWORD_DPS_RATIO,
+  FLAME_SWORD_MAX_STACK,
+  FROST_STRIKE_STUN,
+  FROST_STRIKE_BOSS_STUN,
+  CHAIN_LIGHTNING_CHANCE,
+  CHAIN_LIGHTNING_TARGETS,
+  CHAIN_LIGHTNING_RATIO,
+  SHADOW_CLONE_CHANCE,
+  FURY_BLAST_RATIO,
+  FURY_BLAST_RADIUS,
+  GIANT_BLADE_ATKSPD_MULT,
+  GIANT_BLADE_RANGE_MULT,
+  PHOENIX_HP_RATIO,
+  PHOENIX_BURN_DPS_RATIO,
+  PHOENIX_BURN_T,
+  TIME_SLASH_EVERY,
+  TIME_SLASH_FREEZE_MS,
+} from '../data/traits.ts';
 import { MONSTERS, type MonsterId, type MonsterDef } from '../data/monsters.ts';
 import { syncRoster } from '../data/nicknames.ts';
-import { UPGRADES, type UpgradeKey } from '../data/upgrades.ts';
-import { RARITY, type Card } from '../data/cards.ts';
+import { upgradeCostRange } from '../data/upgrades.ts';
+import { RARITY, type Card, type StatMod } from '../data/cards.ts';
 import { SKILLS, pickSkillReward, type SkillId } from '../data/skills.ts';
 import { CHAT_POOLS, pickChatMood } from '../data/chat.ts';
 import {
@@ -51,11 +93,10 @@ import {
   type ReqCtx,
   type RequestDef,
 } from '../data/requests.ts';
-import { FINAL_EP, targetGold, bossOf } from '../data/progression.ts';
+import { FINAL_EP, targetGold, bossOf, START_VIEWERS } from '../data/progression.ts';
 import { bossCut } from '../data/cutscenes.ts';
 import type { RunOutcome } from '../game/store.ts';
 
-const START_VIEWERS = 12; // 첫 방송 시청자 수
 // 소환 카드 바 (자동 소환 전용). ponytail: 밸런스 knob은 전부 여기
 const CARD = { w: 240, h: 108, gap: 12, x: 20, y: SUMMON_Y + (CANVAS.H - SUMMON_Y - 108) / 2 }; // 소환 바 세로 중앙
 const SLIDER = { x: 96, w: 136, h: 12 }; // 카드 좌상단 기준 오프셋
@@ -87,6 +128,8 @@ interface SliderView {
 }
 const HP_BAR_W = 48; // ponytail: 체력바 크기 knob
 const HP_BAR_H = 8;
+const KNOCKBACK_RADIUS = 120; // ponytail: 방패 밀치기 발동 반경(px) — GDD엔 확률만 있고 거리는 없어 여기서 정한다
+const KNOCKBACK_DIST = 60; // 밀려나는 거리(px)
 const SHAKE_HOLD = 999_999; // critical 흔들림은 단계가 바뀔 때까지 유지 (reset으로 끈다). warn은 흔들지 않는다
 
 export default class BattleScene extends Phaser.Scene {
@@ -187,7 +230,7 @@ export default class BattleScene extends Phaser.Scene {
       if (gameState().mode !== 'hero') gameState().toggleMode();
       this.setSummonVisible(false);
     }
-    this.heroSpr = this.add.image(this.hero.x, this.hero.y, 'hero').setScale(1.3);
+    this.heroSpr = this.add.image(this.hero.x, this.hero.y, 'hero').setScale(2.3);
     this.heroHpBar = this.add.graphics().setDepth(3); // 몬스터·화살 위로
 
     // 병렬 씬: HUD(캔버스 수치) + HeroPanel(용사 스탯). 리듬 판정은 RhythmLane(React)이 담당.
@@ -469,7 +512,10 @@ export default class BattleScene extends Phaser.Scene {
 
   // ── 도네이션: 전투를 멈추고 React(DonationEvent)에 넘긴다. 재개는 endDonation. ──
   fireDonation() {
-    const { amount, jackpot } = rollDonation(this.viewers);
+    const { min, max } = upgradeCostRange(gameState().upgradeLevels);
+    const rolled = rollDonation(this.viewers);
+    const amount = clampDonation(rolled.amount, min, max);
+    const jackpot = rolled.jackpot;
     gameState().addGold(amount);
     this.totalDonated += amount;
     const name = this.randomViewer() ?? '익명';
@@ -489,7 +535,7 @@ export default class BattleScene extends Phaser.Scene {
     this.scene.resume('Hud');
     bus.emit('battle:resume', null);
     if (card.trait) {
-      // 특성 카드는 스탯이 아니라 전투 규칙을 준다 — grantCard/applyLiveUpgrade 경로를 안 탄다
+      // 특성 카드는 스탯이 아니라 전투 규칙을 준다 — grantCard/applyLiveCard 경로를 안 탄다
       gameState().grantTrait(card.trait);
       const t = TRAITS[card.trait];
       this.cameras.main.flash(400, 255, 120, 220);
@@ -497,12 +543,39 @@ export default class BattleScene extends Phaser.Scene {
       this.pushChat('시스템', `🎁 특성 획득 — ${t.icon} ${t.name}: ${t.desc}`, '#ff66cc');
     } else {
       gameState().grantCard(card);
-      this.applyLiveUpgrade(card.key, card.delta, `🎁 ${RARITY[card.rarity].label} 카드!`);
+      this.applyLiveCard(card, `🎁 ${RARITY[card.rarity].label} 카드!`);
     }
+    this.onCardGranted(card);
     if (this.pendingSkill) {
       this.resolveRhythmResult(this.pendingSkill);
       this.pendingSkill = null;
     }
+  }
+
+  // 카드 획득 공통 후처리: 전투의 함성(카드 획득마다 전체 기절) + 일부 특성의 1회성 즉시 효과.
+  onCardGranted(card: Card) {
+    if (hasTrait(gameState().traits, 'warCry') && this.monsters.length) {
+      for (const m of this.monsters) if (!m.dead) applyStun(m, WAR_CRY_STUN);
+      this.floatText(this.hero.x, this.hero.y - 70, '📢 전투의 함성!', '#ffaa33');
+    }
+    if (card.trait === 'giantBlade' || card.trait === 'excalibur') this.applyTraitOneShot(card.trait);
+  }
+
+  // 거인의 대검·엑스칼리버: 특성 자체는 상시 배율(heroAtkMult)로 처리하지만, 습득 즉시 붙는
+  // 공속/사거리 변화는 매 프레임 재계산할 게 아니라 이 시점에 한 번만 스탯에 반영해야 한다.
+  applyTraitOneShot(id: 'giantBlade' | 'excalibur') {
+    const stats = gameState().hero;
+    const mods: StatMod[] =
+      id === 'giantBlade'
+        ? [
+            { stat: 'atkSpd', mode: 'pctCurrent', value: GIANT_BLADE_ATKSPD_MULT - 1 },
+            { stat: 'range', mode: 'pctCurrent', value: GIANT_BLADE_RANGE_MULT - 1 },
+          ]
+        : [{ stat: 'range', mode: 'flat', value: ARENA.w / 2 - stats.range }]; // 화면 절반으로 확장
+    gameState().applyStatMods(mods);
+    const H = this.hero;
+    const applied = gameState().hero;
+    for (const stat of new Set(mods.map((m) => m.stat))) H[stat] = applied[stat];
   }
 
   // ── 리듬 보상: 시청자 변화율 + 스킬 등급 획득 (+ ALL PERFECT 추가 후원) — GDD 3-4, 2026-07-28 개편.
@@ -523,7 +596,8 @@ export default class BattleScene extends Phaser.Scene {
     }
 
     if (res.bonusDonation) {
-      const { amount } = rollDonation(this.viewers);
+      const { min, max } = upgradeCostRange(gameState().upgradeLevels);
+      const amount = clampDonation(rollDonation(this.viewers).amount, min, max);
       gameState().addGold(amount);
       this.totalDonated += amount;
       parts.push(`추가 후원 ${amount.toLocaleString()}G`);
@@ -540,25 +614,26 @@ export default class BattleScene extends Phaser.Scene {
     }
   }
 
-  // ── 실시간 강화: store는 이미 갱신됨(applyUpgrade/grantCard) — 씬 로컬 hero에 반영 + 연출 ──
-  // delta는 호출부가 준다 (상점=1배, 카드=등급 배율).
-  applyLiveUpgrade(key: UpgradeKey, delta: number, via: string) {
-    const u = UPGRADES[key];
+  // ── 도네 카드 반영: store는 이미 갱신됨(grantCard) — 씬 로컬 hero에 mods가 건드린 필드만 동기화 + 연출 ──
+  applyLiveCard(card: Card, via: string) {
     const H = this.hero;
     const stats = gameState().hero;
-    if (u.stat === 'maxHp') {
-      H.maxHp = stats.maxHp;
-      H.hp = Math.min(H.maxHp, H.hp + delta); // 최대치 증가분만큼 즉시 회복
-    } else {
-      H[u.stat] = stats[u.stat];
+    for (const stat of new Set(card.mods.map((m) => m.stat))) {
+      if (stat === 'maxHp') {
+        const inc = stats.maxHp - H.maxHp;
+        H.maxHp = stats.maxHp;
+        H.hp = Math.min(H.maxHp, H.hp + inc); // 최대치 증가분만큼 즉시 회복
+      } else {
+        H[stat] = stats[stat];
+      }
     }
     // 임팩트: 확산 링 + 상승 숫자
     const ring = this.add.circle(H.x, H.y, 20, 0x44ddff, 0).setStrokeStyle(3, 0x44ddff, 1).setDepth(9);
     this.tweens.add({ targets: ring, radius: 60, alpha: 0, duration: 450, onComplete: () => ring.destroy() });
     this.heroSpr.setTint(0x88ffff);
     this.time.delayedCall(200, () => this.heroSpr.clearTint());
-    this.floatText(H.x, H.y - 40, `▲ ${u.name} +${delta}`, '#44ddff');
-    this.pushChat('시스템', `${via} ${u.name} 강화`, '#44ddff');
+    this.floatText(H.x, H.y - 40, `▲ ${card.name}`, '#44ddff');
+    this.pushChat('시스템', `${via} ${card.name} — ${card.desc}`, '#44ddff');
   }
 
   // 스킬이 쓰는 좁은 표면. 씬 헬퍼를 SkillContext로 감싸 skills.ts가 BattleScene에 의존하지 않게 한다.
@@ -603,23 +678,28 @@ export default class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: g, rotation: -0.7, alpha: 0, duration: 160, onComplete: () => g.destroy() });
   }
 
-  damageMonster(m: MonsterEntity, dmg: number) {
+  // silent = 도트(화상/출혈) 틱 전용 — 매 프레임 발생해 콤보에 끼면 실력 지표가 왜곡된다.
+  damageMonster(m: MonsterEntity, dmg: number, silent = false) {
     m.hp -= dmg;
     m.spr.setAlpha(0.5);
     this.time.delayedCall(80, () => {
       if (m.spr.active) m.spr.setAlpha(1);
     });
+    // 콤보는 용사 모드 전용 — 카드를 켜두고 방치하면 쌓이는 자동 소환 공격까지 세면 의미가 없다.
+    // 2026-07-30: 처치가 아니라 타격마다 쌓이도록 변경 — 명중 자체가 실력 지표라는 판단.
+    if (!silent && gameState().mode === 'hero') {
+      bumpCombo(this);
+      bus.emit('combo:hit', { combo: this.combo });
+    }
     if (m.hp <= 0 && !m.dead) {
       m.dead = true;
-      gameState().addGold(m.def.gold);
-      this.killGold += m.def.gold;
+      const gold = goldWithBonus(m.def.gold, gameState().hero.goldBonus);
+      gameState().addGold(gold);
+      this.killGold += gold;
       this.kills++;
+      const H = this.hero;
+      H.hp = Math.min(H.maxHp, H.hp + warriorBloodHeal(gameState().traits, H.maxHp));
       m.spr.destroy();
-      // 콤보는 용사 모드 전용 — 카드를 켜두고 방치하면 쌓이는 자동 소환 처치까지 세면 의미가 없다
-      if (gameState().mode === 'hero') {
-        bumpCombo(this);
-        bus.emit('combo:hit', { combo: this.combo });
-      }
     }
   }
 
@@ -733,39 +813,156 @@ export default class BattleScene extends Phaser.Scene {
     };
   }
 
-  // 용사 피격 단일 진입점 — 무적(대시/피격 직후) 판정을 한 곳에 모은다. 근접·화살 양쪽이 여기로 온다.
+  // 용사 피격 단일 진입점 — 무적(대시/피격 직후)·회피·방어 판정을 한 곳에 모은다. 근접·화살 양쪽이 여기로 온다.
   // 반환값 = 실제로 맞았는가 (반격 특성이 이걸 보고 반사한다).
-  hurtHero(dmg: number): boolean {
-    if (this.hero.invulnT > 0) return false;
-    this.hero.hp -= dmg;
-    this.hero.invulnT = HIT_INVULN_DUR; // 같은 프레임에 몬스터 여럿이 때려도 한 번만 맞는다
+  hurtHero(rawDmg: number): boolean {
+    const H = this.hero;
+    if (H.invulnT > 0) return false;
+    const traits = gameState().traits;
+    if (rollChance(H.dodge)) {
+      this.floatText(H.x, H.y - 50, 'MISS', '#88ccff');
+      return false;
+    }
+    const defense = clamp(H.defense + defenseBonus(traits, H.hp / H.maxHp), 0, 100);
+    H.hp -= mitigate(rawDmg, defense);
+    H.invulnT = HIT_INVULN_DUR; // 같은 프레임에 몬스터 여럿이 때려도 한 번만 맞는다
     this.noHitT = 0;
     if (this.combo > 0) {
       this.combo = 0;
       this.comboT = 0;
       bus.emit('combo:reset', null); // 콤보 = 무피격 실력 지표라 맞는 순간 끊긴다
     }
+    if (hasTrait(traits, 'furyBlast')) this.furyBlastProc();
+    if (rollChance(H.knockback)) this.knockbackProc();
+    if (H.hp <= 0 && hasTrait(traits, 'phoenixFeather') && !H.phoenixUsed) this.phoenixProc();
     return true;
   }
 
-  // 용사가 이번에 넣는 피해 — 광전사(HP 낮을수록 ↑)가 여기서만 곱해진다.
-  heroDamage(): number {
-    return this.hero.atk * heroAtkMult(gameState().traits, this.hero.hp / this.hero.maxHp);
+  // 폭발적인 분노: 피격 시 주변 적 전체에게 공격력의 FURY_BLAST_RATIO배 피해
+  furyBlastProc() {
+    const H = this.hero;
+    const dmg = H.atk * FURY_BLAST_RATIO;
+    for (const m of this.monsters) {
+      if (!m.dead && Phaser.Math.Distance.Between(m.x, m.y, H.x, H.y) <= FURY_BLAST_RADIUS) this.hitFx(m, dmg);
+    }
+    this.impactFx(H.x, H.y, FURY_BLAST_RADIUS);
+  }
+
+  // 방패 밀치기: 피격 시 확률로 주변 몬스터를 밀쳐낸다
+  knockbackProc() {
+    const H = this.hero;
+    for (const m of this.monsters) {
+      if (m.dead) continue;
+      const d = Phaser.Math.Distance.Between(m.x, m.y, H.x, H.y);
+      if (d > 0 && d < KNOCKBACK_RADIUS) {
+        m.x += ((m.x - H.x) / d) * KNOCKBACK_DIST;
+        m.y += ((m.y - H.y) / d) * KNOCKBACK_DIST;
+        m.spr.setPosition(m.x, m.y);
+      }
+    }
+    this.floatText(H.x, H.y - 50, '💫 밀쳐내기!', '#ffaa66');
+  }
+
+  // 불사조의 깃털: 치명적인 피해를 받으면 이번 런 1회, 체력 50%로 부활 + 전체 화상
+  phoenixProc() {
+    const H = this.hero;
+    H.phoenixUsed = true;
+    H.hp = H.maxHp * PHOENIX_HP_RATIO;
+    for (const m of this.monsters) if (!m.dead) applyDot(m, H.atk * PHOENIX_BURN_DPS_RATIO, PHOENIX_BURN_T);
+    this.cameras.main.flash(500, 255, 140, 40);
+    this.floatText(H.x, H.y - 60, '🪶 불사조의 깃털!', '#ffaa33');
+    this.pushChat('시스템', '🪶 불사조의 깃털 발동 — 부활!', '#ffaa33');
+  }
+
+  // 용사가 이번에 넣는 피해 — 광전사/거인의 대검/엑스칼리버(heroAtkMult)·시공간 베기 발동 창이 여기서 곱해지고,
+  // 거합도(첫 공격 필중 치명타) 또는 치명타 확률 롤 결과에 따라 치명타 배율까지 확정한다.
+  heroDamage(): { dmg: number; crit: boolean } {
+    const H = this.hero;
+    const traits = gameState().traits;
+    const base = H.atk * heroAtkMult(traits, H.hp / H.maxHp) * timeSlashMult(H);
+    const forceCrit = hasTrait(traits, 'iaido') && !H.firstAtkDone;
+    const crit = forceCrit || rollChance(H.critChance);
+    if (!H.firstAtkDone) H.firstAtkDone = true;
+    return { dmg: crit ? base * critMultiplier(H.critMult) : base, crit };
+  }
+
+  // 공격 1회가 대상 1명에게 적중 — 묵직한 강타/빙결의 일격/가시 돋친 검/화염검/뇌전 방출/그림자 분신이 여기서 갈린다.
+  heroHit(m: MonsterEntity, dmg: number, crit: boolean) {
+    const traits = gameState().traits;
+    const H = this.hero;
+    let total = dmg;
+    if (hasTrait(traits, 'heavyStrike') && H.atkCount % HEAVY_STRIKE_EVERY === 0) {
+      total *= HEAVY_STRIKE_MULT;
+      applyStun(m, HEAVY_STRIKE_STUN);
+    }
+    this.hitFx(m, total);
+    if (H.lifesteal > 0) H.hp = Math.min(H.maxHp, H.hp + total * (H.lifesteal / 100));
+    if (crit && hasTrait(traits, 'frostStrike')) applyStun(m, m.def.tint ? FROST_STRIKE_BOSS_STUN : FROST_STRIKE_STUN);
+    if (hasTrait(traits, 'thornBlade') && rollChance(THORN_BLADE_CHANCE * 100)) {
+      applyDot(m, H.atk * THORN_BLADE_DPS_RATIO, THORN_BLADE_DOT_T);
+    }
+    if (hasTrait(traits, 'flameSword')) {
+      applyDot(m, H.atk * FLAME_SWORD_DPS_RATIO, FLAME_SWORD_DOT_T, H.atk * FLAME_SWORD_DPS_RATIO * FLAME_SWORD_MAX_STACK);
+    }
+    if (hasTrait(traits, 'chainLightning') && rollChance(CHAIN_LIGHTNING_CHANCE * 100)) this.chainLightningProc(m, dmg);
+    if (hasTrait(traits, 'shadowClone') && rollChance(SHADOW_CLONE_CHANCE * 100)) this.hitFx(m, dmg);
+  }
+
+  // 뇌전 방출: 적중 대상 주변 가장 가까운 몬스터들에게 전이 피해
+  chainLightningProc(origin: MonsterEntity, dmg: number) {
+    const targets = this.monsters
+      .filter((x) => x !== origin && !x.dead)
+      .sort(
+        (a, b) =>
+          Phaser.Math.Distance.Between(a.x, a.y, origin.x, origin.y) -
+          Phaser.Math.Distance.Between(b.x, b.y, origin.x, origin.y),
+      )
+      .slice(0, CHAIN_LIGHTNING_TARGETS);
+    for (const t of targets) this.hitFx(t, dmg * CHAIN_LIGHTNING_RATIO);
+  }
+
+  // 바람 가르기: 공격이 발동하면(사거리 안 명중 여부와 무관) 사거리 밖 가장 가까운 적에게도 피해
+  windSlashProc(dmg: number) {
+    if (!hasTrait(gameState().traits, 'windSlash')) return;
+    const H = this.hero;
+    let target: MonsterEntity | null = null,
+      best = Infinity;
+    for (const m of this.monsters) {
+      if (m.dead) continue;
+      const d = Phaser.Math.Distance.Between(m.x, m.y, H.x, H.y);
+      if (d > H.range && d < best) {
+        best = d;
+        target = m;
+      }
+    }
+    if (target) this.hitFx(target, dmg * WIND_SLASH_DMG_RATIO);
   }
 
   updateHero(dt: number, nearCount: number) {
     const H = this.hero;
+    const traits = gameState().traits;
     // 결정 로직은 battleSim.stepHero(순수). 씬은 결과를 스프라이트에 반영 + 공격만 처리.
-    const intent = stepHero(H, this.monsters, nearCount, dt, { x: CX, y: 300 }, arenaBounds, this.heroInput());
-    if (intent.attacks.length) {
-      const dmg = this.heroDamage();
-      for (const m of intent.attacks) this.hitFx(m, dmg);
-      // 궤적은 최근접 대상 쪽으로 — 스프라이트가 보는 방향은 이동 입력에 묶여 있어 타격감과 어긋난다
-      const lead = intent.attacks.reduce((a, b) =>
-        Phaser.Math.Distance.Between(b.x, b.y, H.x, H.y) < Phaser.Math.Distance.Between(a.x, a.y, H.x, H.y) ? b : a,
-      );
-      this.swingFx(H.x, H.y, H.range, Math.atan2(lead.y - H.y, lead.x - H.x));
-      H.hp = Math.min(H.maxHp, H.hp + vampHeal(gameState().traits, dmg)); // 흡혈 — 광역이어도 1회분
+    const intent = stepHero(H, this.monsters, nearCount, dt, { x: CX, y: 300 }, arenaBounds, this.heroInput(), traits);
+    if (intent.swung) {
+      const { dmg, crit } = this.heroDamage();
+      for (const m of intent.attacks) this.heroHit(m, dmg, crit);
+      this.windSlashProc(dmg); // 사거리 밖 추가 타격 — 스윙당 1회, 명중 대상 유무와 무관
+      // 시공간 베기: N번째 공격마다 시간 정지 + 그 동안 가한 피해 증폭(timeSlashMult가 다음 타격부터 적용)
+      if (hasTrait(traits, 'timeSlash') && H.atkCount % TIME_SLASH_EVERY === 0) {
+        H.timeSlashT = TIME_SLASH_FREEZE_MS / 1000;
+        this.freezeUntil = this.time.now + TIME_SLASH_FREEZE_MS;
+        this.cameras.main.flash(300, 200, 220, 255);
+        this.floatText(H.x, H.y - 60, '⏳ 시공간 베기!', '#88ddff');
+      }
+      if (intent.attacks.length) {
+        // 궤적은 최근접 대상 쪽으로 — 스프라이트가 보는 방향은 이동 입력에 묶여 있어 타격감과 어긋난다
+        const lead = intent.attacks.reduce((a, b) =>
+          Phaser.Math.Distance.Between(b.x, b.y, H.x, H.y) < Phaser.Math.Distance.Between(a.x, a.y, H.x, H.y) ? b : a,
+        );
+        this.swingFx(H.x, H.y, H.range, Math.atan2(lead.y - H.y, lead.x - H.x));
+        if (crit) this.floatText(lead.x, lead.y - 24, 'CRIT!', '#ff4444');
+      }
+      H.hp = Math.min(H.maxHp, H.hp + vampHeal(traits, dmg)); // 흡혈(특성) — 광역이어도 1회분
     }
     this.heroSpr.setPosition(H.x, H.y);
     this.heroSpr.setAlpha(H.invulnT > 0 ? 0.5 : 1); // 대시 무적을 눈에 보이게
@@ -785,8 +982,15 @@ export default class BattleScene extends Phaser.Scene {
   updateMonsters(dt: number) {
     const H = this.hero;
     this.monsters = this.monsters.filter((m) => !m.dead);
-    if (this.time.now < this.freezeUntil) return; // 시간 정지
+    if (this.time.now < this.freezeUntil) return; // 시간 정지 — 도트도 같이 멈춘다(시공간 베기 연출 일관성)
     for (const m of this.monsters) {
+      // 화상/출혈 도트 — 콤보에 안 끼게 silent로 처리
+      if (m.dotT && m.dotT > 0) {
+        m.dotT -= dt;
+        this.damageMonster(m, (m.dotDps ?? 0) * dt, true);
+        if (m.dotT <= 0) m.dotDps = 0;
+        if (m.dead) continue; // 도트로 죽었으면 이번 프레임 AI는 스킵
+      }
       const intent = stepMonster(m, H, dt); // 결정은 순수, 씬은 스프라이트/피격만 적용
       switch (intent.kind) {
         case 'move':
@@ -800,7 +1004,7 @@ export default class BattleScene extends Phaser.Scene {
           break;
         }
         case 'melee': {
-          // 반격은 실제로 맞았을 때만 (대시 무적으로 흘리면 반사도 없다)
+          // 반격은 실제로 맞았을 때만 (대시 무적·회피로 흘리면 반사도 없다)
           const thorns = this.hurtHero(intent.dmg) ? thornsDmg(gameState().traits, intent.dmg) : 0;
           if (thorns > 0 && !m.dead) this.hitFx(m, thorns);
           if (intent.suicide && !m.dead) {
