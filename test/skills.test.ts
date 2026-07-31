@@ -47,7 +47,21 @@ function makeCtx(hero: HeroEntity, monsters: MonsterEntity[], randValue = 100) {
 
 // 화염참격: hero 반경 180 이내만 40*mult로 타격
 {
-  const hero = spawnHero({ maxHp: 100, atk: 10, atkSpd: 1, speed: 100, range: 60 }, { x: 0, y: 0 });
+  const hero = spawnHero({
+    maxHp: 100,
+    atk: 10,
+    atkSpd: 1,
+    speed: 100,
+    range: 60,
+    defense: 0,
+    dodge: 0,
+    critChance: 0,
+    critMult: 0,
+    lifesteal: 0,
+    knockback: 0,
+    regenFlat: 0,
+    goldBonus: 0,
+  }, { x: 0, y: 0 });
   const inRange = mon(100, 0); // 거리 100 ≤ 180
   const outRange = mon(300, 0); // 거리 300 > 180
   const { ctx, calls } = makeCtx(hero, [inRange, outRange]);
@@ -59,7 +73,21 @@ function makeCtx(hero: HeroEntity, monsters: MonsterEntity[], randValue = 100) {
 
 // 낙뢰: 5개 지점 강타 → fxCircle 5회, 경계는 arenaBounds. randBetween를 몬스터 좌표로 고정하면 5회 명중
 {
-  const hero = spawnHero({ maxHp: 100, atk: 10, atkSpd: 1, speed: 100, range: 60 }, { x: 0, y: 0 });
+  const hero = spawnHero({
+    maxHp: 100,
+    atk: 10,
+    atkSpd: 1,
+    speed: 100,
+    range: 60,
+    defense: 0,
+    dodge: 0,
+    critChance: 0,
+    critMult: 0,
+    lifesteal: 0,
+    knockback: 0,
+    regenFlat: 0,
+    goldBonus: 0,
+  }, { x: 0, y: 0 });
   const target = mon(100, 100);
   const { ctx, calls } = makeCtx(hero, [target], 100); // 모든 강타가 (100,100)
   SKILLS.낙뢰.effect(ctx, 1);
@@ -73,7 +101,21 @@ function makeCtx(hero: HeroEntity, monsters: MonsterEntity[], randValue = 100) {
 
 // 회복의성가: heal(0.3) — maxHp의 30% 회복, 상한 clamp
 {
-  const hero = spawnHero({ maxHp: 100, atk: 10, atkSpd: 1, speed: 100, range: 60 }, { x: 0, y: 0 });
+  const hero = spawnHero({
+    maxHp: 100,
+    atk: 10,
+    atkSpd: 1,
+    speed: 100,
+    range: 60,
+    defense: 0,
+    dodge: 0,
+    critChance: 0,
+    critMult: 0,
+    lifesteal: 0,
+    knockback: 0,
+    regenFlat: 0,
+    goldBonus: 0,
+  }, { x: 0, y: 0 });
   hero.hp = 10;
   const { ctx, calls } = makeCtx(hero, []);
   SKILLS.회복의성가.effect(ctx); // mult 무시하는 스킬
@@ -87,7 +129,21 @@ function makeCtx(hero: HeroEntity, monsters: MonsterEntity[], randValue = 100) {
 
 // 시간정지: freeze(3000)
 {
-  const hero = spawnHero({ maxHp: 100, atk: 10, atkSpd: 1, speed: 100, range: 60 }, { x: 0, y: 0 });
+  const hero = spawnHero({
+    maxHp: 100,
+    atk: 10,
+    atkSpd: 1,
+    speed: 100,
+    range: 60,
+    defense: 0,
+    dodge: 0,
+    critChance: 0,
+    critMult: 0,
+    lifesteal: 0,
+    knockback: 0,
+    regenFlat: 0,
+    goldBonus: 0,
+  }, { x: 0, y: 0 });
   const { ctx, calls } = makeCtx(hero, []);
   SKILLS.시간정지.effect(ctx); // mult 무시하는 스킬
   assert.deepStrictEqual(calls.freeze, [3000]);

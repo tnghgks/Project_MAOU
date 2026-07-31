@@ -1,5 +1,6 @@
 import { clamp, danger, hypeTier, viewerDrift, MIN_VIEWERS, type HypeTier } from '../formulas.ts';
 import type { HeroEntity, MonsterEntity, Arrow } from './entities.ts';
+import { hasTrait, INFINITE_DANCE_RATE, INFINITE_DANCE_MAX, INFINITE_DANCE_RESET_IDLE, type TraitId } from '../data/traits.ts';
 
 // "엔티티용 formulas.ts" — 전투 시뮬 결정 로직을 Phaser 없이 모은다.
 // 헬퍼는 plain 시뮬 필드(x/y/hp/타이머)만 변이하고, Phaser가 필요한 것(스프라이트/FX/사망·골드)은
@@ -11,6 +12,7 @@ export const NEAR_RADIUS = 200; // 위험도·회복 판정용 "근접" 반경
 const SEEK_RANGE = 300; // 용사가 노리는 최대 탐지 거리
 const REGEN_RATE = 0.05; // 근접 0마리일 때 초당 회복 비율
 const REGEN_DELAY = 1.5; // 근접 0마리가 이 시간(초) 이상 유지돼야 회복 시작 — 스치듯 벌린 거리로는 안 참다
+const REGEN_FLAT_INTERVAL = 5; // 응급 처치(regenFlat) 고정 회복 주기(초)
 const RETREAT_HP = 0.25; // 이 비율 이하로 떨어지면 후퇴
 const RETREAT_DUR = 2; // 후퇴 지속(초)
 const RETREAT_CD = 6; // 후퇴 쿨다운(초)
@@ -36,6 +38,7 @@ export function countNear(monsters: readonly MonsterEntity[], hero: HeroEntity):
 // ── 용사 AI ──
 export interface HeroIntent {
   attacks: MonsterEntity[]; // 이번 프레임 휘두르기에 맞은 전원 (씬이 damageMonster로 처리)
+  swung: boolean; // 쿨다운이 돌아 공격 자체는 발동했는가 — 사거리 안에 대상이 없어도(attacks가 비어도) true일 수 있다
   moved: boolean; // 수평 이동 여부 (flip 갱신 조건)
   movingLeft: boolean;
 }
@@ -53,6 +56,7 @@ export function stepHero(
   home: { x: number; y: number },
   bounds: { minX: number; maxX: number; minY: number; maxY: number },
   input?: HeroInput,
+  traits: readonly TraitId[] = [],
 ): HeroIntent {
   const H = hero;
   const alive = monsters.filter((m) => !m.dead);
@@ -62,13 +66,29 @@ export function stepHero(
   H.dashT = Math.max(0, H.dashT - dt);
   H.dashCd = Math.max(0, H.dashCd - dt);
   H.invulnT = Math.max(0, H.invulnT - dt);
+  H.timeSlashT = Math.max(0, H.timeSlashT - dt);
+  // 무한의 검무: 이번 프레임 이동/공속에 곱할 배율은 "지난 프레임까지 쌓인" 스택으로 정한다
+  // (이번 프레임 이동 여부는 이 함수 끝에서야 확정되므로) — 기저 스탯은 그대로 두고 매 사용처에서만 곱한다.
+  const dancing = hasTrait(traits, 'infiniteDance');
+  const buffMult = 1 + (dancing ? H.moveBuffStack : 0);
 
   // 자동 회복은 수동 조작에서도 유지 — 구석 도망은 시청자 이탈로 이미 벌점이 걸려 있다
   if (nearCount === 0) {
     H.safeT += dt;
-    if (H.safeT >= REGEN_DELAY) H.hp = Math.min(H.maxHp, H.hp + H.maxHp * REGEN_RATE * dt);
+    if (H.safeT >= REGEN_DELAY) {
+      H.hp = Math.min(H.maxHp, H.hp + H.maxHp * REGEN_RATE * dt);
+      // 응급 처치: 비전투(안전) 상태 유지 중 5초마다 고정량 추가 회복
+      if (H.regenFlat > 0) {
+        H.regenTickT -= dt;
+        if (H.regenTickT <= 0) {
+          H.hp = Math.min(H.maxHp, H.hp + H.regenFlat);
+          H.regenTickT = REGEN_FLAT_INTERVAL;
+        }
+      }
+    }
   } else {
     H.safeT = 0;
+    H.regenTickT = 0;
   }
   // 자동 후퇴는 조작권을 뺏으므로 수동 조작 중엔 발동시키지 않는다
   if (!input && H.hp / H.maxHp <= RETREAT_HP && H.retreatCd <= 0) {
@@ -80,6 +100,7 @@ export function stepHero(
     vy = 0;
   // 근접은 단일 타겟이 아니라 휘두르기 — 사거리 안 전원이 맞는다
   let attacks: MonsterEntity[] = [];
+  let swung = false;
   const swing = () => alive.filter((m) => dist(m, H) <= H.range);
   if (input) {
     if (input.dash && H.dashCd <= 0) {
@@ -89,7 +110,7 @@ export function stepHero(
     }
     const len = Math.hypot(input.dx, input.dy);
     if (len) {
-      const spd = H.speed * (H.dashT > 0 ? DASH_SPEED : 1);
+      const spd = H.speed * buffMult * (H.dashT > 0 ? DASH_SPEED : 1);
       vx = (input.dx / len) * spd;
       vy = (input.dy / len) * spd;
     }
@@ -104,7 +125,9 @@ export function stepHero(
       }
     }
     if (target && H.atkCd <= 0) {
-      H.atkCd = 1 / H.atkSpd;
+      H.atkCd = 1 / (H.atkSpd * buffMult);
+      H.atkCount++;
+      swung = true;
       attacks = swing();
     }
   } else if (H.retreatT > 0 && alive.length) {
@@ -116,8 +139,8 @@ export function stepHero(
       sy += H.y - m.y;
     }
     const len = Math.hypot(sx, sy) || 1;
-    vx = (sx / len) * H.speed;
-    vy = (sy / len) * H.speed;
+    vx = (sx / len) * H.speed * buffMult;
+    vy = (sy / len) * H.speed * buffMult;
   } else {
     // 가장 가까운 대상 추적 → 사거리 안이면 공격
     let target: MonsterEntity | null = null,
@@ -132,10 +155,12 @@ export function stepHero(
     if (target) {
       const d = best;
       if (d > H.range) {
-        vx = ((target.x - H.x) / d) * H.speed;
-        vy = ((target.y - H.y) / d) * H.speed;
+        vx = ((target.x - H.x) / d) * H.speed * buffMult;
+        vy = ((target.y - H.y) / d) * H.speed * buffMult;
       } else if (H.atkCd <= 0) {
-        H.atkCd = 1 / H.atkSpd;
+        H.atkCd = 1 / (H.atkSpd * buffMult);
+        H.atkCount++;
+        swung = true;
         attacks = swing();
       }
     } else if (dist(H, home) > HOME_THRESHOLD) {
@@ -145,9 +170,18 @@ export function stepHero(
       vy = ((home.y - H.y) / d) * H.speed * HOME_SPEED_MULT;
     }
   }
+  if (dancing) {
+    if (vx !== 0 || vy !== 0) {
+      H.moveIdleT = 0;
+      H.moveBuffStack = Math.min(INFINITE_DANCE_MAX, H.moveBuffStack + INFINITE_DANCE_RATE * dt);
+    } else {
+      H.moveIdleT += dt;
+      if (H.moveIdleT >= INFINITE_DANCE_RESET_IDLE) H.moveBuffStack = 0;
+    }
+  }
   H.x = clamp(H.x + vx * dt, bounds.minX, bounds.maxX);
   H.y = clamp(H.y + vy * dt, bounds.minY, bounds.maxY);
-  return { attacks, moved: vx !== 0, movingLeft: vx < 0 };
+  return { attacks, swung, moved: vx !== 0, movingLeft: vx < 0 };
 }
 
 // ── 몬스터 AI ── (사망/스프라이트 처리는 씬 소유: suicide도 씬이 m.dead 세팅)
@@ -159,6 +193,11 @@ export type MonsterIntent =
 export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): MonsterIntent {
   const H = hero;
   m.atkCd = Math.max(0, m.atkCd - dt);
+  // 기절/빙결(경직 포함) 중엔 AI 자체를 건너뛴다 — heavyStrike 경직·frostStrike 빙결이 여길 통해 먹힌다.
+  if (m.stunT && m.stunT > 0) {
+    m.stunT -= dt;
+    return { kind: 'idle' };
+  }
   const d = dist(m, H);
   if (d > m.def.range) {
     m.x += ((H.x - m.x) / d) * m.def.speed * dt;
@@ -186,19 +225,19 @@ export function stepArrow(a: Arrow, hero: HeroEntity, dt: number): ArrowResult {
 }
 
 // ── 시청자 시뮬 ── (viewers/peakViewers/drift/combo 변이, 위험도·흥분도 반환)
-export const COMBO_WINDOW = 2; // ponytail: 이 안에 다음 처치가 나면 콤보 유지 — 난이도 knob
+export const COMBO_WINDOW = 2; // ponytail: 이 안에 다음 타격이 나면 콤보 유지 — 난이도 knob
 export interface ViewerState {
   viewers: number;
   peakViewers: number;
   drift: number;
-  combo: number; // 처치 콤보 — ComboMeter 표시 + FULL 도네이션 확률 보정용 (danger()엔 반영 안 함)
+  combo: number; // 타격 콤보 — ComboMeter 표시 + FULL 도네이션 확률 보정용 (danger()엔 반영 안 함)
   comboT: number; // 콤보 유지 잔여 시간
 }
 export interface ViewerStep {
   D: number;
   tier: HypeTier;
 }
-// 처치 1회. 창이 살아있으면 이어붙이고, 끊겼으면 1부터 다시.
+// 타격 1회 (처치 여부 무관). 창이 살아있으면 이어붙이고, 끊겼으면 1부터 다시.
 export function bumpCombo(vs: ViewerState) {
   vs.combo = vs.comboT > 0 ? vs.combo + 1 : 1;
   vs.comboT = COMBO_WINDOW;

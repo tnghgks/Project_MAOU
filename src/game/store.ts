@@ -1,9 +1,12 @@
 import { createStore } from 'zustand/vanilla';
 import { UPGRADES, upgradeCost, type UpgradeKey } from '../data/upgrades.ts';
+import { stageViewerFloor } from '../data/progression.ts';
 import type { Card } from '../data/cards.ts';
+import { resolveMods } from '../data/cardStats.ts';
 import type { SkillId } from '../data/skills.ts';
 import type { TraitId } from '../data/traits.ts';
 import type { MonsterId } from '../data/monsters.ts';
+import type { StatMod } from '../data/cards.ts';
 
 // 단일 스토어: Phaser는 gameState()로 읽고 액션으로 사건 단위 쓰기, React는 useStore(gameStore, sel)로 구독.
 // 매 프레임 값(viewers 실시간/hype/timer)은 여기 안 넣는다 — 씬 로컬에서 HudScene가 렌더. viewers는 스로틀 반영만.
@@ -14,6 +17,15 @@ export interface HeroStats {
   atkSpd: number;
   speed: number;
   range: number;
+  // 도네이션 카드 전용 확장 스탯 (상점 강화 5종엔 없다) — 전부 %/배율, 기본값 0.
+  defense: number; // 받는 피해 감소율(%)
+  dodge: number; // 회피 확률(%)
+  critChance: number; // 치명타 확률(%)
+  critMult: number; // 치명타 추가 피해 배율(%) — 기본 배율(CRIT_BASE_MULT)에 가산
+  lifesteal: number; // 가한 피해 흡혈 비율(%)
+  knockback: number; // 피격 시 주변 몬스터 밀쳐낼 확률(%)
+  regenFlat: number; // 비전투 회복 시 5초마다 추가로 회복하는 고정 체력량
+  goldBonus: number; // 처치 골드 보너스(%)
 }
 export type Phase = 'boot' | 'title' | 'broadcast' | 'result' | 'upgrade' | 'ending';
 // 시점 전환(C키): maou = 소환 카드 조작 · hero = 용사 직접 조작. 같은 BattleScene을 이어받는다.
@@ -55,6 +67,7 @@ export interface GameState {
   nextEpisode: () => void;
   resetRun: () => void;
   applyUpgrade: (key: UpgradeKey) => boolean;
+  applyStatMods: (mods: readonly StatMod[]) => void;
   grantCard: (card: Card) => void;
   grantTrait: (id: TraitId) => void;
   learnSkill: (id: SkillId, cost: number) => boolean;
@@ -62,7 +75,22 @@ export interface GameState {
 }
 
 const SAVE_KEY = 'maou.save';
-export const BASE_HERO: HeroStats = { maxHp: 70, atk: 10, atkSpd: 0.7, speed: 60, range: 60 }; // GDD 3-6 1화 시작값
+// GDD 3-6 1화 시작값. 확장 스탯은 전부 도네이션 카드로만 오른다 — 시작은 항상 0.
+export const BASE_HERO: HeroStats = {
+  maxHp: 70,
+  atk: 10,
+  atkSpd: 0.7,
+  speed: 60,
+  range: 60,
+  defense: 0,
+  dodge: 0,
+  critChance: 0,
+  critMult: 0,
+  lifesteal: 0,
+  knockback: 0,
+  regenFlat: 0,
+  goldBonus: 0,
+};
 
 // 용사 종합 전투력 — 시작값을 1.00으로 보는 배수. 요청 난이도와 화면 표시가 이 하나만 본다.
 // 가중 기하평균이라 지수 합이 1 → 모든 스탯이 x배면 전투력도 x배. 곱이라 한 스탯만 몰아줘도 폭주하지 않는다.
@@ -121,7 +149,13 @@ export const gameStore = createStore<GameState>()((set, get) => ({
   },
   setViewers: (viewers) => set({ viewers }),
   addGold: (n) => set({ gold: get().gold + n }),
-  nextEpisode: () => set({ episode: get().episode + 1 }),
+  // 다음 화는 지난 화 최고 시청자수의 절반을 이어받는다 — 단, 다음 화 목표 골드가 요구하는
+  // 최소 시청자 규모(stageViewerFloor) 밑으로는 안 내려간다 (BattleScene.create가 이 값을 읽는다).
+  nextEpisode: () => {
+    const ep = get().episode + 1;
+    const carried = Math.floor(get().lastRun.peakViewers / 2);
+    set({ episode: ep, viewers: Math.max(stageViewerFloor(ep), carried) });
+  },
   resetRun: () => {
     set({ ...freshRun() });
     saveGame(); // 초기화된 스킬을 localStorage에도 반영
@@ -141,11 +175,16 @@ export const gameStore = createStore<GameState>()((set, get) => ({
     return true;
   },
 
-  // 도네이션 카드 보상: 골드 없이 스탯만 (upgradeLevels는 안 올린다 — 상점 가격은 구매 이력만 따라간다)
-  grantCard: (card) => {
+  // mods 배열을 hero에 반영하는 범용 진입점 — 도네 카드(grantCard)뿐 아니라 특성 획득 시
+  // 1회성 스탯 보정(거인의 대검·엑스칼리버)도 이 경로를 공유한다.
+  applyStatMods: (mods) => {
     const hero = get().hero;
-    set({ hero: { ...hero, [card.stat]: Math.round((hero[card.stat] + card.delta) * 100) / 100 } });
+    set({ hero: { ...hero, ...resolveMods(mods, hero) } });
   },
+
+  // 도네이션 카드 보상: 골드 없이 스탯만 (upgradeLevels는 안 올린다 — 상점 가격은 구매 이력만 따라간다)
+  // 특성 카드(mods 없음)는 grantTrait 경로를 타므로 여긴 mods가 있는 스탯 카드만 온다.
+  grantCard: (card) => get().applyStatMods(card.mods),
 
   // 특성 획득. 중복은 무시 — 카드 풀에서 이미 빼지만 도착 순서가 꼬여도 두 번 안 붙게 한다.
   grantTrait: (id) => {

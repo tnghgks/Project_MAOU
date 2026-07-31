@@ -1,15 +1,5 @@
 import assert from 'node:assert';
-import {
-  TRAIT_IDS,
-  heroAtkMult,
-  vampHeal,
-  thornsDmg,
-  missingTraits,
-  BERSERK_MAX,
-  VAMP_RATIO,
-  THORNS_RATIO,
-  type TraitId,
-} from '../src/data/traits.ts';
+import { heroAtkMult, vampHeal, thornsDmg, BERSERK_MAX, VAMP_RATIO, THORNS_RATIO, type TraitId } from '../src/data/traits.ts';
 import { traitCard, drawCards } from '../src/data/cards.ts';
 
 const none: TraitId[] = [];
@@ -33,25 +23,22 @@ assert.strictEqual(thornsDmg(['thorns'], 50), 50 * THORNS_RATIO);
 // 다른 특성만 있으면 안 걸린다
 assert.strictEqual(vampHeal(['thorns', 'berserk'], 50), 0);
 
-// 미보유 목록 — 카드 풀이 여기서만 나온다(중복 획득 방지)
-assert.deepStrictEqual(missingTraits(none), TRAIT_IDS);
-assert.deepStrictEqual(missingTraits(TRAIT_IDS), []);
-assert.deepStrictEqual(missingTraits(['vamp']), ['thorns', 'berserk']);
-
-// 특성 카드: 스탯 카드 경로를 안 타도록 delta 0 + trait 표식
+// 특성 카드: mods는 항상 빈 배열(스탯 카드 경로를 안 탄다) + trait 표식
 {
   const c = traitCard('vamp');
   assert.strictEqual(c.trait, 'vamp');
-  assert.strictEqual(c.delta, 0);
+  assert.strictEqual(c.mods.length, 0);
   assert.strictEqual(c.rarity, 'epic');
   assert.ok(c.desc && c.desc.length > 0, '카드에 설명이 있어야 UI가 렌더한다');
 }
 
-// 뽑기: 미보유 목록이 비면 특성 카드가 절대 안 섞인다
+// 뽑기: 가중치상 common이 제일 무겁고(rnd=0은 항상 common) 특성 최저 등급은 uncommon — common 뽑기엔 특성이 안 섞인다
 for (const c of drawCards(200, [], () => 0)) assert.strictEqual(c.trait, undefined);
-// rnd가 0이면 항상 TRAIT_CHANCE 미만 → 전부 특성 카드 (풀에 있을 때)
-for (const c of drawCards(50, ['thorns'], () => 0)) assert.strictEqual(c.trait, 'thorns');
-// rnd가 1에 붙으면 특성은 안 나온다
-for (const c of drawCards(50, TRAIT_IDS, () => 0.999)) assert.strictEqual(c.trait, undefined);
+
+// 이미 보유한 특성은 같은 등급 풀에서 다시 나오지 않는다 (bucketsFor의 owned 제외)
+{
+  const owned: TraitId[] = ['vamp']; // epic 특성 풀에서 vamp만 뺀다
+  for (const c of drawCards(50, owned, () => 0.95, ['epic'])) assert.notStrictEqual(c.trait, 'vamp');
+}
 
 console.log('traits OK');

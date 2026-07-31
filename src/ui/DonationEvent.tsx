@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { bus, type Donation } from '../game/events.ts';
 import { useBusEvent } from './useBusEvent.ts';
 import { drawCards, reactionCard, RARITY, type Card } from '../data/cards.ts';
-import { missingTraits } from '../data/traits.ts';
 import { gameState } from '../game/store.ts';
 import RhythmLane from './RhythmLane.tsx';
 
@@ -52,8 +51,8 @@ export default function DonationEvent() {
       return;
     }
     // 일반 → 카드 3장 노출, 커서가 돌다가 랜덤 1장 당첨
-    // 아직 없는 특성만 풀에 섞는다 — 전부 모았으면 기존 강화 카드만 나온다
-    const three = drawCards(3, missingTraits(gameState().traits));
+    // drawCards는 보유 특성을 받아 그만큼 특성 풀에서 뺀다(중복 획득 방지) — 스탯 카드는 영향 없음
+    const three = drawCards(3, gameState().traits);
     const win = Math.floor(Math.random() * 3);
     setCards(three);
     setCursor(0);
@@ -62,7 +61,7 @@ export default function DonationEvent() {
     after((SPIN_TICKS + 1) * SPIN_MS, () => reveal(three, win));
   });
 
-  useBusEvent('rhythm:result', (res) => reveal([reactionCard(!!res.highTier)], 0));
+  useBusEvent('rhythm:result', (res) => reveal([reactionCard(!!res.highTier, gameState().traits)], 0));
 
   if (stage === 'idle' || !don) return null;
   const dancing = stage === 'reaction' || stage === 'rhythm';
@@ -102,7 +101,7 @@ export default function DonationEvent() {
             >
               <span className="rar">{c.trait ? '특성' : RARITY[c.rarity].label}</span>
               <span className="cname">{c.name}</span>
-              <span className="cdelta">{c.trait ? c.desc : `+${c.delta}`}</span>
+              <span className="cdelta">{c.desc}</span>
             </div>
           ))}
         </div>

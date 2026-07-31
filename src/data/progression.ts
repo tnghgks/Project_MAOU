@@ -24,3 +24,12 @@ export const targetGold = (ep: number) => episodeDef(ep).targetGold;
 export const bossOf = (ep: number) => episodeDef(ep).boss;
 
 export const HERO_TARGET_HP = 900; // GDD 3-6 최종화 목표 HP — 엔딩 판정 기준선
+
+export const START_VIEWERS = 12; // 1화 시작 시청자 수
+
+// 스테이지 인계 시청자 수 하한 — 다음 화가 요구하는 목표 골드가 클수록 최소 시청자 규모도 같이
+// 키운다. 안 그러면 어려운 스테이지일수록 도네이션 빈도·금액까지 낮은 채로 시작해 목표 달성이
+// 갈수록 힘들어진다 (BattleScene은 이전 화 peakViewers÷2와 이 하한 중 큰 쪽을 시작값으로 쓴다).
+export function stageViewerFloor(ep: number): number {
+  return Math.round(START_VIEWERS * (targetGold(ep) / targetGold(1)));
+}

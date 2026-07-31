@@ -19,11 +19,13 @@ export interface HypeTier {
   label: string;
   color: number;
 }
+// 2026-07-30 재조정: 하락은 완만하게, 상승은 뚜렷하게 — 평상시(노잼)에 자주 빠지는 게
+// 체감상 "계속 하락세"로 느껴지지 않도록 하락 폭을 줄이고, 상승 폭은 더 크게 벌렸다.
 export function hypeTier(d: number): HypeTier {
-  if (d < 0.2) return { rate: -0.01, label: '😴 노잼', color: 0x556677 };
-  if (d < 0.45) return { rate: 0.01, label: '🙂 볼만함', color: 0x44aa66 };
-  if (d < 0.75) return { rate: 0.03, label: '🔥 꿀잼', color: 0xff8822 };
-  return { rate: 0.05, label: '💀 벼랑끝', color: 0xff3333 };
+  if (d < 0.2) return { rate: -0.003, label: '😴 노잼', color: 0x556677 };
+  if (d < 0.45) return { rate: 0.02, label: '🙂 볼만함', color: 0x44aa66 };
+  if (d < 0.75) return { rate: 0.05, label: '🔥 꿀잼', color: 0xff8822 };
+  return { rate: 0.08, label: '💀 벼랑끝', color: 0xff3333 };
 }
 
 // 시청자 증감 흔들림 — tier.rate에 더해지는 보정치.
@@ -37,6 +39,16 @@ export function viewerDrift(drift: number, dt: number, rnd: () => number = Math.
   const kick = (rnd() * 2 - 1) * DRIFT_KICK * Math.sqrt(dt);
   return clamp(drift + revert + kick, -DRIFT_MAX, DRIFT_MAX);
 }
+
+// 도네이션 카드 확장 스탯(%미터) 공용 수식 — HeroStats.defense/dodge/critChance/critMult/goldBonus가 여길 통과한다.
+export const CRIT_BASE_MULT = 1.5; // 치명타 기본 피해 배율 — critMult(%)는 여기 가산
+// pct는 %p 단위(0~100+) 그대로 받는다 — 호출부가 매번 /100 하지 않도록.
+export function rollChance(pct: number, rnd: () => number = Math.random): boolean {
+  return rnd() * 100 < pct;
+}
+export const critMultiplier = (critMultPct: number) => CRIT_BASE_MULT + critMultPct / 100;
+export const mitigate = (dmg: number, defensePct: number) => dmg * (1 - clamp(defensePct, 0, 100) / 100);
+export const goldWithBonus = (gold: number, goldBonusPct: number) => Math.round(gold * (1 + goldBonusPct / 100));
 
 // 도네이션 (GDD 3-3)
 // 간격은 시청자 수만으로 결정 — 후원마다 게임이 멈추고 카드가 뜨므로 난수 몰아치기는 뺐다.
@@ -55,6 +67,15 @@ export function rollDonation(viewers: number, rnd: () => number = Math.random): 
   const base = 10 * Math.pow(viewers, 0.6) * (0.5 + rnd() * 1.2); // 0.5x~1.7x
   const jackpot = rnd() < JACKPOT_CHANCE;
   return { amount: Math.round(base * (jackpot ? JACKPOT_MULT : 1)), jackpot };
+}
+
+// 도네이션 상하한 — 육성 화면 업그레이드 가격에 연동한다. 순수 시청자수 공식만으로는 초반엔
+// 아무 업그레이드도 못 살 만큼 적고, 후반엔 한 방에 다 살 만큼 커질 수 있어서 둘 다 막는다.
+// 레벨이 오르면 업그레이드 가격도 같이 오르므로 하한/상한도 자동으로 커진다. 잭팟(5배)도 이 상한을 넘지 않는다.
+export const DONATION_MIN_RATIO = 0.2; // 지금 가장 싼 업그레이드 가격의 20%
+export const DONATION_MAX_RATIO = 1.5; // 지금 가장 비싼 업그레이드 가격의 150%
+export function clampDonation(amount: number, cheapestCost: number, priciestCost: number): number {
+  return Math.round(clamp(amount, cheapestCost * DONATION_MIN_RATIO, priciestCost * DONATION_MAX_RATIO));
 }
 
 // 시청자 이탈 2단계 경보:

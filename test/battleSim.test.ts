@@ -16,7 +16,21 @@ import { arenaBounds } from '../src/game/layout.ts';
 import { hypeTier } from '../src/formulas.ts';
 
 const HOME = { x: 640, y: 300 };
-const stats = { maxHp: 100, atk: 10, atkSpd: 1, speed: 100, range: 60 };
+const stats = {
+  maxHp: 100,
+  atk: 10,
+  atkSpd: 1,
+  speed: 100,
+  range: 60,
+  defense: 0,
+  dodge: 0,
+  critChance: 0,
+  critMult: 0,
+  lifesteal: 0,
+  knockback: 0,
+  regenFlat: 0,
+  goldBonus: 0,
+};
 
 // spr은 시뮬 로직이 건드리지 않으므로 빈 객체로 스텁.
 const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity => ({
@@ -201,13 +215,13 @@ const viewerState = () => ({ viewers: 100, peakViewers: 100, drift: 0, combo: 0,
   bumpCombo(vs);
   assert.strictEqual(vs.combo, 1);
   bumpCombo(vs);
-  assert.strictEqual(vs.combo, 2, '창 안 연속 처치는 누적');
+  assert.strictEqual(vs.combo, 2, '창 안 연속 타격은 누적');
 
   stepViewers(vs, 1, 0, COMBO_WINDOW / 2, () => 0.5); // 창 절반 경과
   assert.strictEqual(vs.combo, 2, '창이 살아있으면 유지');
   bumpCombo(vs);
   assert.strictEqual(vs.combo, 3);
-  assert.strictEqual(vs.comboT, COMBO_WINDOW, '처치할 때마다 창 갱신');
+  assert.strictEqual(vs.comboT, COMBO_WINDOW, '타격할 때마다 창 갱신');
 
   stepViewers(vs, 1, 0, COMBO_WINDOW, () => 0.5); // 창 만료
   assert.strictEqual(vs.combo, 0, '끊기면 리셋');

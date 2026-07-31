@@ -48,9 +48,40 @@ assert.strictEqual(gameState().upgradeLevels.hp, 1);
   const { statOf } = await import('../src/data/upgrades.ts');
   const before = statOf('atk', gameState().hero);
   const lv = gameState().upgradeLevels.atk;
-  gameState().grantCard({ key: 'atk', rarity: 'rare', name: '검술 수련', stat: 'atk', delta: 30 });
+  gameState().grantCard({
+    id: 'sharpBlade',
+    rarity: 'common',
+    name: '검술 수련',
+    desc: '',
+    mods: [{ stat: 'atk', mode: 'flat', value: 30 }],
+  });
   assert.strictEqual(statOf('atk', gameState().hero), before + 30, '카드 상승분이 표시 값에 반영');
   assert.strictEqual(gameState().upgradeLevels.atk, lv, '상점 가격은 구매 이력만 따라간다');
+}
+
+// nextEpisode: peakViewers÷2와 stageViewerFloor(다음 화 목표 골드 비례) 중 큰 쪽으로 인계
+{
+  const { stageViewerFloor } = await import('../src/data/progression.ts');
+  gameStore.setState({ episode: 1, lastRun: { outcome: 'clear', peakViewers: 10000, totalDonated: 0, kills: 0 } });
+  gameState().nextEpisode();
+  assert.strictEqual(gameState().episode, 2);
+  assert.strictEqual(gameState().viewers, 5000, 'peak÷2가 하한보다 크면 그대로 인계');
+
+  gameStore.setState({ episode: 2, lastRun: { outcome: 'clear', peakViewers: 10, totalDonated: 0, kills: 0 } });
+  gameState().nextEpisode();
+  assert.strictEqual(gameState().episode, 3);
+  assert.strictEqual(gameState().viewers, stageViewerFloor(3), 'peak÷2가 하한보다 낮으면 하한으로 보정');
+}
+
+// upgradeCostRange: 지금 레벨 기준 가장 싼/비싼 업그레이드 가격 — 도네이션 상하한이 여기 연동
+{
+  const { upgradeCostRange, upgradeCost } = await import('../src/data/upgrades.ts');
+  const levels = { hp: 0, atk: 0, atkSpd: 0, speed: 0, range: 0 };
+  const { min, max } = upgradeCostRange(levels);
+  assert.strictEqual(min, upgradeCost('speed', 0), '초기 상태 최저가는 경보법(180)');
+  assert.strictEqual(max, upgradeCost('atkSpd', 0), '초기 상태 최고가는 속공 훈련(300)');
+  const { min: min2 } = upgradeCostRange({ ...levels, speed: 3 });
+  assert.ok(min2 > min, '레벨이 오르면 하한 기준 가격도 같이 오른다');
 }
 
 // learnSkill: 골드 차감 + 추가
@@ -66,6 +97,7 @@ assert.strictEqual(heroPower(BASE_HERO), 1, '시작 스탯이 1.00 기준');
 {
   const x = 4;
   const all = {
+    ...BASE_HERO,
     maxHp: BASE_HERO.maxHp * x,
     atk: BASE_HERO.atk * Math.sqrt(x),
     atkSpd: BASE_HERO.atkSpd * Math.sqrt(x),
