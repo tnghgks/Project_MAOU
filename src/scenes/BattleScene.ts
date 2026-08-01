@@ -38,6 +38,7 @@ import {
   SUMMON_MIN_RADIUS,
   HIT_INVULN_DUR,
   type HeroInput,
+  type Facing,
 } from '../game/battleSim.ts';
 import {
   hasTrait,
@@ -510,7 +511,7 @@ export default class BattleScene extends Phaser.Scene {
     if (def.tint) spr.setTint(def.tint);
     // 곱셈이라 대체 상자(setDisplaySize로 이미 스케일이 들어간)에도 그대로 먹는다
     if (def.scale) spr.setScale(spr.scaleX * def.scale, spr.scaleY * def.scale);
-    const m: MonsterEntity = { type: t, def, hp: def.hp, x, y, atkCd: 0, spr, char };
+    const m: MonsterEntity = { type: t, def, hp: def.hp, x, y, atkCd: 0, windupT: 0, spr, char };
     this.monsters.push(m);
     return m;
   }
@@ -1028,6 +1029,14 @@ export default class BattleScene extends Phaser.Scene {
       .fillRect(H.x - HP_BAR_W / 2, H.y - 32, HP_BAR_W * ratio, HP_BAR_H);
   }
 
+  // 몬스터가 보는 4방향을 스프라이트에 반영하고, 애니메이션이 쓰는 3방향 키를 돌려준다.
+  // (서쪽 = 동쪽 프레임 + flipX — 아트가 3방향뿐이라 씬이 매번 이 매핑을 해준다.)
+  faceMonster(m: MonsterEntity, facing: Facing): Dir {
+    const [dir, flip] = dirOf(facing);
+    m.spr.setFlipX(flip);
+    return dir;
+  }
+
   updateMonsters(dt: number) {
     const H = this.hero;
     this.monsters = this.monsters.filter((m) => !m.dead);
@@ -1041,14 +1050,18 @@ export default class BattleScene extends Phaser.Scene {
         if (m.dead) continue; // 도트로 죽었으면 이번 프레임 AI는 스킵
       }
       const intent = stepMonster(m, H, dt); // 결정은 순수, 씬은 스프라이트/피격만 적용
+      const dir = this.faceMonster(m, intent.facing);
       switch (intent.kind) {
         case 'move': {
           m.spr.setPosition(m.x, m.y);
-          const [dir, flip] = dirOf(intent.facing);
-          m.spr.setFlipX(flip);
           playAnim(m.spr, m.char, 'walk', dir); // char 없으면(=대체 상자) no-op
           break;
         }
+        // 시위를 당기기 시작. 화살은 아직 없다 — 모션만 걸고 릴리즈 프레임까지 기다린다.
+        case 'draw':
+          playOnce(m.spr, m.char, 'attack', dir); // 공격 아트가 없는 몬스터면 no-op
+          break;
+        // 시위를 놓는 순간. 모션은 draw에서 이미 돌고 있으니 여기선 화살만 만든다.
         case 'arrow': {
           const spr = this.add.image(intent.x, intent.y, 'arrow').setDepth(2).setScale(0.7);
           spr.setRotation(Math.atan2(intent.ty - intent.y, intent.tx - intent.x) + Math.PI / 2);
@@ -1056,6 +1069,7 @@ export default class BattleScene extends Phaser.Scene {
           break;
         }
         case 'melee': {
+          playOnce(m.spr, m.char, 'attack', dir);
           // 반격은 실제로 맞았을 때만 (대시 무적·회피로 흘리면 반사도 없다)
           const thorns = this.hurtHero(intent.dmg) ? thornsDmg(gameState().traits, intent.dmg) : 0;
           if (thorns > 0 && !m.dead) this.hitFx(m, thorns);
@@ -1065,6 +1079,11 @@ export default class BattleScene extends Phaser.Scene {
           }
           break;
         }
+        // 사거리 안에서 다음 공격을 기다리는 중. 제자리걸음이 아니라 대기 모션으로 선다
+        // (idle 아트가 없으면 playAnim이 그 방향 걷기 0번 프레임에 멈춘다).
+        case 'idle':
+          playAnim(m.spr, m.char, 'idle', dir);
+          break;
       }
     }
   }

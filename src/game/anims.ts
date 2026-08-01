@@ -12,6 +12,12 @@ export type Dir = (typeof DIRS)[number];
 const FRAME_RATE: Record<string, number> = { walk: 10, idle: 6, attack: 18 }; // ponytail: 액션별 속도 knob
 const DEFAULT_RATE = 8;
 
+// 활시위를 놓는 순간 = attack 시트 7번 프레임 (고블린 궁수 기준 6번이 최대 당김, 7번에서 화살이
+// 사라지고 시위가 튕겨 나간다). 화살을 만드는 건 시뮬(battleSim)이지만 그 타이밍은 아트가 정하므로
+// 프레임 속도와 같은 자리에 둔다 — attack 속도를 바꾸면 발사 시각도 따라온다.
+const ATTACK_RELEASE_FRAME = 7;
+export const ATTACK_RELEASE_SEC = ATTACK_RELEASE_FRAME / FRAME_RATE.attack;
+
 // 한 번 재생하고 끝나는 액션. 걷기·대기와 달리 "지금 벌어지는 사건"이라 반복하면 안 된다.
 // 공격 9프레임 @18fps = 0.5초 — 기본 공격 주기(atkSpd 1.0 = 1초)의 절반이라 다음 휘두르기와
 // 겹치지 않는다. 속공을 끝까지 올리면 겹치지만 그땐 재생이 처음부터 다시 시작될 뿐이다.

@@ -50,6 +50,10 @@ export interface MonsterEntity {
   x: number;
   y: number;
   atkCd: number;
+  /** 활을 당기는 중이면 릴리즈까지 남은 시간(초). 0 = 당기는 중이 아니다.
+   *  원거리 몬스터가 쏘기로 결정한 순간 채워지고, 0이 되는 프레임에 화살이 나간다 —
+   *  그림상 시위를 놓는 시점과 판정을 맞추려는 것. 근접 몬스터는 늘 0이다. */
+  windupT: number;
   spr: Phaser.GameObjects.Sprite;
   /** 실제로 로드된 아틀라스 키. 스폰 시점에 확정한다 — def.char가 있어도 파일이 없으면
    *  undefined가 되고, 그때 spr은 대체 상자다. 매 프레임 textures.exists를 다시 묻지 않으려고 캐시한다. */

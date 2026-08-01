@@ -1,6 +1,7 @@
 import { clamp, danger, hypeTier, viewerDrift, MIN_VIEWERS, type HypeTier } from '../formulas.ts';
 import type { HeroEntity, MonsterEntity, Arrow } from './entities.ts';
 import { hasTrait, INFINITE_DANCE_RATE, INFINITE_DANCE_MAX, INFINITE_DANCE_RESET_IDLE, type TraitId } from '../data/traits.ts';
+import { ATTACK_RELEASE_SEC } from './anims.ts'; // 값만 가져온다 — anims의 Phaser는 type import라 런타임에 없다
 
 // "엔티티용 formulas.ts" — 전투 시뮬 결정 로직을 Phaser 없이 모은다.
 // 헬퍼는 plain 시뮬 필드(x/y/hp/타이머)만 변이하고, Phaser가 필요한 것(스프라이트/FX/사망·골드)은
@@ -207,19 +208,35 @@ export function stepHero(
 }
 
 // ── 몬스터 AI ── (사망/스프라이트 처리는 씬 소유: suicide도 씬이 m.dead 세팅)
+// facing은 모든 의도에 들어간다 — 씬이 공격·대기 모션도 방향을 골라 재생해야 하기 때문이다.
+// 원거리 공격은 두 박자다: draw(시위를 당기기 시작) → … → arrow(놓는 순간). 그 사이는 idle이라
+// 씬이 모션을 새로 걸지 않는다 — 이미 도는 공격 애니메이션을 끊지 않으려는 것.
 export type MonsterIntent =
   | { kind: 'move'; facing: Facing }
-  | { kind: 'melee'; dmg: number; suicide: boolean }
-  | { kind: 'arrow'; x: number; y: number; tx: number; ty: number; dmg: number }
-  | { kind: 'idle' };
+  | { kind: 'melee'; facing: Facing; dmg: number; suicide: boolean }
+  | { kind: 'draw'; facing: Facing }
+  | { kind: 'arrow'; facing: Facing; x: number; y: number; tx: number; ty: number; dmg: number }
+  | { kind: 'idle'; facing: Facing };
 export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): MonsterIntent {
   const H = hero;
   m.atkCd = Math.max(0, m.atkCd - dt);
   // 기절/빙결(경직 포함) 중엔 AI 자체를 건너뛴다 — heavyStrike 경직·frostStrike 빙결이 여길 통해 먹힌다.
+  // 당기던 중이었다면 windupT는 그대로 멈춰 있다가 풀린 뒤 이어진다.
   if (m.stunT && m.stunT > 0) {
     m.stunT -= dt;
-    return { kind: 'idle' };
+    return { kind: 'idle', facing: facingOf(H.x - m.x, H.y - m.y) ?? 'south' };
   }
+
+  // 활을 당기는 중이면 다른 판단을 하지 않는다 — 제자리에 서서 조준하고, 놓는 프레임에 쏜다.
+  // 그 사이 용사가 사거리 밖으로 빠져도 이미 시작한 사격은 끝까지 간다(도중에 취소하면
+  // 시위를 당기던 그림만 남고 화살이 안 나가 보인다). 조준점은 놓는 순간의 용사 위치다.
+  if (m.windupT > 0) {
+    m.windupT = Math.max(0, m.windupT - dt);
+    const aim = facingOf(H.x - m.x, H.y - m.y) ?? 'south';
+    if (m.windupT > 0) return { kind: 'idle', facing: aim };
+    return { kind: 'arrow', facing: aim, x: m.x, y: m.y, tx: H.x, ty: H.y, dmg: m.def.dmg };
+  }
+
   const d = dist(m, H);
   if (d > m.def.range) {
     const vx = ((H.x - m.x) / d) * m.def.speed;
@@ -229,12 +246,18 @@ export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): Mon
     // 용사 쪽으로 이동 중이므로 속도가 0일 수 없다 (d > range > 0)
     return { kind: 'move', facing: facingOf(vx, vy) ?? 'south' };
   }
+  // 사거리 안에선 걸음을 멈추고 용사를 본다 — 공격·대기 모션이 볼 방향이다.
+  // 완전히 겹쳐 방향이 안 나오면 남쪽(정면): 어차피 코앞이라 어느 쪽이든 읽힌다.
+  const facing = facingOf(H.x - m.x, H.y - m.y) ?? 'south';
   if (m.atkCd <= 0) {
-    m.atkCd = m.def.atkCd;
-    if (m.def.ranged) return { kind: 'arrow', x: m.x, y: m.y, tx: H.x, ty: H.y, dmg: m.def.dmg };
-    return { kind: 'melee', dmg: m.def.dmg, suicide: !!m.def.suicide };
+    m.atkCd = m.def.atkCd; // 주기는 "쏘기로 마음먹은 순간" 기준 — 당기는 시간이 사격 간격을 늘리지 않는다
+    if (m.def.ranged) {
+      m.windupT = ATTACK_RELEASE_SEC;
+      return { kind: 'draw', facing };
+    }
+    return { kind: 'melee', facing, dmg: m.def.dmg, suicide: !!m.def.suicide };
   }
-  return { kind: 'idle' };
+  return { kind: 'idle', facing };
 }
 
 // ── 화살 ── ('travel'=이동 계속 · {hit}=용사 피격 후 소멸 · 'expire'=빗나가 소멸)

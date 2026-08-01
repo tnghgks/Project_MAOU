@@ -9,7 +9,9 @@ import {
   COMBO_WINDOW,
   DASH_CD,
   DASH_SPEED,
+  type MonsterIntent,
 } from '../src/game/battleSim.ts';
+import { ATTACK_RELEASE_SEC } from '../src/game/anims.ts';
 import { spawnHero, type MonsterEntity, type Arrow } from '../src/game/entities.ts';
 import { MONSTERS } from '../src/data/monsters.ts';
 import { arenaBounds } from '../src/game/layout.ts';
@@ -40,6 +42,7 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   x,
   y,
   atkCd: 0,
+  windupT: 0,
   spr: {} as MonsterEntity['spr'],
 });
 
@@ -220,12 +223,59 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
   }
 
   const archer = mon('archer', HOME.x + 100, HOME.y); // range 240 안
-  const ai = stepMonster(archer, hero, 0.1);
-  assert.strictEqual(ai.kind, 'arrow');
-  if (ai.kind === 'arrow') {
-    assert.strictEqual(ai.tx, hero.x);
-    assert.strictEqual(ai.ty, hero.y);
+  assert.strictEqual(stepMonster(archer, hero, 0.1).kind, 'draw', '원거리는 먼저 시위를 당긴다');
+}
+
+// ── stepMonster: 사거리 안이면 공격·대기도 용사를 바라본다 (공격 모션 방향) ──
+{
+  const hero = spawnHero(stats, HOME);
+  // 궁수가 용사 오른쪽 위 → 수평 우선이라 서쪽(용사가 왼쪽)
+  const aim = stepMonster(mon('archer', HOME.x + 100, HOME.y - 20), hero, 0.1);
+  assert.strictEqual(aim.kind, 'draw');
+  assert.strictEqual(aim.facing, 'west', '당길 때 용사 쪽을 본다');
+
+  // 같은 궁수를 쿨다운 중에 다시 물으면 idle이지만 방향은 그대로 용사 쪽이다
+  const archer = mon('archer', HOME.x, HOME.y - 100); // 용사가 아래 → 남쪽
+  assert.strictEqual(stepMonster(archer, hero, 0.1).kind, 'draw');
+  const wait = stepMonster(archer, hero, 0.1);
+  assert.strictEqual(wait.kind, 'idle');
+  assert.strictEqual(wait.facing, 'south', '당기는 중에도 용사를 본다');
+}
+
+// ── stepMonster: 화살은 시위를 놓는 프레임(공격 모션의 릴리즈 시점)에 나간다 ──
+{
+  const DT = 0.05;
+  const hero = spawnHero(stats, HOME);
+  const archer = mon('archer', HOME.x + 100, HOME.y); // range 240 안
+  assert.strictEqual(stepMonster(archer, hero, DT).kind, 'draw');
+  assert.strictEqual(archer.windupT, ATTACK_RELEASE_SEC, '릴리즈까지 남은 시간은 아트가 정한다');
+
+  let elapsed = 0;
+  let shot: MonsterIntent | null = null;
+  while (elapsed < 1 && !shot) {
+    const i = stepMonster(archer, hero, DT);
+    elapsed += DT;
+    if (i.kind === 'arrow') shot = i;
+    else assert.strictEqual(i.kind, 'idle', '당기는 동안엔 화살도 이동도 없다');
   }
+  assert.ok(shot, '릴리즈 프레임에 화살이 나간다');
+  assert.ok(elapsed >= ATTACK_RELEASE_SEC, '릴리즈 시각 전에는 안 나간다');
+  assert.ok(elapsed < ATTACK_RELEASE_SEC + DT, '릴리즈 직후 프레임에 바로 나간다');
+  assert.strictEqual(archer.windupT, 0, '쏘고 나면 당기기 상태가 풀린다');
+}
+
+// ── stepMonster: 조준점은 놓는 순간의 용사 위치 (당기는 사이 움직이면 따라간다) ──
+{
+  const hero = spawnHero(stats, HOME);
+  const archer = mon('archer', HOME.x + 100, HOME.y);
+  stepMonster(archer, hero, 0.05); // draw
+  hero.x = HOME.x - 60; // 당기는 동안 용사가 이동
+  let shot: MonsterIntent | null = null;
+  for (let t = 0; t < 1 && !shot; t += 0.05) {
+    const i = stepMonster(archer, hero, 0.05);
+    if (i.kind === 'arrow') shot = i;
+  }
+  assert.strictEqual(shot?.kind === 'arrow' && shot.tx, hero.x, '옛 위치가 아니라 지금 위치를 겨눈다');
 }
 
 // ── stepMonster: 폭탄 박쥐는 자폭 melee ──
