@@ -14,11 +14,13 @@ import TitleView from './ui/TitleView.tsx';
 import HelpPopup from './ui/HelpPopup.tsx';
 import CutsceneView from './ui/CutsceneView.tsx';
 import DevPanel from './ui/DevPanel.tsx';
+import { useBgm } from './ui/useBgm.ts';
 
 export default function App() {
   const parentRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const phase = useStore(gameStore, (s) => s.phase);
+  useBgm(); // 방송 구간 BGM — 재생/정지 조건은 훅이 전부 안다
 
   useEffect(() => {
     if (gameRef.current) return;
