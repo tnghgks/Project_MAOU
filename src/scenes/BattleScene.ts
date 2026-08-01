@@ -5,6 +5,7 @@ import {
   donationInterval,
   rollDonation,
   clampDonation,
+  donationTier,
   stepCritical,
   viewerAlert,
   rollChance,
@@ -516,13 +517,15 @@ export default class BattleScene extends Phaser.Scene {
     const rolled = rollDonation(this.viewers);
     const amount = clampDonation(rolled.amount, min, max);
     const jackpot = rolled.jackpot;
+    // 단계 판정은 클램프 이후 실제 지급액 기준 — 상하한에 걸린 금액이 곧 플레이어가 보는 금액이다
+    const tier = donationTier(amount, min, max, jackpot);
     gameState().addGold(amount);
     this.totalDonated += amount;
     const name = this.randomViewer() ?? '익명';
     const msg = `${name}님 ${amount.toLocaleString()}G${jackpot ? ' 대박 후원!!' : '!'}`;
     this.pushChat('🎁 후원', msg, jackpot ? '#ff66cc' : '#ffdd44');
     this.pendingSkill = null;
-    bus.emit('donation:arrive', { amount, donor: name, jackpot });
+    bus.emit('donation:arrive', { amount, donor: name, jackpot, tier });
     // Rhythm은 계속 돌려야 한다 (리액션 이벤트의 QWER 판정 담당)
     this.scene.pause();
     bus.emit('battle:pause', null); // InfoLayer/ComboMeter 등 React UI도 같이 멈춰야 한다
@@ -921,7 +924,12 @@ export default class BattleScene extends Phaser.Scene {
       applyDot(m, H.atk * THORN_BLADE_DPS_RATIO, THORN_BLADE_DOT_T);
     }
     if (hasTrait(traits, 'flameSword')) {
-      applyDot(m, H.atk * FLAME_SWORD_DPS_RATIO, FLAME_SWORD_DOT_T, H.atk * FLAME_SWORD_DPS_RATIO * FLAME_SWORD_MAX_STACK);
+      applyDot(
+        m,
+        H.atk * FLAME_SWORD_DPS_RATIO,
+        FLAME_SWORD_DOT_T,
+        H.atk * FLAME_SWORD_DPS_RATIO * FLAME_SWORD_MAX_STACK,
+      );
     }
     if (hasTrait(traits, 'chainLightning') && rollChance(CHAIN_LIGHTNING_CHANCE * 100)) this.chainLightningProc(m, dmg);
     if (hasTrait(traits, 'shadowClone') && rollChance(SHADOW_CLONE_CHANCE * 100)) this.hitFx(m, dmg);

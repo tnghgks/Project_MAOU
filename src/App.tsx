@@ -3,6 +3,7 @@ import { useStore } from 'zustand';
 import type Phaser from 'phaser';
 import { createGame } from './game/config.ts';
 import { gameStore } from './game/store.ts';
+import { preloadSfx } from './game/sfx.ts';
 import BroadcastFrame from './ui/BroadcastFrame.tsx';
 import InfoLayer from './ui/InfoLayer.tsx';
 import DonationToast from './ui/DonationToast.tsx';
@@ -21,6 +22,7 @@ export default function App() {
 
   useEffect(() => {
     if (gameRef.current) return;
+    preloadSfx(); // 첫 후원에서 다운로드 지연으로 효과음이 늦게 붙지 않게 미리 받아둔다
     gameRef.current = createGame(parentRef.current!);
     return () => {
       gameRef.current?.destroy(true);

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { SkillOutcome, ViewerAlert } from '../formulas.ts';
+import type { DonationTier, SkillOutcome, ViewerAlert } from '../formulas.ts';
 import type { Card } from '../data/cards.ts';
 
 // 순간적으로 터지는 사건 버스 (지속값은 store). 이벤트 계약은 BusEvents가 강제.
@@ -17,6 +17,7 @@ export interface Donation {
   amount: number;
   donor: string;
   jackpot: boolean;
+  tier: DonationTier; // 효과음 단계. 금액만으로는 판정할 수 없어(업그레이드 가격 연동) emit 쪽에서 계산해 싣는다
 }
 
 // HUD(React InfoLayer) 전용 스냅샷 — BattleScene 인스턴스 전용 필드(매 프레임 변함)만 담는다.
