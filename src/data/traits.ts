@@ -34,7 +34,7 @@ export interface TraitDef {
 }
 
 // ponytail: 특성 밸런스 knob — 전부 여기 상수로
-export const VAMP_RATIO = 0.2; // 입힌 피해의 회복 비율
+export const VAMP_RATIO = 0.12; // 입힌 피해의 회복 비율 (2026-07-31 하향: 0.2 → 0.12, 흡혈 과다 피드백)
 export const THORNS_RATIO = 0.4; // 근접 피격 시 반사 비율
 export const BERSERK_MAX = 0.8; // HP 0%일 때 공격력 가산 배율
 export const WARRIOR_BLOOD_HEAL = 0.01; // 처치 시 즉시 회복하는 최대체력 비율
@@ -70,7 +70,9 @@ export const PHOENIX_HP_RATIO = 0.5; // 부활 시 회복되는 최대체력 비
 export const PHOENIX_BURN_DPS_RATIO = 0.15; // 부활 시 전체 화상 초당 피해 = atk * 이 값
 export const PHOENIX_BURN_T = 5; // 부활 시 전체 화상 지속(초)
 export const EXCALIBUR_DMG_MULT = 4; // 상시 피해 배율(피해량 300% 증가 = 4배)
-// 사거리는 고정값이 아니라 습득 시점 화면 절반(ARENA.w / 2)으로 BattleScene에서 계산 — 해상도에 따라 달라진다.
+// 사거리는 고정값이 아니라 습득 시점 화면 절반(ARENA.w / 2)을 BattleScene에서 목표로 계산하지만,
+// 실제 반영은 store.applyStatMods의 RANGE_CAP(기본값의 3배) 클램프를 그대로 통과한다 — 즉 엑스칼리버는
+// "사거리 상한에 곧바로 닿는다"는 의미로 남는다(2026-07-31 사거리 상한 도입).
 export const TIME_SLASH_EVERY = 10; // 몇 번째 공격마다 발동
 export const TIME_SLASH_FREEZE_MS = 2000; // 발동 시 전체 시간 정지(ms)
 export const TIME_SLASH_DMG_MULT = 1.5; // 정지 창 동안 가한 피해 증폭

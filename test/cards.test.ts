@@ -2,12 +2,12 @@ import assert from 'node:assert';
 import { rollRarity, drawCards, reactionCard, statCard, traitCard } from '../src/data/cards.ts';
 import { TRAIT_IDS } from '../src/data/traits.ts';
 
-// 가중 추첨 경계 (common 50 / uncommon 27 / magic 14 / epic 7 / legend 2, 총 100)
+// 가중 추첨 경계 (2026-08-03: common 850 / uncommon 100 / magic 40 / epic 8 / legend 2, 총 1000)
 assert.strictEqual(rollRarity(() => 0), 'common');
-assert.strictEqual(rollRarity(() => 0.6), 'uncommon');
-assert.strictEqual(rollRarity(() => 0.85), 'magic');
-assert.strictEqual(rollRarity(() => 0.95), 'epic');
-assert.strictEqual(rollRarity(() => 0.99), 'legend');
+assert.strictEqual(rollRarity(() => 0.9), 'uncommon');
+assert.strictEqual(rollRarity(() => 0.96), 'magic');
+assert.strictEqual(rollRarity(() => 0.995), 'epic');
+assert.strictEqual(rollRarity(() => 0.999), 'legend');
 assert.strictEqual(rollRarity(() => 1), 'legend'); // rnd가 1에 붙어도 pool 밖으로 안 나간다
 
 // 3장 뽑기

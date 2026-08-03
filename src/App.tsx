@@ -4,6 +4,7 @@ import type Phaser from 'phaser';
 import { createGame } from './game/config.ts';
 import { gameStore } from './game/store.ts';
 import BroadcastFrame from './ui/BroadcastFrame.tsx';
+import InfoLayer from './ui/InfoLayer.tsx';
 import DonationToast from './ui/DonationToast.tsx';
 import DonationEvent from './ui/DonationEvent.tsx';
 import ComboMeter from './ui/ComboMeter.tsx';
@@ -32,15 +33,17 @@ export default function App() {
     const game = gameRef.current;
     if (!game) return;
     if (phase === 'broadcast')
-      game.scene.start('Battle'); // Battle이 Hud/HeroPanel launch
-    else for (const k of ['Battle', 'Hud', 'HeroPanel']) if (game.scene.isActive(k)) game.scene.stop(k);
+      game.scene.start('Battle'); // Battle이 HeroPanel launch
+    else for (const k of ['Battle', 'HeroPanel']) if (game.scene.isActive(k)) game.scene.stop(k);
   }, [phase]);
 
-  // 캔버스와 오버레이는 플레이어 영역(.screen) 안 — 채팅/사이드바는 BroadcastFrame가 소유
+  // 캔버스와 오버레이는 플레이어 영역(.screen) 안 — 채팅/사이드바는 BroadcastFrame가 소유.
+  // 3레이어(피드백 2026-07-31): 1=Phaser 캔버스 · 2=정보성 UI(InfoLayer) · 3=리듬/콤보 등 효과(ui-layer).
   return (
     <>
       <BroadcastFrame>
         <div ref={parentRef} className="canvas-layer" />
+        {phase === 'broadcast' && <InfoLayer />}
         <div className="ui-layer">
           {phase === 'broadcast' && (
             <>

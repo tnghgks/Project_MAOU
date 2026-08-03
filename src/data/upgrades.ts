@@ -10,13 +10,17 @@ export interface UpgradeDef {
 }
 
 // 한 강화 = 한 줄, 컬럼 정렬로 밸런스 비교가 쉽다
+// 2026-07-31 밸런스 하향(피드백): 배율 계산 구조상 델타가 조금만 올라도 체감 난이도가 크게 꺾여
+// 전 항목 델타를 25~35%씩 낮췄다 — 비용/성장 곡선(mult)은 그대로, "한 레벨의 무게"만 줄인다.
+// 2026-08-03 추가 하향(피드백: "여전히 세다"): 위 값에서 다시 25~30%씩 낮췄다. 누적으로 원래
+// 대비 하나 lv1 상승폭이 절반 수준(예: 체력 80→38, 약 -52%)까지 내려온다.
 // prettier-ignore
 export const UPGRADES = {
-  hp:     { name: '체력 단련', stat: 'maxHp', delta: 80, baseCost: 200, mult: 1.5 },
-  atk:    { name: '검술 수련', stat: 'atk', delta: 12, baseCost: 250, mult: 1.5 },
-  atkSpd: { name: '속공 훈련', stat: 'atkSpd', delta: 0.15, baseCost: 300, mult: 1.6 },
-  speed:  { name: '경보법', stat: 'speed', delta: 12, baseCost: 180, mult: 1.4 },
-  range:  { name: '장창 구매', stat: 'range', delta: 15, baseCost: 220, mult: 1.5 },
+  hp:     { name: '체력 단련', stat: 'maxHp', delta: 38, baseCost: 200, mult: 1.5 },
+  atk:    { name: '검술 수련', stat: 'atk', delta: 6, baseCost: 250, mult: 1.5 },
+  atkSpd: { name: '속공 훈련', stat: 'atkSpd', delta: 0.07, baseCost: 300, mult: 1.6 },
+  speed:  { name: '경보법', stat: 'speed', delta: 6, baseCost: 180, mult: 1.4 },
+  range:  { name: '장창 구매', stat: 'range', delta: 7, baseCost: 220, mult: 1.5 },
 } satisfies Record<string, UpgradeDef>;
 
 export type UpgradeKey = keyof typeof UPGRADES;

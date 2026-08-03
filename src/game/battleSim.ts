@@ -242,11 +242,15 @@ export function bumpCombo(vs: ViewerState) {
   vs.combo = vs.comboT > 0 ? vs.combo + 1 : 1;
   vs.comboT = COMBO_WINDOW;
 }
+// cap: 상한 근처일수록 상승률을 깎는 소프트캡(로지스틱형) — 하락엔 안 걸린다.
+// 피드백(2026-08-03): 상한이 없어 1화에서 9만 명까지 폭주했다. 기본값 Infinity는 캡 없는
+// 기존 동작(과 기존 테스트)을 그대로 보존한다 — 실제 캡은 BattleScene이 progression.viewerCap()로 넘긴다.
 export function stepViewers(
   vs: ViewerState,
   hpRatio: number,
   nearCount: number,
   dt: number,
+  cap: number = Infinity,
   rnd: () => number = Math.random,
 ): ViewerStep {
   vs.comboT = Math.max(0, vs.comboT - dt);
@@ -254,7 +258,9 @@ export function stepViewers(
   const D = danger(hpRatio, nearCount);
   const tier = hypeTier(D);
   vs.drift = viewerDrift(vs.drift, dt, rnd);
-  vs.viewers = Math.max(MIN_VIEWERS, vs.viewers * (1 + (tier.rate + vs.drift) * dt));
+  const rate = tier.rate + vs.drift;
+  const room = clamp(1 - vs.viewers / cap, 0, 1); // 상승세만 감쇠, 하락세는 그대로 통과
+  vs.viewers = Math.max(MIN_VIEWERS, vs.viewers * (1 + (rate > 0 ? rate * room : rate) * dt));
   vs.peakViewers = Math.max(vs.peakViewers, vs.viewers);
   return { D, tier };
 }

@@ -202,11 +202,20 @@ const viewerState = () => ({ viewers: 100, peakViewers: 100, drift: 0, combo: 0,
 {
   const vs = viewerState();
   const rnd = () => 0.5; // drift kick = 0
-  const step = stepViewers(vs, 1, 0, 1, rnd); // hpRatio 1, near 0, 콤보 0 → D 0
+  const step = stepViewers(vs, 1, 0, 1, Infinity, rnd); // hpRatio 1, near 0, 콤보 0 → D 0
   assert.strictEqual(step.D, 0);
   assert.deepStrictEqual(step.tier, hypeTier(0));
   assert.ok(vs.viewers < 100, '노잼 구간 감쇠');
   assert.strictEqual(vs.peakViewers, 100, 'peak 유지');
+}
+
+// ── 시청자 소프트캡: 상한 근처에선 상승률이 죽어 캡을 못 넘는다 (2026-08-03 피드백: 9만 명 폭주 방지) ──
+{
+  const vs = { viewers: 4990, peakViewers: 4990, drift: 0, combo: 0, comboT: 0 };
+  const rnd = () => 0.5; // drift kick = 0
+  for (let i = 0; i < 1000; i++) stepViewers(vs, 0, 10, 1, 5000, rnd); // 최고 흥분도(D=1) 유지, 캡 5000
+  assert.ok(vs.viewers <= 5000, `캡을 넘으면 안 된다: ${vs.viewers}`);
+  assert.ok(vs.viewers > 4990, '캡 아래에서는 계속 성장한다');
 }
 
 // ── 콤보: 창 안이면 이어지고, 창이 끊기면 0으로 리셋 ──
@@ -217,13 +226,13 @@ const viewerState = () => ({ viewers: 100, peakViewers: 100, drift: 0, combo: 0,
   bumpCombo(vs);
   assert.strictEqual(vs.combo, 2, '창 안 연속 타격은 누적');
 
-  stepViewers(vs, 1, 0, COMBO_WINDOW / 2, () => 0.5); // 창 절반 경과
+  stepViewers(vs, 1, 0, COMBO_WINDOW / 2, Infinity, () => 0.5); // 창 절반 경과
   assert.strictEqual(vs.combo, 2, '창이 살아있으면 유지');
   bumpCombo(vs);
   assert.strictEqual(vs.combo, 3);
   assert.strictEqual(vs.comboT, COMBO_WINDOW, '타격할 때마다 창 갱신');
 
-  stepViewers(vs, 1, 0, COMBO_WINDOW, () => 0.5); // 창 만료
+  stepViewers(vs, 1, 0, COMBO_WINDOW, Infinity, () => 0.5); // 창 만료
   assert.strictEqual(vs.combo, 0, '끊기면 리셋');
   bumpCombo(vs);
   assert.strictEqual(vs.combo, 1, '리셋 후엔 1부터');

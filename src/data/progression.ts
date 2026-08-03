@@ -33,3 +33,11 @@ export const START_VIEWERS = 12; // 1화 시작 시청자 수
 export function stageViewerFloor(ep: number): number {
   return Math.round(START_VIEWERS * (targetGold(ep) / targetGold(1)));
 }
+
+// 시청자 상한 (피드백 2026-08-03): stepViewers가 이 값에 가까워질수록 상승률을 깎는 소프트캡으로 쓴다.
+// "9만 명이 넘는 건 말이 안 된다" — 캡도 stageViewerFloor와 같은 스케일(targetGold 비)을 따라 화별로
+// 커진다. 1화 5,000명 상한이면 500G짜리 강화도 못 살 만큼 적진 않되, 첫 방송이 억 단위로 튀진 않는다.
+export const VIEWER_CAP_BASE = 5_000;
+export function viewerCap(ep: number): number {
+  return Math.round(VIEWER_CAP_BASE * (targetGold(ep) / targetGold(1)));
+}

@@ -9,7 +9,7 @@ import type { MonsterId } from '../data/monsters.ts';
 import type { StatMod } from '../data/cards.ts';
 
 // 단일 스토어: Phaser는 gameState()로 읽고 액션으로 사건 단위 쓰기, React는 useStore(gameStore, sel)로 구독.
-// 매 프레임 값(viewers 실시간/hype/timer)은 여기 안 넣는다 — 씬 로컬에서 HudScene가 렌더. viewers는 스로틀 반영만.
+// 매 프레임 값(viewers 실시간/hype/timer)은 여기 안 넣는다 — 씬 로컬 필드 + hud:tick 버스로 React InfoLayer가 렌더. viewers는 스로틀 반영만.
 
 export interface HeroStats {
   maxHp: number;
@@ -92,6 +92,16 @@ export const BASE_HERO: HeroStats = {
   goldBonus: 0,
 };
 
+// 사거리 상한 (피드백 2026-07-31): 업그레이드·카드·특성이 전부 사거리를 건드릴 수 있어 무상한이면
+// 사기가 된다. "창 정도 리치"를 현실적 최대로 보고 기본값의 3배로 고정 — 엑스칼리버의 화면 절반
+// 오버라이드(BattleScene.applyTraitOneShot)도 결국 이 상한에 걸린다(applyStatMods가 clampHero로 자름).
+export const RANGE_CAP = BASE_HERO.range * 3;
+
+// hero 전체를 손대는 두 액션(applyUpgrade/applyStatMods)이 공유하는 안전장치 — 상한선은 여기 한 곳에서만 자른다.
+function clampHero(h: HeroStats): HeroStats {
+  return h.range > RANGE_CAP ? { ...h, range: RANGE_CAP } : h;
+}
+
 // 용사 종합 전투력 — 시작값을 1.00으로 보는 배수. 요청 난이도와 화면 표시가 이 하나만 본다.
 // 가중 기하평균이라 지수 합이 1 → 모든 스탯이 x배면 전투력도 x배. 곱이라 한 스탯만 몰아줘도 폭주하지 않는다.
 // ponytail: 가중치 knob — 화력 0.4 / 생존 0.35 / 사거리 0.15 / 기동 0.1
@@ -169,7 +179,7 @@ export const gameStore = createStore<GameState>()((set, get) => ({
     const u = UPGRADES[key];
     set({
       gold: gold - cost,
-      hero: { ...hero, [u.stat]: Math.round((hero[u.stat] + u.delta) * 100) / 100 },
+      hero: clampHero({ ...hero, [u.stat]: Math.round((hero[u.stat] + u.delta) * 100) / 100 }),
       upgradeLevels: { ...upgradeLevels, [key]: upgradeLevels[key] + 1 },
     });
     return true;
@@ -179,7 +189,7 @@ export const gameStore = createStore<GameState>()((set, get) => ({
   // 1회성 스탯 보정(거인의 대검·엑스칼리버)도 이 경로를 공유한다.
   applyStatMods: (mods) => {
     const hero = get().hero;
-    set({ hero: { ...hero, ...resolveMods(mods, hero) } });
+    set({ hero: clampHero({ ...hero, ...resolveMods(mods, hero) }) });
   },
 
   // 도네이션 카드 보상: 골드 없이 스탯만 (upgradeLevels는 안 올린다 — 상점 가격은 구매 이력만 따라간다)
