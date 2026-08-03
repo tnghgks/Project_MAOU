@@ -1,4 +1,5 @@
 import type { DonationTier } from '../formulas.ts';
+import { FINAL_EP } from '../data/progression.ts';
 
 // 효과음 재생기. Phaser sound가 아니라 HTMLAudioElement를 쓰는 이유 두 가지:
 //  1. 후원 효과음은 Battle/Hud 씬이 pause된 상태에서 울려야 한다 (fireDonation 참고).
@@ -53,40 +54,63 @@ export function playSfx(key: SfxKey): void {
 export const playDonationSfx = (tier: DonationTier): void => playSfx(DONATION_SFX[tier]);
 
 // ── BGM ───────────────────────────────────────────────────────────────────
-// 효과음과 달리 preloadSfx에 넣지 않는다 — 5MB대라 타이틀 화면부터 받아두면 낭비다.
-// 방송이 시작될 때(startBgm) 처음 만들면서 받는다.
-const BGM_SRC = 'assets/sounds/bgm/stage-bgm.mp3';
+// 효과음과 달리 preloadSfx에 넣지 않는다 — 5MB대라 타이틀 화면부터 전부 받아두면 낭비다.
+// 실제로 트는 순간(playBgm)에 그 트랙만 만들면서 받는다.
+// ponytail: 트랙 파일 knob — 1·2화 보스는 아직 전용 곡이 없어 같은 파일을 본다. 곡 오면 여기 경로만 갈아끼운다.
+const BGM_SRC = {
+  title: 'assets/sounds/bgm/title_bgm.mp3',
+  stage1: 'assets/sounds/bgm/stage-1_bgm.mp3',
+  stage2: 'assets/sounds/bgm/stage-2_bgm.mp3',
+  stage3: 'assets/sounds/bgm/stage-3_bgm.mp3',
+  boss1: 'assets/sounds/bgm/boss_bgm.mp3',
+  boss2: 'assets/sounds/bgm/boss_bgm.mp3',
+  boss3: 'assets/sounds/bgm/final-boss_bgm.mp3',
+} as const;
+
+export type BgmTrack = keyof typeof BGM_SRC;
+
+// 화 번호 + 보스 등장 여부 → 트랙 키. 범위 밖 화는 최종화 곡으로 떨어뜨린다.
+export const stageBgm = (episode: number, boss: boolean): BgmTrack =>
+  `${boss ? 'boss' : 'stage'}${Math.min(Math.max(episode, 1), FINAL_EP)}` as BgmTrack;
+
 // ponytail: BGM 볼륨 knob. 효과음(0.4~0.7)보다 확실히 낮아야 후원 소리가 묻히지 않는다.
 const BGM_VOLUME = 0.3;
 const BGM_DUCK_VOLUME = 0.1; // 도네이션 팝업 동안
 
-let bgm: HTMLAudioElement | null = null;
+const bgmCache = new Map<BgmTrack, HTMLAudioElement>();
+let bgm: HTMLAudioElement | null = null; // 지금 트는 트랙 (정지 상태면 null)
 let ducked = false;
 
-function bgmElement(): HTMLAudioElement {
-  if (bgm) return bgm;
-  bgm = new Audio(`${import.meta.env.BASE_URL}${BGM_SRC}`);
-  bgm.loop = true;
-  bgm.preload = 'auto';
-  return bgm;
-}
-
-// 볼륨은 항상 여기로 모아 계산한다. 더킹 중에 컷씬이 끝나 resumeBgm이 불려도
+// 볼륨은 항상 여기로 모아 계산한다. 더킹 중에 컷씬이 끝나 playBgm이 다시 불려도
 // 원래 볼륨으로 튀지 않게 하려면 "지금 더킹인가"가 유일한 기준이어야 한다.
 function applyBgmVolume(): void {
   if (bgm) bgm.volume = ducked ? BGM_DUCK_VOLUME : BGM_VOLUME;
 }
 
-export function startBgm(): void {
-  const el = bgmElement();
+// 재생 겸 트랙 전환. 같은 트랙이면 되감지 않고 이어서 튼다 — 컷씬 복귀가 이 경로를 탄다.
+export function playBgm(track: BgmTrack): void {
+  let next = bgmCache.get(track);
+  if (!next) {
+    next = new Audio(`${import.meta.env.BASE_URL}${BGM_SRC[track]}`);
+    next.loop = true;
+    next.preload = 'auto';
+    bgmCache.set(track, next);
+  }
+  if (bgm && bgm !== next) {
+    bgm.pause();
+    bgm.currentTime = 0; // 나중에 이 트랙으로 돌아오면 처음부터 (보스 → 다음 화 스테이지)
+  }
+  bgm = next;
   applyBgmVolume();
-  void el.play().catch(() => {}); // 자동재생 차단은 무시 — playSfx와 같은 이유
+  // 자동재생 차단은 무시 — playSfx와 같은 이유. 첫 방문 타이틀 화면은 조작 전이라 대부분 여기 걸린다.
+  void bgm.play().catch(() => {});
 }
 
 export function stopBgm(): void {
   if (!bgm) return; // 한 번도 안 틀었으면 5MB를 받으러 갈 이유가 없다
   bgm.pause();
   bgm.currentTime = 0;
+  bgm = null;
   ducked = false; // 도네이션 도중 방송이 끝나면 donation:end가 안 온다 — 여기서 되돌려 놓는다
 }
 
@@ -94,9 +118,11 @@ export function pauseBgm(): void {
   bgm?.pause();
 }
 
-export const resumeBgm = startBgm; // 되감지 않고 이어서 트는 것 = start와 같은 동작
-
 export function duckBgm(on: boolean): void {
   ducked = on;
   applyBgmVolume();
 }
+
+// HMR로 이 모듈이 갈릴 때 bgmCache는 새로 비워지지만, 재생 중이던 Audio는 아무도 못 잡는 채로
+// 계속 울린다 — 새 모듈이 같은 곡을 틀면 그대로 겹친다. 교체 직전에 끊고 넘긴다 (개발 전용).
+import.meta.hot?.dispose(() => stopBgm());

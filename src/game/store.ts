@@ -57,8 +57,12 @@ export interface GameState {
   mode: ViewMode; // 시점 — Phaser 씬은 gameState()로, React는 useStore로 읽는다
   lastRun: RunSummary;
   cuts: string[]; // 재생 대기 중인 컷씬 id 큐 (CutsceneView가 소비)
+  bossUp: boolean; // 보스 등장 여부 — BGM 전환용. 실체(BattleScene.boss)는 씬이 갖고 있고 여기엔 사실만 미러링한다
+  bgmOn: boolean; // BGM On/Off 설정 (런이 아니라 설정 — resetRun에 안 걸리고 세이브에 남는다)
 
   setPhase: (phase: Phase) => void;
+  setBossUp: (up: boolean) => void;
+  toggleBgm: () => void;
   toggleMode: () => ViewMode;
   playCuts: (ids: string | string[], after?: () => void) => void;
   advanceCut: () => void;
@@ -122,6 +126,7 @@ const freshRun = () => ({
   traits: [] as TraitId[],
   viewers: 0,
   mode: 'maou' as ViewMode, // 방송은 항상 마왕 시점에서 시작
+  bossUp: false,
 });
 
 // 컷씬 큐가 다 비면 호출할 후속 동작 (씬 재개·페이즈 전환). 스토어엔 값만 남긴다.
@@ -134,8 +139,14 @@ export const gameStore = createStore<GameState>()((set, get) => ({
   records: { bestViewers: 0, bestGold: 0 },
   lastRun: { outcome: 'clear', peakViewers: 0, totalDonated: 0, kills: 0 },
   cuts: [],
+  bgmOn: true,
 
   setPhase: (phase) => set({ phase }),
+  setBossUp: (bossUp) => set({ bossUp }),
+  toggleBgm: () => {
+    set({ bgmOn: !get().bgmOn });
+    saveGame(); // 소리 설정은 새로고침해도 유지되는 게 맞다
+  },
 
   // 시점 전환. 전환 후 모드를 돌려줘 호출부(BattleScene)가 한 번 더 읽지 않게 한다.
   toggleMode: () => {
@@ -225,13 +236,13 @@ export const gameStore = createStore<GameState>()((set, get) => ({
 
 export const gameState = gameStore.getState; // Phaser 직통 접근
 
-// localStorage: 해금 목록 + 최고기록만 (GDD 8장)
+// localStorage: 해금 목록 + 최고기록 + 소리 설정 (GDD 8장)
 export function saveGame() {
   const ls = globalThis.localStorage;
   if (!ls) return;
-  const { skills, unlockedMonsters, records } = gameStore.getState();
+  const { skills, unlockedMonsters, records, bgmOn } = gameStore.getState();
   try {
-    ls.setItem(SAVE_KEY, JSON.stringify({ skills, unlockedMonsters, records }));
+    ls.setItem(SAVE_KEY, JSON.stringify({ skills, unlockedMonsters, records, bgmOn }));
   } catch {
     /* 프라이빗 모드 등 */
   }
@@ -248,6 +259,7 @@ export function loadGame() {
     if (Array.isArray(d.skills)) patch.skills = d.skills;
     if (Array.isArray(d.unlockedMonsters)) patch.unlockedMonsters = d.unlockedMonsters;
     if (d.records) patch.records = d.records;
+    if (typeof d.bgmOn === 'boolean') patch.bgmOn = d.bgmOn;
     gameStore.setState(patch);
   } catch {
     /* 손상된 세이브 무시 */

@@ -120,6 +120,11 @@ button {
   border-color: var(--brand);
   color: var(--brand);
 }
+/* 타이틀·정산 오버레이(z-index 40)가 상단바까지 덮는다 — BGM 버튼만 그 위로 올려 어느 화면에서든 누른다 */
+.bgm-toggle {
+  position: relative;
+  z-index: 50;
+}
 
 /* 플레이어 + 방송 정보 */
 .player {

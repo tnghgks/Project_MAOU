@@ -201,6 +201,7 @@ export default class BattleScene extends Phaser.Scene {
     this.killGold = 0;
     this.target = targetGold(S.episode);
     this.boss = null;
+    S.setBossUp(false); // 지난 화 보스 BGM이 새 방송까지 따라오지 않게
     this.critical = false;
     this.critT = 0;
     this.alert = 'normal';
@@ -499,6 +500,7 @@ export default class BattleScene extends Phaser.Scene {
     const t = bossOf(gameState().episode);
     const x = this.hero.x < CX ? arenaBounds.maxX - 40 : arenaBounds.minX + 40;
     this.boss = this.doSummon(t, x, (ARENA.y + SUMMON_Y) / 2);
+    gameState().setBossUp(true); // BGM 전환(useBgm) — 아래 playCuts와 같은 렌더에 묶여 컷씬 뒤 보스 곡으로 이어진다
     this.cameras.main.flash(600, 255, 80, 80);
     this.floatText(this.boss.x, this.boss.y - 60, `☠ ${MONSTERS[t].name} 등장!`, '#ff4444');
     this.pushChat('시스템', `☠ ${MONSTERS[t].name} 등장! 용사가 쓰러뜨리면 방송 성공`, '#ff4444');
