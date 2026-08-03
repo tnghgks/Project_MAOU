@@ -1,5 +1,14 @@
 import assert from 'node:assert/strict';
-import { EPISODES, FINAL_EP, targetGold, bossOf, START_VIEWERS, stageViewerFloor } from '../src/data/progression.ts';
+import {
+  EPISODES,
+  FINAL_EP,
+  targetGold,
+  bossOf,
+  START_VIEWERS,
+  stageViewerFloor,
+  viewerCap,
+  VIEWER_CAP_BASE,
+} from '../src/data/progression.ts';
 import { MONSTERS } from '../src/data/monsters.ts';
 
 // 스테이지 테이블: 1~FINAL_EP 연속, 목표 골드 증가, 보스는 실존 + 소환 버튼에 안 뜬다
@@ -21,5 +30,10 @@ assert.equal(targetGold(99), targetGold(FINAL_EP));
 assert.equal(stageViewerFloor(1), START_VIEWERS);
 assert.equal(stageViewerFloor(2), Math.round(START_VIEWERS * (3000 / 1000))); // 36명
 assert.equal(stageViewerFloor(FINAL_EP), Math.round(START_VIEWERS * (5000 / 1000))); // 60명
+
+// 시청자 상한: stageViewerFloor와 같은 스케일(targetGold 비)로 화마다 커진다 (2026-08-03 피드백)
+assert.equal(viewerCap(1), VIEWER_CAP_BASE);
+assert.equal(viewerCap(2), Math.round(VIEWER_CAP_BASE * (3000 / 1000)));
+assert.equal(viewerCap(FINAL_EP), Math.round(VIEWER_CAP_BASE * (5000 / 1000)));
 
 console.log('progression ok');

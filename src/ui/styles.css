@@ -872,6 +872,87 @@ button {
   border: 1px solid #444460;
   cursor: pointer;
 }
+/* ── 정보바 (InfoLayer.tsx) — Phaser HudScene을 대체. 캔버스 위 상단 전체폭 바 + 아레나 비네팅 ── */
+.info-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.info-bar {
+  position: absolute;
+  inset: 0 0 auto 0;
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 1.4vw, 22px);
+  padding: 0 clamp(10px, 1.6vw, 20px);
+  background: #1a1a24;
+  font-size: clamp(11px, 1.3vw, 18px);
+  font-weight: 700;
+  color: #fff;
+  pointer-events: auto;
+}
+.info-gold {
+  color: #ffdd44;
+}
+.info-hype {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.info-hype-track {
+  width: clamp(80px, 12vw, 180px);
+  height: 12px;
+  background: #000;
+}
+.info-hype-fill {
+  height: 100%;
+  transition: width 120ms linear;
+}
+.info-hype-label {
+  font-size: clamp(10px, 1.1vw, 15px);
+}
+.info-mode-btn {
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+.info-target {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.info-crit {
+  position: absolute;
+  font-size: clamp(16px, 2vw, 28px);
+  font-weight: 800;
+  color: #ff4444;
+  text-shadow: 0 2px 3px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+.info-req {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 10px;
+  font-size: clamp(11px, 1.2vw, 16px);
+  font-weight: 700;
+  background: #0a1c26;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.info-vignette,
+.info-alert-vignette {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  pointer-events: none;
+}
+.info-vignette {
+  background: #ff0000;
+}
+
 /* ── 처치 콤보 (ComboMeter.tsx) — 아레나 좌측 중앙, 컨트롤 중 시야 안에 들어오는 위치 ── */
 .combo-meter {
   position: absolute;
