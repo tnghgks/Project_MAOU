@@ -5,6 +5,7 @@ import {
   donationInterval,
   rollDonation,
   clampDonation,
+  donationTier,
   stepCritical,
   viewerAlert,
   rollChance,
@@ -208,6 +209,7 @@ export default class BattleScene extends Phaser.Scene {
     this.killGold = 0;
     this.target = targetGold(S.episode);
     this.boss = null;
+    S.setBossUp(false); // 지난 화 보스 BGM이 새 방송까지 따라오지 않게
     this.critical = false;
     this.critT = 0;
     this.alert = 'normal';
@@ -523,6 +525,7 @@ export default class BattleScene extends Phaser.Scene {
     const t = bossOf(gameState().episode);
     const x = this.hero.x < CX ? arenaBounds.maxX - 40 : arenaBounds.minX + 40;
     this.boss = this.doSummon(t, x, (ARENA.y + SUMMON_Y) / 2);
+    gameState().setBossUp(true); // BGM 전환(useBgm) — 아래 playCuts와 같은 렌더에 묶여 컷씬 뒤 보스 곡으로 이어진다
     this.cameras.main.flash(600, 255, 80, 80);
     this.floatText(this.boss.x, this.boss.y - 60, `☠ ${MONSTERS[t].name} 등장!`, '#ff4444');
     this.pushChat('시스템', `☠ ${MONSTERS[t].name} 등장! 용사가 쓰러뜨리면 방송 성공`, '#ff4444');
@@ -541,13 +544,15 @@ export default class BattleScene extends Phaser.Scene {
     const rolled = rollDonation(this.viewers);
     const amount = clampDonation(rolled.amount, min, max);
     const jackpot = rolled.jackpot;
+    // 단계 판정은 클램프 이후 실제 지급액 기준 — 상하한에 걸린 금액이 곧 플레이어가 보는 금액이다
+    const tier = donationTier(amount, min, max, jackpot);
     gameState().addGold(amount);
     this.totalDonated += amount;
     const name = this.randomViewer() ?? '익명';
     const msg = `${name}님 ${amount.toLocaleString()}G${jackpot ? ' 대박 후원!!' : '!'}`;
     this.pushChat('🎁 후원', msg, jackpot ? '#ff66cc' : '#ffdd44');
     this.pendingSkill = null;
-    bus.emit('donation:arrive', { amount, donor: name, jackpot });
+    bus.emit('donation:arrive', { amount, donor: name, jackpot, tier });
     // Rhythm은 계속 돌려야 한다 (리액션 이벤트의 QWER 판정 담당)
     this.scene.pause();
     bus.emit('battle:pause', null); // InfoLayer/ComboMeter 등 React UI도 같이 멈춰야 한다
@@ -954,7 +959,12 @@ export default class BattleScene extends Phaser.Scene {
       applyDot(m, H.atk * THORN_BLADE_DPS_RATIO, THORN_BLADE_DOT_T);
     }
     if (hasTrait(traits, 'flameSword')) {
-      applyDot(m, H.atk * FLAME_SWORD_DPS_RATIO, FLAME_SWORD_DOT_T, H.atk * FLAME_SWORD_DPS_RATIO * FLAME_SWORD_MAX_STACK);
+      applyDot(
+        m,
+        H.atk * FLAME_SWORD_DPS_RATIO,
+        FLAME_SWORD_DOT_T,
+        H.atk * FLAME_SWORD_DPS_RATIO * FLAME_SWORD_MAX_STACK,
+      );
     }
     if (hasTrait(traits, 'chainLightning') && rollChance(CHAIN_LIGHTNING_CHANCE * 100)) this.chainLightningProc(m, dmg);
     if (hasTrait(traits, 'shadowClone') && rollChance(SHADOW_CLONE_CHANCE * 100)) this.hitFx(m, dmg);

@@ -7,6 +7,7 @@ import {
   donationInterval,
   rollDonation,
   clampDonation,
+  donationTier,
   DONATION_MIN_RATIO,
   DONATION_MAX_RATIO,
   judge,
@@ -57,11 +58,7 @@ assert.ok(roll.amount > 30 && roll.amount < 60, `amount=${roll.amount}`);
   const cheap = 180,
     pricey = 300; // 예: 초기 상태 speed(180)~atkSpd(300)
   assert.strictEqual(clampDonation(1, cheap, pricey), Math.round(cheap * DONATION_MIN_RATIO), '너무 적으면 하한');
-  assert.strictEqual(
-    clampDonation(999999, cheap, pricey),
-    Math.round(pricey * DONATION_MAX_RATIO),
-    '너무 많으면 상한',
-  );
+  assert.strictEqual(clampDonation(999999, cheap, pricey), Math.round(pricey * DONATION_MAX_RATIO), '너무 많으면 상한');
   const mid = Math.round((cheap + pricey) / 2);
   assert.strictEqual(clampDonation(mid, cheap, pricey), mid, '범위 안이면 그대로');
 }
@@ -122,5 +119,16 @@ assert.strictEqual(skillResult(['good', 'good', 'perfect', 'miss']).viewerMult, 
 assert.strictEqual(skillResult(['good', 'good', 'perfect', 'miss']).rarity, 'common');
 assert.strictEqual(skillResult(['miss', 'miss', 'miss', 'good']).viewerMult, 0.95);
 assert.ok(skillResult(['miss', 'miss', 'miss', 'good']).penalty);
+
+// 후원 3단계: 업그레이드 가격 범위(min 180 / max 300, Lv0 기준)가 경계다.
+// 가장 싼 것도 못 사면 small, 사이면 middle, 가장 비싼 것까지 사면 big — 경계값은 위쪽에 포함.
+assert.strictEqual(donationTier(179, 180, 300), 'small');
+assert.strictEqual(donationTier(180, 180, 300), 'middle');
+assert.strictEqual(donationTier(299, 180, 300), 'middle');
+assert.strictEqual(donationTier(300, 180, 300), 'big');
+// 대박 후원은 금액이 아무리 적어도 big (클램프 상한에 걸려 작아질 수 있다)
+assert.strictEqual(donationTier(10, 180, 300, true), 'big');
+// 클램프 하한(min * 0.2)까지 내려가도 small로 판정돼야 세 단계가 모두 도달 가능하다
+assert.strictEqual(donationTier(clampDonation(0, 180, 300), 180, 300), 'small');
 
 console.log('formulas OK');

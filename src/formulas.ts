@@ -80,6 +80,21 @@ export function clampDonation(amount: number, cheapestCost: number, priciestCost
   return Math.round(clamp(amount, cheapestCost * DONATION_MIN_RATIO, priciestCost * DONATION_MAX_RATIO));
 }
 
+// 후원 규모 3단계 — 효과음(assets/sounds/*_donation.mp3)이 이 값을 따라간다.
+// 기준은 절대 금액이 아니라 "지금 뭘 살 수 있나": 가장 싼 업그레이드도 못 사면 small,
+// 가장 비싼 것까지 사면 big. clampDonation과 같은 가격 범위를 쓰므로 세 단계 모두 도달 가능하고,
+// 레벨이 올라 가격이 뛰면 단계 기준도 같이 올라간다. 대박 후원은 금액과 무관하게 항상 big.
+export type DonationTier = 'small' | 'middle' | 'big';
+export function donationTier(
+  amount: number,
+  cheapestCost: number,
+  priciestCost: number,
+  jackpot = false,
+): DonationTier {
+  if (jackpot || amount >= priciestCost) return 'big';
+  return amount >= cheapestCost ? 'middle' : 'small';
+}
+
 // 시청자 이탈 2단계 경보:
 //  WARN_VIEWERS(5) 이하 — 화면 살짝 흔들림 + 시청자 수 주황
 //  MIN_VIEWERS(1) 도달 — 즉시 CRIT_TIME 카운트다운, CRIT_ESCAPE명까지 못 올리면 방송 종료
