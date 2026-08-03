@@ -6,13 +6,18 @@ import type { HeroStats } from '../game/store.ts';
 // 카드 자체가 스탯 mods(전투기획서 원본 수치)나 특성(trait) 하나를 그대로 준다.
 export type Rarity = 'common' | 'uncommon' | 'magic' | 'epic' | 'legend';
 
+// 2026-08-03 하향(피드백: "특성 등급 카드가 너무 잘 나온다"): 등급별 보유 카드 수를 보면 common
+// 이외 등급은 특성(traits.ts)이 대부분이라(예: epic 7종 중 6종이 특성) 등급이 뜨는 순간 사실상
+// 강력한 특성이 뜨는 셈이었다. 기본은 common만 나오다시피 하도록 common 비중을 확 늘리고 나머지는
+// 등급이 오를수록 훨씬 가파르게 줄인다 (합계는 1000 기준 — common 85% · uncommon 10% · magic 4% ·
+// epic 0.8% · legend 0.2%).
 // prettier-ignore
 export const RARITY = {
-  common:   { label: '일반', weight: 50, color: '#8fd17a' },
-  uncommon: { label: '고급', weight: 27, color: '#4fa3ff' },
-  magic:    { label: '희귀', weight: 14, color: '#b366ff' },
-  epic:     { label: '영웅', weight: 7,  color: '#ffcc33' },
-  legend:   { label: '전설', weight: 2,  color: '#ff4444' },
+  common:   { label: '일반', weight: 850, color: '#8fd17a' },
+  uncommon: { label: '고급', weight: 100, color: '#4fa3ff' },
+  magic:    { label: '희귀', weight: 40,  color: '#b366ff' },
+  epic:     { label: '영웅', weight: 8,   color: '#ffcc33' },
+  legend:   { label: '전설', weight: 2,   color: '#ff4444' },
 } satisfies Record<Rarity, { label: string; weight: number; color: string }>;
 
 const ALL: Rarity[] = ['common', 'uncommon', 'magic', 'epic', 'legend'];

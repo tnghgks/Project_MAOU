@@ -5,7 +5,7 @@ import { drawCards, reactionCard, RARITY, type Card } from '../data/cards.ts';
 import { gameState } from '../game/store.ts';
 import RhythmLane from './RhythmLane.tsx';
 
-// 도네이션 1회의 진행 주체. 이 팝업이 떠 있는 동안 Battle/Hud는 멈춰 있고,
+// 도네이션 1회의 진행 주체. 이 팝업이 떠 있는 동안 Battle은 멈춰 있고(InfoLayer도 hud:tick이 끊겨 같이 정지),
 // 카드가 확정되면 'donation:end'로 강화 적용 + 재개를 요청한다 (events.ts 사이클 주석 참고).
 type Stage = 'idle' | 'reaction' | 'rhythm' | 'draw' | 'reveal';
 

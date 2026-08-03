@@ -12,7 +12,10 @@ globalThis.localStorage = {
   },
 } as Storage;
 
-const { gameStore, gameState, saveGame, loadGame, heroPower, BASE_HERO } = await import('../src/game/store.ts');
+const { gameStore, gameState, saveGame, loadGame, heroPower, BASE_HERO, RANGE_CAP } = await import(
+  '../src/game/store.ts'
+);
+const { UPGRADES } = await import('../src/data/upgrades.ts');
 
 // save → 오염 → load 라운드트립: 해금·기록만 복원
 gameStore.setState({ skills: ['낙뢰', '화염참격'], records: { bestViewers: 5000, bestGold: 12000 } });
@@ -40,8 +43,17 @@ assert.strictEqual(gameState().applyUpgrade('hp'), false); // 200G 필요
 gameStore.setState({ gold: 500 });
 assert.strictEqual(gameState().applyUpgrade('hp'), true);
 assert.strictEqual(gameState().gold, 300); // 500 - 200
-assert.strictEqual(gameState().hero.maxHp, BASE_HERO.maxHp + 80);
+assert.strictEqual(gameState().hero.maxHp, BASE_HERO.maxHp + UPGRADES.hp.delta);
 assert.strictEqual(gameState().upgradeLevels.hp, 1);
+
+// 사거리 상한(RANGE_CAP = 기본값의 3배): 카드/특성이 아무리 몰아줘도 이 값을 못 넘는다 (2026-07-31 피드백)
+{
+  gameStore.setState({ hero: { ...gameState().hero, range: BASE_HERO.range } });
+  gameState().applyStatMods([{ stat: 'range', mode: 'flat', value: RANGE_CAP * 5 }]);
+  assert.strictEqual(gameState().hero.range, RANGE_CAP, '사거리는 RANGE_CAP에서 잘린다');
+  gameState().applyUpgrade('range'); // 상한에 이미 닿은 상태에서 강화를 사도 더 안 오른다
+  assert.strictEqual(gameState().hero.range, RANGE_CAP, '업그레이드로도 상한을 못 넘는다');
+}
 
 // grantCard: 레벨은 그대로여도 statOf가 오른 값을 돌려줘야 한다 (#13 — 화면이 Lv만 보면 반영이 안 보였다)
 {

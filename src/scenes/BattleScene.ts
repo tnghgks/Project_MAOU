@@ -93,7 +93,7 @@ import {
   type ReqCtx,
   type RequestDef,
 } from '../data/requests.ts';
-import { FINAL_EP, targetGold, bossOf, START_VIEWERS } from '../data/progression.ts';
+import { FINAL_EP, targetGold, bossOf, START_VIEWERS, viewerCap } from '../data/progression.ts';
 import { bossCut } from '../data/cutscenes.ts';
 import type { RunOutcome } from '../game/store.ts';
 
@@ -140,6 +140,7 @@ export default class BattleScene extends Phaser.Scene {
   viewers!: number;
   peakViewers!: number;
   viewerSyncT!: number;
+  hudSyncT!: number; // React InfoLayer로 쏘는 hud:tick 스로틀 (씬 전용 값만 — store 중복값은 안 보낸다)
   totalDonated!: number;
   kills!: number;
   killGold!: number; // 몬스터 처치로 번 골드
@@ -147,7 +148,7 @@ export default class BattleScene extends Phaser.Scene {
   boss!: MonsterEntity | null; // 등장 후 유지 — 죽으면 스테이지 클리어
   critical = false; // 시청자 바닥 위기 (카운트다운 진행 중)
   critT = 0;
-  alert: ViewerAlert = 'normal'; // HudScene가 읽어 시청자 수 색을 바꾼다
+  alert: ViewerAlert = 'normal'; // React InfoLayer가 hud:tick으로 받아 시청자 수 색을 바꾼다
   audience: string[] = []; // 현재 접속 중인 시청자 닉네임 — 채팅·후원자가 여기서만 나온다
   drift = 0; // 시청자 증감률에 얹히는 흔들림 (기계적인 지수곡선 방지)
   combo = 0; // 처치 콤보 — ComboMeter가 읽고, FULL이면 도네이션 확률도 보정된다 (용사 모드에서만 쌓인다)
@@ -157,7 +158,7 @@ export default class BattleScene extends Phaser.Scene {
   donateT!: number;
   freezeUntil!: number; // 시간 정지 스킬
   D!: number;
-  tier!: HypeTier; // HudScene가 읽음
+  tier!: HypeTier; // React InfoLayer가 hud:tick으로 읽음
   over!: boolean;
   available!: MonsterId[];
   slots!: SummonSlot[];
@@ -169,7 +170,7 @@ export default class BattleScene extends Phaser.Scene {
   heroHpBar!: Phaser.GameObjects.Graphics;
   pendingSkill: SkillOutcome | null = null; // 리액션 리듬 결과 — 전투 재개 시점에 발동
   chatT = 0;
-  req: ActiveRequest | null = null; // 진행 중인 시청자 요청 (HudScene가 읽어 배너 렌더)
+  req: ActiveRequest | null = null; // 진행 중인 시청자 요청 (React InfoLayer가 hud:tick으로 받아 배너 렌더)
   reqPct = 0; // 요청 진행률 0~1 — HUD용 캐시
   reqT!: number; // 다음 요청까지
   lastReq: RequestDef | null = null; // 직전 요청 (연속 출제 방지)
@@ -193,6 +194,7 @@ export default class BattleScene extends Phaser.Scene {
     this.viewers = S.viewers || START_VIEWERS; // 다음 화는 지난 화 시청자 수를 이어받는다 (resetRun이 0으로 비운다)
     this.peakViewers = this.viewers;
     this.viewerSyncT = 0;
+    this.hudSyncT = 0;
     this.totalDonated = 0;
     this.kills = 0;
     this.killGold = 0;
@@ -233,8 +235,8 @@ export default class BattleScene extends Phaser.Scene {
     this.heroSpr = this.add.image(this.hero.x, this.hero.y, 'hero').setScale(2.3);
     this.heroHpBar = this.add.graphics().setDepth(3); // 몬스터·화살 위로
 
-    // 병렬 씬: HUD(캔버스 수치) + HeroPanel(용사 스탯). 리듬 판정은 RhythmLane(React)이 담당.
-    this.scene.launch('Hud');
+    // 병렬 씬: HeroPanel(용사 스탯). HUD 수치는 React InfoLayer가 hud:tick 구독으로 그린다.
+    // 리듬 판정은 RhythmLane(React)이 담당.
     this.scene.launch('HeroPanel');
 
     // 리듬 결과는 씬이 멈춰 있는 동안 도착한다 — 스킬 발동은 재개 시점(endDonation)까지 미룬다
@@ -242,7 +244,7 @@ export default class BattleScene extends Phaser.Scene {
       this.pendingSkill = res;
     });
     busBind(this, 'donation:end', ({ card }) => this.endDonation(card));
-    // Hud 중지는 App 디렉터가 담당 (shutdown 중 형제 씬 stop은 신뢰 불가)
+    busBind(this, 'mode:toggle', () => this.switchMode());
 
     // 입력: 슬라이더 드래그(카드 밖으로 나가도 추적) + 숫자키 = 해당 카드 ON/OFF
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
@@ -322,7 +324,7 @@ export default class BattleScene extends Phaser.Scene {
     map.createLayer(0, tiles, ARENA.x, ARENA.y)!.setScale(2).setDepth(-10);
     map.createBlankLayer('Props', tiles, ARENA.x, ARENA.y)!.setScale(2).setDepth(-9).putTilesAt(props, 0, 0);
 
-    // 전투 영역 chrome (상단바=Hud, 리듬레인=Rhythm)
+    // 전투 영역 chrome (상단바=React InfoLayer, 리듬레인=Rhythm)
     this.reg(add.rectangle(CX, (SUMMON_Y + CANVAS.H) / 2, ARENA.w, CANVAS.H - SUMMON_Y, 0x1a1a24).setDepth(5)); // 소환 바
     this.reg(add.line(0, 0, ARENA.x, SUMMON_Y, ARENA.w, SUMMON_Y, 0x333344).setOrigin(0).setDepth(5));
     this.slots = this.available.map((k, i) => this.buildCard(k, i));
@@ -500,12 +502,10 @@ export default class BattleScene extends Phaser.Scene {
     this.floatText(this.boss.x, this.boss.y - 60, `☠ ${MONSTERS[t].name} 등장!`, '#ff4444');
     this.pushChat('시스템', `☠ ${MONSTERS[t].name} 등장! 용사가 쓰러뜨리면 방송 성공`, '#ff4444');
     // 보스 등장 컷씬 — 도네이션과 같은 방식으로 전투를 멈추고 React에 넘긴다
-    this.scene.pause('Hud');
     this.scene.pause();
-    bus.emit('battle:pause', null); // ComboMeter 등 React UI도 같이 멈춰야 한다
+    bus.emit('battle:pause', null); // InfoLayer/ComboMeter 등 React UI도 같이 멈춰야 한다
     gameState().playCuts(bossCut(gameState().episode), () => {
       this.scene.resume();
-      this.scene.resume('Hud');
       bus.emit('battle:resume', null);
     });
   }
@@ -524,15 +524,13 @@ export default class BattleScene extends Phaser.Scene {
     this.pendingSkill = null;
     bus.emit('donation:arrive', { amount, donor: name, jackpot });
     // Rhythm은 계속 돌려야 한다 (리액션 이벤트의 QWER 판정 담당)
-    this.scene.pause('Hud');
     this.scene.pause();
-    bus.emit('battle:pause', null); // ComboMeter 등 React UI도 같이 멈춰야 한다
+    bus.emit('battle:pause', null); // InfoLayer/ComboMeter 등 React UI도 같이 멈춰야 한다
   }
 
   // 카드 확정 → 강화 적용 후 재개. 리액션이었다면 예약된 스킬도 여기서 터진다.
   endDonation(card: Card) {
     this.scene.resume();
-    this.scene.resume('Hud');
     bus.emit('battle:resume', null);
     if (card.trait) {
       // 특성 카드는 스탯이 아니라 전투 규칙을 준다 — grantCard/applyLiveCard 경로를 안 탄다
@@ -571,7 +569,7 @@ export default class BattleScene extends Phaser.Scene {
             { stat: 'atkSpd', mode: 'pctCurrent', value: GIANT_BLADE_ATKSPD_MULT - 1 },
             { stat: 'range', mode: 'pctCurrent', value: GIANT_BLADE_RANGE_MULT - 1 },
           ]
-        : [{ stat: 'range', mode: 'flat', value: ARENA.w / 2 - stats.range }]; // 화면 절반으로 확장
+        : [{ stat: 'range', mode: 'flat', value: ARENA.w / 2 - stats.range }]; // 화면 절반을 목표로 요청 — store가 RANGE_CAP으로 자른다
     gameState().applyStatMods(mods);
     const H = this.hero;
     const applied = gameState().hero;
@@ -732,7 +730,7 @@ export default class BattleScene extends Phaser.Scene {
 
     const near = countNear(this.monsters, H);
     // this는 { viewers, peakViewers, drift } 필드를 가져 ViewerState로 그대로 넘긴다.
-    const step = stepViewers(this, H.hp / H.maxHp, near, dt);
+    const step = stepViewers(this, H.hp / H.maxHp, near, dt, viewerCap(gameState().episode));
     this.D = step.D;
     this.tier = step.tier;
     this.updateRequest(dt); // 위기 판정 전 — 요청 보상이 그 프레임의 시청자 수에 바로 반영된다
@@ -766,6 +764,25 @@ export default class BattleScene extends Phaser.Scene {
       this.viewerSyncT = 0.25;
     }
 
+    // React InfoLayer — 씬 전용(store에 없는) 실시간 값만 스로틀로 쏜다. viewers/gold/mode는 store가 이미 커버.
+    this.hudSyncT -= dt;
+    if (this.hudSyncT <= 0) {
+      bus.emit('hud:tick', {
+        D: this.D,
+        tierLabel: this.tier.label,
+        tierColor: this.tier.color,
+        alert: this.alert,
+        critical: this.critical,
+        critT: this.critT,
+        modeCd: this.modeCd,
+        boss: this.boss ? { name: this.boss.def.name, hp: Math.max(0, this.boss.hp), maxHp: this.boss.def.hp } : null,
+        stageGold: this.stageGold,
+        target: this.target,
+        req: this.req ? { label: this.req.label, pct: this.reqPct, t: Math.max(0, this.req.t) } : null,
+      });
+      this.hudSyncT = 0.1;
+    }
+
     if (H.hp <= 0) return this.endRun('death');
   }
 
@@ -788,7 +805,7 @@ export default class BattleScene extends Phaser.Scene {
 
   // 경보 단계가 바뀔 때만 흔들림을 갈아끼운다 (매 프레임 shake 재호출은 진동이 튄다).
   // GDD 3-9 정정(2026-07-28): warn(시청자 ≤5)은 화면 흔들림 없이 주황 비네팅만 — 흔들림은
-  // critical(1명)에서만. HudScene.alertVignette가 b.alert를 읽어 비네팅 색/알파를 그린다.
+  // critical(1명)에서만. React InfoLayer의 info-alert-vignette가 hud:tick의 alert로 색/알파를 그린다.
   syncAlert() {
     const next = viewerAlert(this.viewers, this.critical);
     if (next === this.alert) return;
@@ -896,7 +913,9 @@ export default class BattleScene extends Phaser.Scene {
       applyStun(m, HEAVY_STRIKE_STUN);
     }
     this.hitFx(m, total);
-    if (H.lifesteal > 0) H.hp = Math.min(H.maxHp, H.hp + total * (H.lifesteal / 100));
+    // 흡혈(카드 lifesteal)은 여기서 안 준다 — 스윙당 한 번만(아래 updateHero) 적용해야 한다.
+    // 예전엔 대상마다 여기서 흡혈해 사거리↑ → 동시 타격 수↑ → 흡혈량↑로 무한 증식했다(#피드백:
+    // "사거리 늘어나면 사기". vamp 특성도 원래부터 광역과 무관하게 1회분만 준다 — 카드 쪽도 그 규칙에 맞춘다).
     if (crit && hasTrait(traits, 'frostStrike')) applyStun(m, m.def.tint ? FROST_STRIKE_BOSS_STUN : FROST_STRIKE_STUN);
     if (hasTrait(traits, 'thornBlade') && rollChance(THORN_BLADE_CHANCE * 100)) {
       applyDot(m, H.atk * THORN_BLADE_DPS_RATIO, THORN_BLADE_DOT_T);
@@ -963,6 +982,8 @@ export default class BattleScene extends Phaser.Scene {
         if (crit) this.floatText(lead.x, lead.y - 24, 'CRIT!', '#ff4444');
       }
       H.hp = Math.min(H.maxHp, H.hp + vampHeal(traits, dmg)); // 흡혈(특성) — 광역이어도 1회분
+      // 흡혈(카드 lifesteal) — 특성 흡혈과 같은 규칙: 명중 대상 수와 무관하게 스윙당 1회, 단일 타격 기준 피해로만 계산
+      if (H.lifesteal > 0) H.hp = Math.min(H.maxHp, H.hp + dmg * (H.lifesteal / 100));
     }
     this.heroSpr.setPosition(H.x, H.y);
     this.heroSpr.setAlpha(H.invulnT > 0 ? 0.5 : 1); // 대시 무적을 눈에 보이게

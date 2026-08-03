@@ -55,8 +55,8 @@ export const STAT_CARDS = {
                        mods: [{ stat: 'dodge' as const,      mode: 'flat' as const,       value: 5 }] },
   combatExperience: { name: '실전 경험',        icon: '💰', rarity: 'uncommon', desc: '처치 골드 +15%',
                        mods: [{ stat: 'goldBonus' as const,  mode: 'flat' as const,       value: 15 }] },
-  vampiricHunger:   { name: '흡혈귀의 굶주림',   icon: '🩸', rarity: 'magic',    desc: '가한 피해의 5% 흡혈',
-                       mods: [{ stat: 'lifesteal' as const,  mode: 'flat' as const,       value: 5 }] },
+  vampiricHunger:   { name: '흡혈귀의 굶주림',   icon: '🩸', rarity: 'magic',    desc: '가한 피해의 3% 흡혈',
+                       mods: [{ stat: 'lifesteal' as const,  mode: 'flat' as const,       value: 3 }] },
   swordSaint:       { name: '검성(劍聖)의 경지', icon: '🌟', rarity: 'epic',    desc: '치명타 확률 +20%, 치명타 피해 +100%',
                        mods: [
                          { stat: 'critChance' as const, mode: 'flat' as const, value: 20 },

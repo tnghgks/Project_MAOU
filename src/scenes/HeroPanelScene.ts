@@ -9,7 +9,7 @@ import { TRAITS, heroAtkMult } from '../data/traits.ts';
 import type BattleScene from './BattleScene.ts';
 
 // 용사 모드 하단 패널 (RPG UI). 소환 바와 같은 자리(SUMMON_Y~CANVAS.H)를 쓰고 모드에 따라 켜진다.
-// HudScene과 같은 패턴 — 매 프레임 BattleScene 필드를 직접 읽는다 (store 아님, React 리렌더 방지).
+// 매 프레임 BattleScene 필드를 직접 읽는다 (store 아님, React 리렌더 방지) — React InfoLayer가 hud:tick으로 받는 것과 같은 이유.
 // 씬 sleep/wake 대신 루트 컨테이너 visible로 토글: launch 타이밍에 얽히지 않는다.
 
 const H0 = SUMMON_Y; // 패널 상단
