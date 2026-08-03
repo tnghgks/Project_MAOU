@@ -7,7 +7,9 @@ import { CONTROLS } from './HelpPopup.tsx';
 type Panel = 'help' | 'options' | 'credits' | null;
 
 // public/ 자산이라 번들러가 경로를 안 바꾼다 — 상대경로 빌드(base './')를 직접 붙여준다.
-const BG_URL = `${import.meta.env.BASE_URL}assets/bg.png`;
+// CSS 변수로 넘기는 url() 은 상대경로면 스타일시트(/assets/*.css) 기준으로 풀려 assets/assets/ 가 된다.
+// 문서 기준 절대 URL 로 고정한다.
+const BG_URL = new URL(`${import.meta.env.BASE_URL}assets/bg.png`, location.href).href;
 
 export default function TitleView() {
   const records = useStore(gameStore, (s) => s.records);
