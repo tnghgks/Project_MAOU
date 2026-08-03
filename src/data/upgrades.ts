@@ -16,11 +16,11 @@ export interface UpgradeDef {
 // 대비 하나 lv1 상승폭이 절반 수준(예: 체력 80→38, 약 -52%)까지 내려온다.
 // prettier-ignore
 export const UPGRADES = {
-  hp:     { name: '체력 단련', stat: 'maxHp', delta: 38, baseCost: 200, mult: 1.5 },
-  atk:    { name: '검술 수련', stat: 'atk', delta: 6, baseCost: 250, mult: 1.5 },
-  atkSpd: { name: '속공 훈련', stat: 'atkSpd', delta: 0.07, baseCost: 300, mult: 1.6 },
-  speed:  { name: '경보법', stat: 'speed', delta: 6, baseCost: 180, mult: 1.4 },
-  range:  { name: '장창 구매', stat: 'range', delta: 7, baseCost: 220, mult: 1.5 },
+  hp:     { name: '체력 증가', stat: 'maxHp', delta: 80, baseCost: 200, mult: 1.5 },
+  atk:    { name: '데미지 증가', stat: 'atk', delta: 12, baseCost: 250, mult: 1.5 },
+  atkSpd: { name: '공격 속도 증가', stat: 'atkSpd', delta: 0.15, baseCost: 300, mult: 1.6 },
+  speed:  { name: '이동 속도 증가', stat: 'speed', delta: 12, baseCost: 180, mult: 1.4 },
+  range:  { name: '사거리 증가', stat: 'range', delta: 5, baseCost: 220, mult: 2 },
 } satisfies Record<string, UpgradeDef>;
 
 export type UpgradeKey = keyof typeof UPGRADES;

@@ -1,10 +1,13 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
 import { gameStore, gameState } from '../game/store.ts';
 import { stageCut } from '../data/cutscenes.ts';
 import { CONTROLS } from './HelpPopup.tsx';
 
 type Panel = 'help' | 'options' | 'credits' | null;
+
+// public/ 자산이라 번들러가 경로를 안 바꾼다 — 상대경로 빌드(base './')를 직접 붙여준다.
+const BG_URL = `${import.meta.env.BASE_URL}assets/bg.png`;
 
 export default function TitleView() {
   const records = useStore(gameStore, (s) => s.records);
@@ -18,7 +21,7 @@ export default function TitleView() {
   };
 
   return (
-    <div className="menu title-screen">
+    <div className="menu title-screen" style={{ '--title-bg': `url(${BG_URL})` } as CSSProperties}>
       <h1 className="title-logo">마왕 채널</h1>
       <p className="subtitle">MAOU CHANNEL — 구독과 좋아요, 그리고 나를 죽일 용사</p>
 

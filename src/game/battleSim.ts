@@ -1,6 +1,7 @@
 import { clamp, danger, hypeTier, viewerDrift, MIN_VIEWERS, type HypeTier } from '../formulas.ts';
 import type { HeroEntity, MonsterEntity, Arrow } from './entities.ts';
 import { hasTrait, INFINITE_DANCE_RATE, INFINITE_DANCE_MAX, INFINITE_DANCE_RESET_IDLE, type TraitId } from '../data/traits.ts';
+import { ATTACK_RELEASE_SEC } from './anims.ts'; // 값만 가져온다 — anims의 Phaser는 type import라 런타임에 없다
 
 // "엔티티용 formulas.ts" — 전투 시뮬 결정 로직을 Phaser 없이 모은다.
 // 헬퍼는 plain 시뮬 필드(x/y/hp/타이머)만 변이하고, Phaser가 필요한 것(스프라이트/FX/사망·골드)은
@@ -36,12 +37,31 @@ export function countNear(monsters: readonly MonsterEntity[], hero: HeroEntity):
 }
 
 // ── 용사 AI ──
+// 스프라이트는 3장(남/동/북)만 만들고 서쪽은 동쪽을 flipX — 씬이 west→east+flip으로 매핑한다.
+export type Facing = 'south' | 'east' | 'west' | 'north';
 export interface HeroIntent {
   attacks: MonsterEntity[]; // 이번 프레임 휘두르기에 맞은 전원 (씬이 damageMonster로 처리)
   swung: boolean; // 쿨다운이 돌아 공격 자체는 발동했는가 — 사거리 안에 대상이 없어도(attacks가 비어도) true일 수 있다
-  moved: boolean; // 수평 이동 여부 (flip 갱신 조건)
-  movingLeft: boolean;
+  facing: Facing | null; // null = 정지 (씬이 걷기 애니메이션을 멈춘다)
+  /** 휘두른 방향(rad). null = 이번 프레임엔 공격 없음. 판정 반원의 중심축이자 씬의 참격 각도 —
+   *  씬이 대상 좌표로 각도를 다시 구하면 판정과 연출이 어긋날 수 있어 여기서 한 번만 정한다. */
+  swingAngle: number | null;
 }
+// 4방향 → 단위 벡터. 용사 모드 조준축.
+const FACING_VEC: Record<Facing, [number, number]> = {
+  east: [1, 0],
+  west: [-1, 0],
+  north: [0, -1],
+  south: [0, 1],
+};
+// 속도 벡터 → 바라보는 방향. 용사·몬스터가 공유한다.
+// 대각선은 수평 우선 — 측면 뷰가 4방향 중 가장 잘 읽힌다.
+export function facingOf(vx: number, vy: number): Facing | null {
+  if (vx === 0 && vy === 0) return null;
+  if (Math.abs(vx) >= Math.abs(vy)) return vx < 0 ? 'west' : 'east';
+  return vy < 0 ? 'north' : 'south';
+}
+
 // 용사 모드 입력. 넘기면 자동 AI(추적·후퇴·복귀)를 대체한다 — 공격만 기존대로 자동.
 export interface HeroInput {
   dx: number;
@@ -98,10 +118,13 @@ export function stepHero(
 
   let vx = 0,
     vy = 0;
-  // 근접은 단일 타겟이 아니라 휘두르기 — 사거리 안 전원이 맞는다
+  // 근접은 단일 타겟이 아니라 휘두르기 — 사거리 안에서 (ux,uy) 쪽 180°가 맞는다.
+  // 반평면 판정은 내적 ≥ 0 — atan2 각도 차이와 달리 ±π 경계에서 뒤집히지 않는다.
   let attacks: MonsterEntity[] = [];
   let swung = false;
-  const swing = () => alive.filter((m) => dist(m, H) <= H.range);
+  let swingAngle: number | null = null;
+  const swing = (ux: number, uy: number) =>
+    alive.filter((m) => dist(m, H) <= H.range && (m.x - H.x) * ux + (m.y - H.y) * uy >= 0);
   if (input) {
     if (input.dash && H.dashCd <= 0) {
       H.dashT = DASH_DUR;
@@ -114,21 +137,18 @@ export function stepHero(
       vx = (input.dx / len) * spd;
       vy = (input.dy / len) * spd;
     }
-    // 이동은 수동, 공격은 사거리 안 최근접 자동 (다수 몬스터 상황에 조준은 손이 모자란다)
-    let target: MonsterEntity | null = null,
-      best = H.range;
-    for (const m of alive) {
-      const d = dist(m, H);
-      if (d < best) {
-        best = d;
-        target = m;
-      }
-    }
-    if (target && H.atkCd <= 0) {
+    // 조준은 바라보는 쪽 고정 — 자동 조준이 등 뒤 몬스터로 방향을 틀면 조작감이 어긋난다.
+    // 정지하면 마지막 방향이 남으므로(facingOf가 null) 제자리 공격도 방향이 정해진다.
+    H.facing = facingOf(vx, vy) ?? H.facing;
+    const [ux, uy] = FACING_VEC[H.facing];
+    const hits = swing(ux, uy);
+    // 앞이 비었으면 휘두르지 않는다 — 등 뒤 몬스터 때문에 쿨다운만 날리는 헛스윙이 된다
+    if (hits.length && H.atkCd <= 0) {
       H.atkCd = 1 / (H.atkSpd * buffMult);
       H.atkCount++;
       swung = true;
-      attacks = swing();
+      attacks = hits;
+      swingAngle = Math.atan2(uy, ux);
     }
   } else if (H.retreatT > 0 && alive.length) {
     // 몬스터 무리 반대 방향으로 도주
@@ -158,10 +178,13 @@ export function stepHero(
         vx = ((target.x - H.x) / d) * H.speed * buffMult;
         vy = ((target.y - H.y) / d) * H.speed * buffMult;
       } else if (H.atkCd <= 0) {
+        // 자동 AI는 대상 쪽을 그대로 축으로 쓴다 — 스스로 붙은 대상이라 정면이 곧 그 방향이다
         H.atkCd = 1 / (H.atkSpd * buffMult);
         H.atkCount++;
         swung = true;
-        attacks = swing();
+        const [ux, uy] = [target.x - H.x, target.y - H.y];
+        attacks = swing(ux, uy);
+        swingAngle = Math.atan2(uy, ux);
       }
     } else if (dist(H, home) > HOME_THRESHOLD) {
       // 대상 없으면 스폰으로 천천히 복귀
@@ -181,35 +204,60 @@ export function stepHero(
   }
   H.x = clamp(H.x + vx * dt, bounds.minX, bounds.maxX);
   H.y = clamp(H.y + vy * dt, bounds.minY, bounds.maxY);
-  return { attacks, swung, moved: vx !== 0, movingLeft: vx < 0 };
+  return { attacks, swung, facing: facingOf(vx, vy), swingAngle };
 }
 
 // ── 몬스터 AI ── (사망/스프라이트 처리는 씬 소유: suicide도 씬이 m.dead 세팅)
+// facing은 모든 의도에 들어간다 — 씬이 공격·대기 모션도 방향을 골라 재생해야 하기 때문이다.
+// 원거리 공격은 두 박자다: draw(시위를 당기기 시작) → … → arrow(놓는 순간). 그 사이는 idle이라
+// 씬이 모션을 새로 걸지 않는다 — 이미 도는 공격 애니메이션을 끊지 않으려는 것.
 export type MonsterIntent =
-  | { kind: 'move'; flipLeft: boolean }
-  | { kind: 'melee'; dmg: number; suicide: boolean }
-  | { kind: 'arrow'; x: number; y: number; tx: number; ty: number; dmg: number }
-  | { kind: 'idle' };
+  | { kind: 'move'; facing: Facing }
+  | { kind: 'melee'; facing: Facing; dmg: number; suicide: boolean }
+  | { kind: 'draw'; facing: Facing }
+  | { kind: 'arrow'; facing: Facing; x: number; y: number; tx: number; ty: number; dmg: number }
+  | { kind: 'idle'; facing: Facing };
 export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): MonsterIntent {
   const H = hero;
   m.atkCd = Math.max(0, m.atkCd - dt);
   // 기절/빙결(경직 포함) 중엔 AI 자체를 건너뛴다 — heavyStrike 경직·frostStrike 빙결이 여길 통해 먹힌다.
+  // 당기던 중이었다면 windupT는 그대로 멈춰 있다가 풀린 뒤 이어진다.
   if (m.stunT && m.stunT > 0) {
     m.stunT -= dt;
-    return { kind: 'idle' };
+    return { kind: 'idle', facing: facingOf(H.x - m.x, H.y - m.y) ?? 'south' };
   }
+
+  // 활을 당기는 중이면 다른 판단을 하지 않는다 — 제자리에 서서 조준하고, 놓는 프레임에 쏜다.
+  // 그 사이 용사가 사거리 밖으로 빠져도 이미 시작한 사격은 끝까지 간다(도중에 취소하면
+  // 시위를 당기던 그림만 남고 화살이 안 나가 보인다). 조준점은 놓는 순간의 용사 위치다.
+  if (m.windupT > 0) {
+    m.windupT = Math.max(0, m.windupT - dt);
+    const aim = facingOf(H.x - m.x, H.y - m.y) ?? 'south';
+    if (m.windupT > 0) return { kind: 'idle', facing: aim };
+    return { kind: 'arrow', facing: aim, x: m.x, y: m.y, tx: H.x, ty: H.y, dmg: m.def.dmg };
+  }
+
   const d = dist(m, H);
   if (d > m.def.range) {
-    m.x += ((H.x - m.x) / d) * m.def.speed * dt;
-    m.y += ((H.y - m.y) / d) * m.def.speed * dt;
-    return { kind: 'move', flipLeft: H.x < m.x };
+    const vx = ((H.x - m.x) / d) * m.def.speed;
+    const vy = ((H.y - m.y) / d) * m.def.speed;
+    m.x += vx * dt;
+    m.y += vy * dt;
+    // 용사 쪽으로 이동 중이므로 속도가 0일 수 없다 (d > range > 0)
+    return { kind: 'move', facing: facingOf(vx, vy) ?? 'south' };
   }
+  // 사거리 안에선 걸음을 멈추고 용사를 본다 — 공격·대기 모션이 볼 방향이다.
+  // 완전히 겹쳐 방향이 안 나오면 남쪽(정면): 어차피 코앞이라 어느 쪽이든 읽힌다.
+  const facing = facingOf(H.x - m.x, H.y - m.y) ?? 'south';
   if (m.atkCd <= 0) {
-    m.atkCd = m.def.atkCd;
-    if (m.def.ranged) return { kind: 'arrow', x: m.x, y: m.y, tx: H.x, ty: H.y, dmg: m.def.dmg };
-    return { kind: 'melee', dmg: m.def.dmg, suicide: !!m.def.suicide };
+    m.atkCd = m.def.atkCd; // 주기는 "쏘기로 마음먹은 순간" 기준 — 당기는 시간이 사격 간격을 늘리지 않는다
+    if (m.def.ranged) {
+      m.windupT = ATTACK_RELEASE_SEC;
+      return { kind: 'draw', facing };
+    }
+    return { kind: 'melee', facing, dmg: m.def.dmg, suicide: !!m.def.suicide };
   }
-  return { kind: 'idle' };
+  return { kind: 'idle', facing };
 }
 
 // ── 화살 ── ('travel'=이동 계속 · {hit}=용사 피격 후 소멸 · 'expire'=빗나가 소멸)

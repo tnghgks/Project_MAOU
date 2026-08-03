@@ -21,6 +21,7 @@ const mon = (x: number, y: number, hp = 50): MonsterEntity => ({
   x,
   y,
   atkCd: 0,
+  windupT: 0,
   spr: {} as MonsterEntity['spr'],
 });
 

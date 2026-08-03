@@ -387,9 +387,33 @@ button {
 }
 
 /* ── 타이틀: 방송 프레임까지 덮는 전체화면 메뉴 ── */
+/* --title-bg 는 TitleView 가 bg.png url 로 채운다 */
 .title-screen {
   position: fixed;
   z-index: 40;
+  /* 배경 위에 중앙 비네트를 얹어 메뉴 글자 대비를 확보한다 */
+  background-image:
+    radial-gradient(ellipse 62% 58% at 50% 46%, rgba(8, 8, 18, 0.88), rgba(8, 8, 18, 0.55) 58%, rgba(8, 8, 18, 0.2)),
+    var(--title-bg, none);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+.title-screen .title-logo {
+  text-shadow:
+    0 0 18px rgba(255, 68, 102, 0.45),
+    0 3px 0 #2a0410;
+}
+.title-screen .subtitle {
+  color: #cfc7d8;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+}
+/* 배경 위에 뜨는 패널이라 바탕을 깔아야 읽힌다 */
+.title-screen .howto {
+  padding: 12px 20px;
+  background: rgba(10, 10, 22, 0.82);
+  box-shadow: var(--bevel);
 }
 .title-menu {
   display: flex;

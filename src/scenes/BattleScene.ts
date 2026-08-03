@@ -20,6 +20,8 @@ import {
   type SkillRarity,
   type ViewerAlert,
 } from '../formulas.ts';
+import { dirOf, playAnim, playOnce, makeActor, type Dir } from '../game/anims.ts';
+import { HERO_CHAR, BOX_TEXTURE, FX_BASH } from './BootScene.ts';
 import { gameState, heroPower } from '../game/store.ts';
 import { bus, busBind } from '../game/events.ts';
 import { ARENA, CANVAS, SUMMON_Y, CX, arenaBounds } from '../game/layout.ts';
@@ -32,9 +34,11 @@ import {
   stepViewers,
   bumpCombo,
   countNear,
+  facingOf,
   SUMMON_MIN_RADIUS,
   HIT_INVULN_DUR,
   type HeroInput,
+  type Facing,
 } from '../game/battleSim.ts';
 import {
   hasTrait,
@@ -130,6 +134,9 @@ const HP_BAR_W = 48; // ponytail: 체력바 크기 knob
 const HP_BAR_H = 8;
 const KNOCKBACK_RADIUS = 120; // ponytail: 방패 밀치기 발동 반경(px) — GDD엔 확률만 있고 거리는 없어 여기서 정한다
 const KNOCKBACK_DIST = 60; // 밀려나는 거리(px)
+// 용사 원본은 92×92 캔버스에 인물 ~20×46px.
+// 1 = 리샘플 없음 = pixelArt 필터에서 가장 깨끗하다. ponytail: 화면상 크기 knob, 줄이면 축소 시 픽셀이 떤다.
+const HERO_SCALE = 1;
 const SHAKE_HOLD = 999_999; // critical 흔들림은 단계가 바뀔 때까지 유지 (reset으로 끈다). warn은 흔들지 않는다
 
 export default class BattleScene extends Phaser.Scene {
@@ -166,7 +173,8 @@ export default class BattleScene extends Phaser.Scene {
   summonObjs: Phaser.GameObjects.GameObject[] = []; // 소환 바 오브젝트 전부 — 용사 모드에선 통째로 숨긴다
   keys!: Record<string, Phaser.Input.Keyboard.Key>; // 용사 이동/대시 (폴링)
   skillCd: Partial<Record<SkillId, number>> = {}; // 용사 모드 직접 시전 쿨타임 (HeroPanelScene이 읽는다)
-  heroSpr!: Phaser.GameObjects.Image;
+  heroSpr!: Phaser.GameObjects.Sprite;
+  facingDir: Dir = 'south'; // 마지막으로 바라본 방향 — 정지 시 이 방향 대기 모션으로 선다
   heroHpBar!: Phaser.GameObjects.Graphics;
   pendingSkill: SkillOutcome | null = null; // 리액션 리듬 결과 — 전투 재개 시점에 발동
   chatT = 0;
@@ -232,7 +240,16 @@ export default class BattleScene extends Phaser.Scene {
       if (gameState().mode !== 'hero') gameState().toggleMode();
       this.setSummonVisible(false);
     }
-    this.heroSpr = this.add.image(this.hero.x, this.hero.y, 'hero').setScale(2.3);
+    this.heroSpr = makeActor(this, this.hero.x, this.hero.y, HERO_CHAR, 48, BOX_TEXTURE).spr.setScale(HERO_SCALE);
+    // 대기 모션은 별도 스프라이트 없이 트윈으로. y는 매 프레임 덮어써지므로 scaleY만 건드린다.
+    this.tweens.add({
+      targets: this.heroSpr,
+      scaleY: HERO_SCALE * 1.06,
+      duration: 700,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut',
+    });
     this.heroHpBar = this.add.graphics().setDepth(3); // 몬스터·화살 위로
 
     // 병렬 씬: HeroPanel(용사 스탯). HUD 수치는 React InfoLayer가 hud:tick 구독으로 그린다.
@@ -320,9 +337,15 @@ export default class BattleScene extends Phaser.Scene {
     // 아레나 배경 — 에피소드 시드로 생성한 40×15 타일맵을 scale 2로 깔면 ARENA(1280×480)에 맞는다
     const { ground, props } = buildArenaMap(gameState().episode);
     const map = this.make.tilemap({ data: ground, tileWidth: 16, tileHeight: 16 });
-    const tiles = map.addTilesetImage('tiles', 'tiles', 16, 16, 0, 1)!;
-    map.createLayer(0, tiles, ARENA.x, ARENA.y)!.setScale(2).setDepth(-10);
-    map.createBlankLayer('Props', tiles, ARENA.x, ARENA.y)!.setScale(2).setDepth(-9).putTilesAt(props, 0, 0);
+    // 텍스처가 없으면 null이 온다. 그대로 진행하면 putTilesAt이 터져 전투가 통째로 죽는다 —
+    // 배경은 없어도 게임은 굴러가니 건너뛴다.
+    const tiles = map.addTilesetImage('tiles', 'tiles', 16, 16, 0, 1);
+    if (tiles) {
+      map.createLayer(0, tiles, ARENA.x, ARENA.y)!.setScale(2).setDepth(-10);
+      map.createBlankLayer('Props', tiles, ARENA.x, ARENA.y)!.setScale(2).setDepth(-9).putTilesAt(props, 0, 0);
+    } else {
+      console.warn('[arena] 타일셋 텍스처(tiles)가 없어 배경을 건너뛴다 — 부트 에셋 로드를 확인');
+    }
 
     // 전투 영역 chrome (상단바=React InfoLayer, 리듬레인=Rhythm)
     this.reg(add.rectangle(CX, (SUMMON_Y + CANVAS.H) / 2, ARENA.w, CANVAS.H - SUMMON_Y, 0x1a1a24).setDepth(5)); // 소환 바
@@ -340,7 +363,7 @@ export default class BattleScene extends Phaser.Scene {
   // 소환 카드 1장: 초상화 + 종류 정보 + 주기/수량 슬라이더. 카드 본체 클릭 = ON/OFF.
   buildCard(t: MonsterId, i: number): SummonSlot {
     const add = this.add;
-    const def = MONSTERS[t];
+    const def: MonsterDef = MONSTERS[t];
     const x = CARD.x + i * (CARD.w + CARD.gap);
     const y = CARD.y;
 
@@ -354,12 +377,12 @@ export default class BattleScene extends Phaser.Scene {
         .setDepth(7)
         .setStrokeStyle(1, 0x4a4a5e),
     );
-    this.reg(
-      add
-        .image(x + 30, y + 30, `m_${t}`)
-        .setDisplaySize(40, 40)
-        .setDepth(8),
-    );
+    // 초상화는 아틀라스의 정면 정지컷(rotations/south). 아트가 없으면 아레나와 같은 대체 상자.
+    const portrait =
+      def.char && this.textures.exists(def.char)
+        ? add.image(x + 30, y + 30, def.char, 'rotations/south')
+        : add.image(x + 30, y + 30, BOX_TEXTURE).setTint(def.tint ?? 0xffffff);
+    this.reg(portrait.setDisplaySize(40, 40).setDepth(8));
     this.reg(add.text(x + 60, y + 10, def.name, { fontSize: '13px', fontStyle: 'bold', color: '#ffffff' }).setDepth(8));
     this.reg(
       add
@@ -486,9 +509,11 @@ export default class BattleScene extends Phaser.Scene {
 
   doSummon(t: MonsterId, x: number, y: number): MonsterEntity {
     const def: MonsterDef = MONSTERS[t];
-    const spr = this.add.image(x, y, `m_${t}`).setScale(def.size / 16);
+    const { spr, char } = makeActor(this, x, y, def.char, def.size, BOX_TEXTURE);
     if (def.tint) spr.setTint(def.tint);
-    const m: MonsterEntity = { type: t, def, hp: def.hp, x, y, atkCd: 0, spr };
+    // 곱셈이라 대체 상자(setDisplaySize로 이미 스케일이 들어간)에도 그대로 먹는다
+    if (def.scale) spr.setScale(spr.scaleX * def.scale, spr.scaleY * def.scale);
+    const m: MonsterEntity = { type: t, def, hp: def.hp, x, y, atkCd: 0, windupT: 0, spr, char };
     this.monsters.push(m);
     return m;
   }
@@ -666,14 +691,22 @@ export default class BattleScene extends Phaser.Scene {
   }
 
   // 칼 궤적 — angle(rad) 방향 호가 훑고 지나간다. impactFx와 같은 자기 청소 규칙.
+  // 판정은 반경 r 반원인데 시트 프레임(64px) 안에 여백이 있어 그대로 r*2를 주면 작아 보인다.
+  // ponytail: 눈으로 맞추는 배율 knob — 판정보다 커 보이면 줄인다
+  static readonly FX_BASH_SCALE = 3;
+
   swingFx(x: number, y: number, r: number, angle: number) {
-    const g = this.add.graphics({ x, y }).setDepth(4);
-    g.lineStyle(6, 0xffffee, 0.9);
-    g.beginPath();
-    g.arc(0, 0, r, angle - 0.8, angle + 0.8);
-    g.strokePath();
-    g.setRotation(0.7);
-    this.tweens.add({ targets: g, rotation: -0.7, alpha: 0, duration: 160, onComplete: () => g.destroy() });
+    // 용사 중앙에서 시작해 사거리를 덮는다. 초승달이 대상 쪽으로 볼록해야 베는 것처럼 보이는데
+    // 시트 원본은 볼록한 쪽이 -x라 π를 더한다.
+    this.add
+      .sprite(x, y, FX_BASH)
+      .setDepth(4)
+      .setRotation(angle + Math.PI)
+      .setDisplaySize(r * BattleScene.FX_BASH_SCALE, r * BattleScene.FX_BASH_SCALE)
+      .play(FX_BASH)
+      .once(Phaser.Animations.Events.ANIMATION_COMPLETE, (_a: unknown, _f: unknown, s: Phaser.GameObjects.Sprite) =>
+        s.destroy(),
+      );
   }
 
   // silent = 도트(화상/출혈) 틱 전용 — 매 프레임 발생해 콤보에 끼면 실력 지표가 왜곡된다.
@@ -973,13 +1006,23 @@ export default class BattleScene extends Phaser.Scene {
         this.cameras.main.flash(300, 200, 220, 255);
         this.floatText(H.x, H.y - 60, '⏳ 시공간 베기!', '#88ddff');
       }
-      if (intent.attacks.length) {
-        // 궤적은 최근접 대상 쪽으로 — 스프라이트가 보는 방향은 이동 입력에 묶여 있어 타격감과 어긋난다
+      // 참격 축은 시뮬이 정한 값 하나 — 씬이 대상 좌표로 각도를 다시 구하면 판정과 연출이 어긋난다.
+      if (intent.swingAngle !== null) {
+        this.swingFx(H.x, H.y, H.range, intent.swingAngle);
+        // 공격 모션도 같은 축을 본다 — 궤적과 스프라이트가 따로 놀면 타격감이 어긋난다
+        const [dir, flip] = dirOf(
+          facingOf(Math.cos(intent.swingAngle), Math.sin(intent.swingAngle)) ?? this.facingDir,
+        );
+        this.facingDir = dir;
+        this.heroSpr.setFlipX(flip);
+        playOnce(this.heroSpr, HERO_CHAR, 'attack', dir);
+      }
+      // CRIT 표시는 최근접 피격 대상 위에
+      if (crit && intent.attacks.length) {
         const lead = intent.attacks.reduce((a, b) =>
           Phaser.Math.Distance.Between(b.x, b.y, H.x, H.y) < Phaser.Math.Distance.Between(a.x, a.y, H.x, H.y) ? b : a,
         );
-        this.swingFx(H.x, H.y, H.range, Math.atan2(lead.y - H.y, lead.x - H.x));
-        if (crit) this.floatText(lead.x, lead.y - 24, 'CRIT!', '#ff4444');
+        this.floatText(lead.x, lead.y - 24, 'CRIT!', '#ff4444');
       }
       H.hp = Math.min(H.maxHp, H.hp + vampHeal(traits, dmg)); // 흡혈(특성) — 광역이어도 1회분
       // 흡혈(카드 lifesteal) — 특성 흡혈과 같은 규칙: 명중 대상 수와 무관하게 스윙당 1회, 단일 타격 기준 피해로만 계산
@@ -987,7 +1030,14 @@ export default class BattleScene extends Phaser.Scene {
     }
     this.heroSpr.setPosition(H.x, H.y);
     this.heroSpr.setAlpha(H.invulnT > 0 ? 0.5 : 1); // 대시 무적을 눈에 보이게
-    if (intent.moved) this.heroSpr.setFlipX(intent.movingLeft);
+    if (intent.facing) {
+      const [dir, flip] = dirOf(intent.facing);
+      this.facingDir = dir;
+      this.heroSpr.setFlipX(flip);
+      playAnim(this.heroSpr, HERO_CHAR, 'walk', dir);
+    } else {
+      playAnim(this.heroSpr, HERO_CHAR, 'idle', this.facingDir); // 대기 모션이 없는 방향은 걷기 0번 프레임
+    }
 
     const ratio = clamp(H.hp / H.maxHp, 0, 1);
     this.heroHpBar
@@ -998,6 +1048,14 @@ export default class BattleScene extends Phaser.Scene {
       .fillRect(H.x - HP_BAR_W / 2, H.y - 32, HP_BAR_W, HP_BAR_H) // 빈 구간도 보이게 (잃은 체력 = 회색)
       .fillStyle(ratio > 0.25 ? 0x44ff66 : 0xff4444)
       .fillRect(H.x - HP_BAR_W / 2, H.y - 32, HP_BAR_W * ratio, HP_BAR_H);
+  }
+
+  // 몬스터가 보는 4방향을 스프라이트에 반영하고, 애니메이션이 쓰는 3방향 키를 돌려준다.
+  // (서쪽 = 동쪽 프레임 + flipX — 아트가 3방향뿐이라 씬이 매번 이 매핑을 해준다.)
+  faceMonster(m: MonsterEntity, facing: Facing): Dir {
+    const [dir, flip] = dirOf(facing);
+    m.spr.setFlipX(flip);
+    return dir;
   }
 
   updateMonsters(dt: number) {
@@ -1013,11 +1071,18 @@ export default class BattleScene extends Phaser.Scene {
         if (m.dead) continue; // 도트로 죽었으면 이번 프레임 AI는 스킵
       }
       const intent = stepMonster(m, H, dt); // 결정은 순수, 씬은 스프라이트/피격만 적용
+      const dir = this.faceMonster(m, intent.facing);
       switch (intent.kind) {
-        case 'move':
+        case 'move': {
           m.spr.setPosition(m.x, m.y);
-          m.spr.setFlipX(intent.flipLeft);
+          playAnim(m.spr, m.char, 'walk', dir); // char 없으면(=대체 상자) no-op
           break;
+        }
+        // 시위를 당기기 시작. 화살은 아직 없다 — 모션만 걸고 릴리즈 프레임까지 기다린다.
+        case 'draw':
+          playOnce(m.spr, m.char, 'attack', dir); // 공격 아트가 없는 몬스터면 no-op
+          break;
+        // 시위를 놓는 순간. 모션은 draw에서 이미 돌고 있으니 여기선 화살만 만든다.
         case 'arrow': {
           const spr = this.add.image(intent.x, intent.y, 'arrow').setDepth(2).setScale(0.7);
           spr.setRotation(Math.atan2(intent.ty - intent.y, intent.tx - intent.x) + Math.PI / 2);
@@ -1025,6 +1090,7 @@ export default class BattleScene extends Phaser.Scene {
           break;
         }
         case 'melee': {
+          playOnce(m.spr, m.char, 'attack', dir);
           // 반격은 실제로 맞았을 때만 (대시 무적·회피로 흘리면 반사도 없다)
           const thorns = this.hurtHero(intent.dmg) ? thornsDmg(gameState().traits, intent.dmg) : 0;
           if (thorns > 0 && !m.dead) this.hitFx(m, thorns);
@@ -1034,6 +1100,11 @@ export default class BattleScene extends Phaser.Scene {
           }
           break;
         }
+        // 사거리 안에서 다음 공격을 기다리는 중. 제자리걸음이 아니라 대기 모션으로 선다
+        // (idle 아트가 없으면 playAnim이 그 방향 걷기 0번 프레임에 멈춘다).
+        case 'idle':
+          playAnim(m.spr, m.char, 'idle', dir);
+          break;
       }
     }
   }

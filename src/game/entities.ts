@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import type { HeroStats } from './store.ts';
 import type { MonsterId, MonsterDef } from '../data/monsters.ts';
+import type { Facing } from './battleSim.ts';
 
 // 전투 중 시뮬레이션 엔티티 타입 (씬 로컬). 스토어의 HeroStats(영구 스탯)와 별개로
 // 매 프레임 변이되는 런타임 상태(x/y/hp/쿨다운)를 담는다 — 의도적 이중 모델(React 리렌더 회피).
@@ -37,6 +38,9 @@ export interface HeroEntity {
   timeSlashT: number; // 시공간 베기: 남은 피해 증폭 창(초)
   firstAtkDone: boolean; // 거합도: 이번 전투 첫 공격을 이미 썼는가
   phoenixUsed: boolean; // 불사조의 깃털: 이번 런에 이미 발동했는가
+  /** 마지막으로 향한 방향. 용사 모드 공격 판정의 기준이라 시뮬이 들고 있어야 한다 —
+   *  씬의 facingDir은 서/동을 flipX로 합쳐 3방향이라 여기서 쓸 수 없다. */
+  facing: Facing;
 }
 
 export interface MonsterEntity {
@@ -46,7 +50,14 @@ export interface MonsterEntity {
   x: number;
   y: number;
   atkCd: number;
-  spr: Phaser.GameObjects.Image;
+  /** 활을 당기는 중이면 릴리즈까지 남은 시간(초). 0 = 당기는 중이 아니다.
+   *  원거리 몬스터가 쏘기로 결정한 순간 채워지고, 0이 되는 프레임에 화살이 나간다 —
+   *  그림상 시위를 놓는 시점과 판정을 맞추려는 것. 근접 몬스터는 늘 0이다. */
+  windupT: number;
+  spr: Phaser.GameObjects.Sprite;
+  /** 실제로 로드된 아틀라스 키. 스폰 시점에 확정한다 — def.char가 있어도 파일이 없으면
+   *  undefined가 되고, 그때 spr은 대체 상자다. 매 프레임 textures.exists를 다시 묻지 않으려고 캐시한다. */
+  char?: string;
   dead?: boolean;
   stunT?: number; // 기절/빙결 남은 시간 — stepMonster가 이 동안 AI를 건너뛴다
   dotT?: number; // 화상/출혈 남은 시간
@@ -95,6 +106,7 @@ export function spawnHero(s: HeroStats, at: { x: number; y: number }): HeroEntit
     timeSlashT: 0,
     firstAtkDone: false,
     phoenixUsed: false,
+    facing: 'south',
   };
 }
 
