@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { loadGame, gameState } from '../game/store.ts';
 import { MONSTERS, type MonsterDef } from '../data/monsters.ts';
 import { registerAnims, registerSheetAnims } from '../game/anims.ts';
+import { DESERT_OBJECTS } from '../game/arenaMap.ts';
 
 // 용사 아틀라스는 장비 등급마다 한 장이다 (assets/character/rian/Rian-Basic → rian-basic).
 // 약한 것부터 순서대로. 철검을 붙일 땐 Rian-Iron 폴더를 넣고 여기에 'rian-iron' 한 줄만 더한다 —
@@ -56,8 +57,11 @@ export default class BootScene extends Phaser.Scene {
     // 일반 몬스터는 idle 시트 한 장 (가로 한 줄, 정사각 프레임). 패킹 없이 그대로 넣는다.
     for (const [k, size] of SHEETS)
       this.load.spritesheet(k, `assets/character/${k}.png`, { frameWidth: size, frameHeight: size });
-    // 아레나 배경 타일셋 (광산, 16×16 spacing 1). 맵 자체는 game/arenaMap.ts가 에피소드 시드로 생성.
-    this.load.image('tiles', 'assets/tilemap.png');
+    // 아레나 배경 타일셋. 맵 자체는 game/arenaMap.ts가 에피소드 시드로 생성하고, 화별로 시트를 고른다.
+    this.load.image('tiles', 'assets/tilemap.png'); // 광산 (2화~), 16×16 spacing 1
+    this.load.image('desert-tiles', 'assets/desert-tiles.png'); // 사막 (1화), 16×16 spacing 0, 코너 wang
+    // 사막 소품은 타일이 아니라 낱장 이미지 — 목록은 arenaMap이 들고 있고 로드만 여기서 따라온다.
+    for (const { key } of DESERT_OBJECTS) this.load.image(key, `assets/desert/${key}.png`);
     // 참격 이펙트. 640×576 = 64×64 프레임 10열 × 9행(= 색상 9종). 6행이 흰색 → 50~59.
     this.load.spritesheet(FX_BASH, 'assets/impact/skill/bash.png', { frameWidth: 64, frameHeight: 64 });
   }

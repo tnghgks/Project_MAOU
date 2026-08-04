@@ -354,18 +354,28 @@ export default class BattleScene extends Phaser.Scene {
 
   buildUI() {
     const add = this.add;
-    // 아레나 배경 — 에피소드 시드로 생성한 40×15 타일맵을 scale 2로 깔면 ARENA(1280×480)에 맞는다
-    const { ground, props } = buildArenaMap(gameState().episode);
+    // 아레나 배경 — 에피소드 시드로 생성한 MAP_W×17 타일맵을 scale 2로 깔면 ARENA(세로 544)에 맞는다.
+    // 쓸 타일셋(광산/사막)도 화별로 arenaMap이 정해서 같이 넘겨준다.
+    const { ground, props, objects, tiles: sheet } = buildArenaMap(gameState().episode);
     const map = this.make.tilemap({ data: ground, tileWidth: 16, tileHeight: 16 });
     // 텍스처가 없으면 null이 온다. 그대로 진행하면 putTilesAt이 터져 전투가 통째로 죽는다 —
     // 배경은 없어도 게임은 굴러가니 건너뛴다.
-    const tiles = map.addTilesetImage('tiles', 'tiles', 16, 16, 0, 1);
+    const tiles = map.addTilesetImage(sheet.key, sheet.key, 16, 16, 0, sheet.spacing);
     if (tiles) {
       map.createLayer(0, tiles, ARENA.x, ARENA.y)!.setScale(2).setDepth(-10);
       map.createBlankLayer('Props', tiles, ARENA.x, ARENA.y)!.setScale(2).setDepth(-9).putTilesAt(props, 0, 0);
     } else {
-      console.warn('[arena] 타일셋 텍스처(tiles)가 없어 배경을 건너뛴다 — 부트 에셋 로드를 확인');
+      console.warn(`[arena] 타일셋 텍스처(${sheet.key})가 없어 배경을 건너뛴다 — 부트 에셋 로드를 확인`);
     }
+    // 낱장 소품(사막). 타일맵 위·엔티티 아래에 깔린다. 원점이 밑변이라 y가 곧 발이 닿는 지점.
+    // 로드 실패한 텍스처는 건너뛴다 — 없는 키로 그리면 초록 상자가 배경에 박힌다.
+    for (const o of objects)
+      if (this.textures.exists(o.key))
+        add
+          .image(ARENA.x + o.x, ARENA.y + o.y, o.key)
+          .setOrigin(0.5, 1)
+          .setScale(2)
+          .setDepth(-9);
 
     // 전투 영역 chrome (상단바=React InfoLayer, 리듬레인=Rhythm)
     this.reg(add.rectangle(CX, (SUMMON_Y + CANVAS.H) / 2, ARENA.w, CANVAS.H - SUMMON_Y, 0x1a1a24).setDepth(5)); // 소환 바
