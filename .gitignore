@@ -10,6 +10,9 @@ lerna-debug.log*
 .claude/settings.local.json
 .claude/skills/**/.state.json
 .claude/skills/**/.snapshot.txt
+# gdd-shared는 예외 — gdd-push-sync/gdd-pull-sync가 공유하는 동기화 이력이라 팀/기기 간 같이 가야 한다.
+!.claude/skills/notion/gdd-shared/.state.json
+!.claude/skills/notion/gdd-shared/.snapshot.txt
 
 # assets
 /assets

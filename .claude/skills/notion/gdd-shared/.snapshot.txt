@@ -1,0 +1,311 @@
+# blocks under 3a82ca92-c5bc-80b5-b6f0-e9a35e905acd
+3aa2ca92-c5bc-804a-a99c-dce0f55a24cd | heading_1 | 마왕 채널 — GDD (Game Design Document)
+3aa2ca92-c5bc-80ec-b5b7-d53b0ab2c70e | paragraph | 버전 v0.6 (초안) · 최종 수정 2026-08-04 · 상태 설계 확정 전 · 전제 2인 / 2주 / Phaser 3 / GitHub Pages
+3aa2ca92-c5bc-8084-a1f8-d09ce8ea98f8 | paragraph | ⚠️ 이 문서는 개발 내내 갱신된다. 수치는 전부 초기 제안값이며, 플레이 테스트 후 조정한다. 각 항목의 [MVP] 는 2주 안에 반드시 넣는 것, [STRETCH] 는 시간이 남으면 넣는 것.
+3ab2ca92-c5bc-812f-b75d-f367e1ed6be6 | heading_2 | 변경 이력
+3ab2ca92-c5bc-817c-8432-e46f7ce282d2 | table
+  3ab2ca92-c5bc-81e9-80a1-e31dcd815691 | table_row | 날짜 | 버전 | 수정사항 | 비고
+  3ab2ca92-c5bc-81f5-a371-d4fda4f8f78e | table_row | 2026-07-28 | v0.2 | • [1.게임개요]
+    ◦ 해상도: 레터박스 제거, 가로 가변(1280~2560)
+• [3-2.긴장도]
+    ◦ 위험도 공식 벼랑끝 보너스(+0.15)·콤보 보너스(최대+0.3) 문서화
+• [3-2.긴장도]
+    ◦ 시청자 증
+  3ab2ca92-c5bc-815b-92cd-cd3850c08315 | table_row | 2026-07-28 | v0.3 | • [3-2.긴장도]
+    ◦ 시청자 변화율 정정: 노잼 -1%, 꿀잼 +3%, 벼랑끝 +5%/초
+• [3-3.도네이션]
+    ◦ 도네 간격 공식 재조정: clamp(30-5·log10(v), 10, 25)
+• [3-4.리듬]
+ 
+  3ad2ca92-c5bc-816b-a48e-fe80e29c6c67 | table_row | 2026-07-30 | v0.4 | • [3-2.긴장도]
+    ◦ 위험도 공식에서 콤보 제거, 벼랑끝 보너스 30%→15%
+    ◦ 콤보는 화면 표시 + 도네이션 간격 단축(FULL 유지 시 -2.5초) 용도로 재정의, 피격 시 즉시 리셋
+• [3-1.리소스]
+  
+  3ae2ca92-c5bc-818a-a9a6-dcbd77d2e3a6 | table_row | 2026-07-31 | v0.5 | • [2-2.세션 루프]
+    ◦ 다음 스테이지 인계 시청자 수: peak÷2와 stageViewerFloor 중 큰 값으로 정정
+• [3-10.용사 특성]
+    ◦ 특성 20종 전부 반영, 카드-등급 확률 계산식 정정(43%)
+
+  3b22ca92-c5bc-810a-9e06-e305875a1bdc | table_row | 2026-08-04 | v0.6 | • [3-3.도네이션]
+    ◦ UI 흐름 재설계: 트위치풍 알림 → 카드 룰렛 → 등급색 배너 공개, 일반 후원은 전투 유지
+    ◦ 간격 공식 재조정: 상/하한 25→30초·10→15초, 하한 도달 시점 1만→1.5만 명
+• 
+3aa2ca92-c5bc-8075-a890-d8693a70d9f9 | divider
+3aa2ca92-c5bc-8067-a72b-d50da7f29814 | heading_2 | 1. 게임 개요
+3aa2ca92-c5bc-80e9-a09e-ec5685da3f22 | table
+  3aa2ca92-c5bc-802e-bd92-c1b979eaf3f0 | table_row | 항목 | 값
+  3aa2ca92-c5bc-8073-9c61-c1a9c78a5979 | table_row | 타이틀(가제) | 마왕 채널 (MAOU CHANNEL)
+  3aa2ca92-c5bc-8048-8e64-eefeaafd764a | table_row | 장르 | 오토배틀 × 육성 × 리듬
+  3aa2ca92-c5bc-8013-a7fe-f08000adf783 | table_row | 플랫폼 | PC 웹 브라우저 (Chrome 기준)
+  3aa2ca92-c5bc-8017-84e7-cb9b8e1ee724 | table_row | 해상도 | 세로 720 고정, 가로 1280~2560 가변 (창 비율에 맞춰 확장, 레터박스 없음)
+  3aa2ca92-c5bc-8077-afe8-e97fb71d117f | table_row | 플레이 타임 | 1회차 약 20분
+  3aa2ca92-c5bc-807a-ada3-d2dfafbdb048 | table_row | 세이브 | localStorage (해금 정보만)
+3aa2ca92-c5bc-8038-b0ce-ccc76141fce0 | divider
+3aa2ca92-c5bc-8098-9369-d75004978ebf | heading_2 | 2. 게임 루프
+3aa2ca92-c5bc-8048-917e-c05a394fde0b | heading_3 | 2-1. 코어 루프 (초 단위)
+3aa2ca92-c5bc-8033-b99a-f507b56468fa | paragraph | 용사가 자동 전투
+3aa2ca92-c5bc-8032-9bd0-d5c11a127d48 | paragraph | ↓
+3aa2ca92-c5bc-802a-9257-db71d107987a | paragraph | 플레이어가 몬스터 소환 (마우스 클릭)
+3aa2ca92-c5bc-8006-bde9-de008a2d78c1 | paragraph | ↓
+3aa2ca92-c5bc-80cf-86b4-c8099fb6f3fd | paragraph | 용사가 위험해짐 → 긴장도 상승 → 시청자 유입
+3aa2ca92-c5bc-8029-88c0-f90c5a299835 | paragraph | ↓
+3ab2ca92-c5bc-802f-87f2-e1f1abca2b41 | paragraph | 용사 모드로 전환 →  직접 조작 →  위험도 하락
+3ab2ca92-c5bc-802b-a065-e92ac118b94d | paragraph | ↓
+3ab2ca92-c5bc-8031-9210-df7abdddd47a | paragraph | 다시 마왕 모드로 전환 → 몬스터 추가  →  위험도 상승  → 반복
+3ab2ca92-c5bc-80ee-8eec-c6896e34bec6 | paragraph | ↓
+3aa2ca92-c5bc-803b-8203-c4b2796fadc0 | paragraph | 시청자 수에 비례해 도네이션 발생
+3aa2ca92-c5bc-80c6-bd3b-d640e6545eba | paragraph | ↓
+3aa2ca92-c5bc-80f7-b6a2-d56d6be459aa | paragraph | 능력치 카드 등장 -→ 랜덤 선택
+3aa2ca92-c5bc-803b-aa1f-f55dd8facaea | paragraph | ↓
+3aa2ca92-c5bc-8029-a525-c2f6dd38bc05 | paragraph | 랜덤으로 선택된 등급만큼 강력한 카드 획득 → 용사 강화 → 몬스터 정리 → 골드 획득
+3aa2ca92-c5bc-8051-9d9f-d202b3a5e8dd | paragraph | ↓ (반복)
+3aa2ca92-c5bc-8087-b9bc-c2508d8ce227 | heading_3 | 2-2. 세션 루프 (1 방송 = 약 3분)
+3aa2ca92-c5bc-8015-956d-f4c7a5163779 | paragraph | [방송 시작] → 3분 실시간 전투 → [방송 종료 정산]
+3aa2ca92-c5bc-80ad-a843-ccd8dae0c3b5 | paragraph | ↓
+3aa2ca92-c5bc-80ee-82e9-c98bcaed27ac | paragraph | 획득 골드 / 최고 동접 / 총 도네 표시
+3aa2ca92-c5bc-8072-87f5-feb25631f772 | paragraph | ↓
+3aa2ca92-c5bc-8034-bc03-fbbc1135c63e | paragraph | [육성 화면] 골드로 용사 강화
+3aa2ca92-c5bc-8092-a5fd-f37a737cd3f8 | paragraph | ↓
+3aa2ca92-c5bc-80a6-a470-c3ad5aefffdb | paragraph | 다음 방송 시작
+3aa2ca92-c5bc-805a-bcaf-d789a5479513 | paragraph | ※ 스테이지 클리어 시, 다음 스테이지는 이전 스테이지 최고 동접(peakViewers)의 1/2과, 다음 화 목표 골드에 비례한 하한(stageViewerFloor) 중 큰 값을 보유한 상태로 시작한다.
+3aa2ca92-c5bc-80e8-986a-d97f186f25af | heading_3 | 2-3. 메타 루프 (1 런 = 방송 3화)
+3aa2ca92-c5bc-80ba-9b85-edf8f09d20d1 | paragraph | 1화 → 2화 → 3화 → [최종화: 마왕 vs 용사]
+3aa2ca92-c5bc-80eb-aef2-d16107ded028 | paragraph | ↓
+3aa2ca92-c5bc-8050-993d-c60bbcd1f31c | paragraph | 엔딩 분기 (시청률 기준 3종)
+3aa2ca92-c5bc-804a-9160-cf95b979ba49 | paragraph | ↓
+3aa2ca92-c5bc-80ee-ace3-d7f504112cb6 | paragraph | 클리어 보상: 신규 몬스터 / 스킬 영구 해금
+3aa2ca92-c5bc-80bd-848c-d74b0f365772 | paragraph | ↓
+3aa2ca92-c5bc-802c-9896-f234bda56ec9 | paragraph | 다음 런
+3aa2ca92-c5bc-806a-8547-c5636b91b9db | paragraph | 게임 오버 조건:
+3aa2ca92-c5bc-80a4-b1e9-d2c6e705f666 | numbered_list_item | 방송 중 용사 HP 0 → "방송 사고" 연출 → 런 종료. 로그라이크답게 해금 요소만 남기고 1화부터 재시작.
+3aa2ca92-c5bc-8012-823f-cccc19a063b6 | numbered_list_item | 시청자 0명 -> “방송 폐지” 연출 -> 런 종료.
+3aa2ca92-c5bc-8096-8a87-f8369820cb64 | divider
+3aa2ca92-c5bc-80b1-aae5-e5e098bc0aaf | heading_2 | 3. 핵심 시스템
+3aa2ca92-c5bc-805f-8ca9-c53e42abde00 | heading_3 | 3-1. 리소스
+3aa2ca92-c5bc-80cf-b534-f34e22e0c9f9 | table
+  3aa2ca92-c5bc-80dd-87e9-c3522ea3fe8d | table_row | 리소스 | 최대 | 회복 | 용도
+  3aa2ca92-c5bc-80de-a573-eddf5a24bd04 | table_row | 멘탈 | 100 | 시청자들의 반응에 따라 변동 | 용사의 명중률, 이동 속도에 영향
+  3aa2ca92-c5bc-80c1-8816-fb5fc4dcaf12 | table_row | 시청자(Viewers) | 화별 소프트캡 (1화 5,000명, targetGold 비례로 증가) | 긴장도에 따라 변동, 상한 근처에서 상승률 감쇠 | 도네이션 빈도·금액 결정
+  3aa2ca92-c5bc-8007-8755-cb889ed8a89b | table_row | 골드(Gold) | 무제한 | 도네이션 / 몬스터 처치 | 용사 강화
+  3aa2ca92-c5bc-8043-8b4e-e4caa25c2c80 | table_row | 용사 HP | 성장에 따라 증가 | 근접 몬스터 0마리 상태 1.5초 지속 시 초당 +5% 회복 | 0이 되면 게임 오버
+3aa2ca92-c5bc-80f6-8f44-cfd477c41ec5 | heading_3 | 3-2. 긴장도(Hype) 시스템 ★ 게임의 심장
+3aa2ca92-c5bc-8005-89f2-f7924d641bed | paragraph | 매 프레임 위험도 D를 계산한다.
+3aa2ca92-c5bc-8096-b825-f8213fea78a4 | paragraph | D = (1 - 용사HP비율) × 0.6
+3aa2ca92-c5bc-808e-bd79-e9e408a915af | paragraph | + min(용사 반경 200px 내 몬스터 수 / 10, 1) × 0.4
+3ab2ca92-c5bc-8141-a3f1-d309c916bfea | paragraph | 위험도 = (1 - HP비율) × 0.6 + min(근접 몬스터 수 / 10, 1) × 0.4 + (HP비율 ≤ 15%면 +0.15 브링크 보너스). 콤보는 위험도 계산에서 빠졌다 — 콤보는 이제 화면 표시 + 도네이션 간격 단축(3-3 참고) 용도로만 쓰이고, 몬스터
+3ab2ca92-c5bc-81b0-9cc2-d6aaec5ee3ba | paragraph | 시청자 증감에는 tier.rate에 더해지는 관성 있는 랜덤워크(drift)가 있다 — 매 프레임 0으로 서서히 되돌아가려는 힘과 무작위 충격을 합산해, 상한 ±0.05 안에서 '한참 잘 늘다가 갑자기 빠지는' 실제 방송처럼 보이게 한다.
+3aa2ca92-c5bc-802f-be22-cb702b52d8af | table
+  3aa2ca92-c5bc-80cb-b2d7-d353048306f5 | table_row | 위험도 D | 상태 | 시청자 변화 | 화면 연출
+  3aa2ca92-c5bc-8072-915a-e0175308e049 | table_row | 0.00 ~ 0.20 | 😴 노잼 | -1%/초 | 채팅 조용, 화면 채도 down
+  3aa2ca92-c5bc-80c6-a57b-f8f9c6c89194 | table_row | 0.20 ~ 0.45 | 🙂 볼만함 | +1%/초 | 평범
+  3aa2ca92-c5bc-8070-9cd7-df6e2118299d | table_row | 0.45 ~ 0.75 | 🔥 꿀잼 (스윗스팟) | +3%/초 | 채팅 폭주, 화면 진동
+  3aa2ca92-c5bc-8077-8246-eab092e60ae8 | table_row | 0.75 ~ 1.00 | 💀 벼랑끝 | +5%/초 | 적색 비네팅, BGM 고조
+3aa2ca92-c5bc-8058-9592-d99562efcaef | paragraph | 설계 의도: 가장 돈이 되는 구간(0.75+)이 가장 죽기 쉬운 구간이 되도록 한다. 플레이어가 "조금만 더"를 반복하다 사고 치게 만드는 것이 목표. 밸런싱 시 이 표 하나만 만져도 게임 난이도 전체가 움직인다.
+3aa2ca92-c5bc-80be-a172-ebf70b9e9505 | heading_3 | 3-3. 도네이션 시스템
+3aa2ca92-c5bc-8032-964f-e1a6ab84b52e | paragraph | 도네 발생 간격(초) = 아래 표에 따른 공식 산출
+3aa2ca92-c5bc-80d8-847d-ceb9b99432f1 | paragraph | 도네이션 항목        = 카드 룰렛에서 1장 자동 당첨 (세로 슬롯 스핀 후 등급색 배너로 공개, 리액션 퍼팩트 시에 추가 후원 도네이션 금액(옛다 감성))
+3aa2ca92-c5bc-809c-916d-e43618261315 | table
+  3aa2ca92-c5bc-8022-b429-fe6204bc2e3b | table_row | 시청자 수 | 도네 간격 | 
+  3aa2ca92-c5bc-802d-9ecd-f0f9c0d24b96 | table_row | 46명 이하 | 30초 (상한) | 
+  3aa2ca92-c5bc-80f4-89c4-caac5224274e | table_row | 1,000명 | 22초 | 
+  3aa2ca92-c5bc-80d6-b68b-d4b57b356aed | table_row | 15,000명 이상 | 15초 (하한) | 
+3aa2ca92-c5bc-80f2-acf6-fe0c3a19c57c | paragraph | 도네이션 발생 시 → 트위치풍 알림(캐릭터+후원자·금액+메시지, 2.4초 노출) → 카드 룰렛(세로 슬롯 스핀 1.7초 → 등급색 배너 공개 1.6초) → 용사 강화. 채팅창(.chat) 왼쪽 별도 위젯에서 alert→roulette→reveal 순으로 이어지며, 일반
+3aa2ca92-c5bc-8088-bb47-d9e191d7f4e4 | paragraph | 도네이션 발생 시 → 낮은 확률로 리액션 이벤트 발생 -> 용사가 춤추는 애니메이션과 함께 ->  리듬 노트 시퀀스 출현. -> 높은 등급의 카드 1장 노출 -> 용사 강화
+3ab2ca92-c5bc-80a7-affc-ec43fbfc0cfd | paragraph | 도네이션 발생 시 → 낮은 확률로 리액션 이벤트 발생 -> 용사가 춤추는 애니메이션과 함께 ->  리듬 노트 시퀀스 출현  -> ALL PERFECT 판정 ⇒ 높은 등급의 카드 1장 노출 -> 용사 강화 ⇒ 골드 도네이션 추가
+  3ad2ca92-c5bc-814a-8d22-c0e5a14c683c | paragraph | 콤보 보너스: 처치 콤보가 FULL(12)에 도달한 상태로 도네이션이 발생하면, 다음 도네이션까지의 간격이 2.5초 단축된다.
+3ab2ca92-c5bc-80ed-b4a2-cd66ab07e76a | quote | 도네이션 보상 UI (UI Ref)
+  3ab2ca92-c5bc-80fe-b05e-fefe3147e758 | image
+3aa2ca92-c5bc-8051-8047-dda27444a409 | heading_3 | 3-4. 리듬 시스템
+3aa2ca92-c5bc-8022-94e7-d52cddeb43bf | bulleted_list_item | 입력: Q W E R 4키 (또는 방향키)
+3aa2ca92-c5bc-80c2-9ada-fc70858e5ad4 | bulleted_list_item | 노트 수: 2노트 / 4노트 / 6노트 [MVP는 4노트 고정]
+3aa2ca92-c5bc-8089-aa33-d030faf65f0c | bulleted_list_item | 판정 창: Perfect ±60ms / Good ±140ms / 그 외 Miss
+3aa2ca92-c5bc-803c-999a-c77bb83ca5da | bulleted_list_item | BPM: 방송 BGM에 고정 (128 BPM 권장), 노트는 비트 위에만 생성
+3aa2ca92-c5bc-80f2-9ab1-f3dad441dccf | table
+  3aa2ca92-c5bc-80e0-bbb5-e4573934e545 | table_row | 결과 | 혜택 | 연출
+  3aa2ca92-c5bc-804b-ba86-d3e94bbacad4 | table_row | ALL PERFECT | 시청자 +5%(+에픽 스킬, 골드 도네이션 추가) |  도네이션 보상 UI 표출
+  3aa2ca92-c5bc-8034-8c41-d4de3ea90764 | table_row | Perfect 과반 (GREAT) | 시청자 +3%(+Uncommon 스킬 획득) |  도네이션 보상 UI 표출
+  3aa2ca92-c5bc-80ca-abcb-fd6c407bb6e0 | table_row | Good 위주 (GOOD) | 시청자 +1%(+Common 스킬 획득) |  도네이션 보상 UI 표출
+  3aa2ca92-c5bc-80d1-86d6-f04485d13e4a | table_row | Miss 과반 | 시청자 -5% | 시청자 -5%
+3ab2ca92-c5bc-8032-b391-f349b0444899 | bulleted_list_item | 리듬 결과는 위 표 참고
+3aa2ca92-c5bc-8053-a8e2-e64172c0de4a | paragraph | 의도적 설계: Miss해도 게임이 끝나지 않지만 시청자가 빠진다. 처벌은 즉사가 아니라 수익 감소.
+3ab2ca92-c5bc-813c-8712-dc245c869603 | paragraph | 구현 참고: ALL PERFECT는 에픽 스킬 획득 + 추가 골드 도네이션, GREAT는 Uncommon 스킬, GOOD은 Common 스킬을 지급한다(이미 보유한 스킬이면 다른 미보유 스킬로 대체, 4종 전부 보유 중이면 시청자%만 적용). 리액션 보상 카드(스탯/특
+3aa2ca92-c5bc-80ca-8803-f84111916f59 | heading_3 | 3-5. 몬스터 소환
+3aa2ca92-c5bc-8027-af96-dc7bd6b45af5 | paragraph | 몬스터는 자동 소환 시스템으로 동작한다. 플레이어는 UI 버튼을 통해 소환 주기(시간)와 소환 배율(수량)을 설정할 수 있다. 소환 시 용사 반경 150px 이내에는 생성되지 않는다(즉사 방지).
+3aa2ca92-c5bc-80ad-b342-ef89768771c9 | table
+  3aa2ca92-c5bc-8064-927f-fcea441bd223 | table_row | 몬스터 | MP (폐지) | HP | 역할 | 해금
+  3aa2ca92-c5bc-8040-8ae3-f136ddcbd674 | table_row | 슬라임 | — | 20 | 물량. 긴장도 유발용 | 시작
+  3aa2ca92-c5bc-804e-a475-fe9aee775bc0 | table_row | 고블린 궁수 | — | 15 | 원거리 견제. 용사 HP를 서서히 깎음 | 시작
+  3aa2ca92-c5bc-8018-82a1-dc3fb666b0e9 | table_row | 골렘 | — | 120 | 탱커. 용사를 오래 붙잡아둠 | 시작
+  3aa2ca92-c5bc-8049-8895-f7211cf368f2 | table_row | 폭탄 박쥐 | — | 10 | 자폭. 순간 위험도 스파이크 | 2화
+  3aa2ca92-c5bc-809c-9b2f-f71871c97337 | table_row | 정예 기사 | — | 300 | 미니보스. 대형 도네 유발 | 3화
+3aa2ca92-c5bc-8093-83da-f42ac3195ba6 | heading_3 | 3-6. 용사 (AI)
+3aa2ca92-c5bc-8099-a3a9-c0620b58e7c8 | paragraph | 행동 규칙 (우선순위 순)
+3aa2ca92-c5bc-8096-9a8c-fd1b336796e3 | numbered_list_item | 반경 300px 내 가장 가까운 몬스터로 이동
+3aa2ca92-c5bc-8056-afd9-e4418563aa3d | numbered_list_item | 사거리 진입 시 자동 공격
+3aa2ca92-c5bc-80aa-b717-eb5cbd11b152 | numbered_list_item | HP 25% 이하 → 몬스터 밀집도가 낮은 방향으로 후퇴 (2초간)
+3aa2ca92-c5bc-800a-9a36-cd17ff266992 | numbered_list_item | 스킬 발동 명령 수신 시 즉시 실행 (이동 중단)
+3aa2ca92-c5bc-8007-b5ee-cd6008b81f2f | paragraph | 초기 스탯
+3aa2ca92-c5bc-8049-8b4c-f7deaad6d969 | table
+  3aa2ca92-c5bc-8050-8148-e0707294ad83 | table_row | 스탯 | 1화 시작값 | 최종화 목표값
+  3aa2ca92-c5bc-80c3-991e-c0250cb4f1b0 | table_row | HP | 70 | 900
+  3aa2ca92-c5bc-80ea-be7e-c0f7d2f36f65 | table_row | 공격력 | 10 | 120
+  3aa2ca92-c5bc-800e-9f35-f62a1e6d6610 | table_row | 공격속도 | 0.7 /s | 2.5 /s
+  3aa2ca92-c5bc-8022-9e90-efef831193f4 | table_row | 이동속도 | 60 px/s | 180 px/s
+  3aa2ca92-c5bc-80cb-be6a-c032ad5fc4be | table_row | 사거리 | 60 px | 140 px
+3aa2ca92-c5bc-8053-b709-dd82eff88b3e | paragraph | 이 "목표값"이 밸런싱 기준선이다. 3화까지 이 근처에 도달하지 못하면 골드 획득량이 부족한 것.
+3b22ca92-c5bc-81bc-a096-cb98bc7d7217 | paragraph | 사거리 상한(RANGE_CAP, 2026-08-03 도입): 카드·특성·강화가 아무리 몰려도 사거리는 기본값(60px)의 3배(180px)를 넘지 못한다 — 엑스칼리버 특성의 '화면 절반' 효과도 이 상한에 걸려 실질적으로 180px까지만 늘어난다.
+3aa2ca92-c5bc-807f-89e6-f967a60921b1 | heading_3 | 3-7. 멘탈 시스템 (Mental System)
+3aa2ca92-c5bc-8071-b845-f4d44672b9a7 | paragraph | 용사의 현재 정신 상태를 수치화하여 표시한다.
+3aa2ca92-c5bc-8073-a236-dc9ead9d476c | bulleted_list_item | 낮은 멘탈 (Debuff): 공격 미스 확률 증가, 이동 속도 감소.
+3aa2ca92-c5bc-8036-a885-e5f00e9200ec | bulleted_list_item | 높은 멘탈 (Buff): 공격 정확도 증가, 이동 속도 증가.
+3aa2ca92-c5bc-8091-9402-d42d9fc93f06 | heading_3 | 3-8. 이벤트 시스템 (Event System)
+3aa2ca92-c5bc-80c7-aeb2-e49f579d8350 | bulleted_list_item | 시청자 요청: 채팅으로 조건이 뜨고, 제한시간 안에 달성하면 시청자 ×1.35 / 실패하면 ×0.85. (TBD 해소 — 완전히 구현됨)
+3ab2ca92-c5bc-8115-9561-cc27a2409d9f | bulleted_list_item | 목표치는 그 시점 전투력 기준으로 스케일링(전투력 2배당 +50%, 로그 스케일)되고, 요청 시작 시점에 고정된다. 예시 11종: "슬라임 6마리 동시에", "용사 피 30% 밑으로", "노 데미지 20초"(용사 시점 전용) 등.
+3ab2ca92-c5bc-814f-baf4-fb5841a85e41 | bulleted_list_item | 요청 중 3종은 용사 시점(직접 조작) 전용이다 — 소환 조작만으로는 못 채우는 요구를 넣어 용사 시점에서 손 놓고 기다리게 되는 공백을 막는다.
+3aa2ca92-c5bc-80e6-bb35-c512691fd8e9 | bulleted_list_item | 도네이션 이벤트: 후원 발생 시 스탯/스킬 카드가 등장하며, 리듬 미니게임이 트리거된다. 리듬 게임 성적에 따라 에픽 등급 이상의 카드를 획득할 확률이 변동한다.
+3aa2ca92-c5bc-802c-a46c-dacc17175df4 | bulleted_list_item | 악성 댓글: 멘탈 수치 하락 유발. (눈에 띄는 빨간 글씨)
+3aa2ca92-c5bc-803c-97fe-c875ec6c8a03 | bulleted_list_item | 응원 댓글: 멘탈 수치 상승 유발. (눈에 띄는 파랑 글씨)
+3ab2ca92-c5bc-815b-8ef4-f4df0451abc9 | heading_3 | 3-9. 시청자 이탈 경보 시스템
+3ab2ca92-c5bc-81e3-a775-eae6f3f01ab8 | paragraph | 2단계 경보로 동작한다: 
+3ab2ca92-c5bc-80d5-ae03-f06bbb886746 | paragraph | ① 경고 — 시청자 5명 이하(WARN_VIEWERS)면 시청자 수가 주황으로 표시, 주황색 비네팅이 화면에 추가된다.
+3ab2ca92-c5bc-8008-9ca0-c13ed2247845 | paragraph | ② 위험 — 1명(MIN_VIEWERS)까지 떨어지면 10초(CRIT_TIME) 카운트다운이 즉시 시작되고, 빨간색 비네팅 + 화면 흔들림이 추가 된다. 10초 안에 2명(CRIT_ESCAPE)까지 못 올리면 방송이 강제 종료된다(게임 오버 조건 중 '시청자 0명'의 
+3ab2ca92-c5bc-81b5-81d2-c8a10b205d6b | paragraph | 판정은 화면 표시와 같은 기준(내림, Math.floor)을 쓴다 — 실수값을 그대로 비교하면 '5명인데 경고가 안 뜬다'는 체감 오차가 생기기 때문. 탈출 조건(CRIT_ESCAPE)이 카운트다운 만료보다 우선 판정된다(히스테리시스).
+3ab2ca92-c5bc-81e7-b054-dd112b25c1e1 | heading_3 | 3-10. 용사 특성 시스템 (Traits) 
+3ab2ca92-c5bc-8119-88cb-ded7e094231c | paragraph | 스탯(육성/카드)과 달리 전투 규칙 자체를 바꾸는 별도 보너스. 카드는 먼저 등급(common 85% / uncommon 10% / magic 4% / epic 0.8% / legend 0.2%, 2026-08-03 하향)이 정해지고, 그 등급 안에서 스탯 카드와 아직
+3ab2ca92-c5bc-8158-942c-d6656c9073c3 | bulleted_list_item | 🩸 흡혈: 입힌 피해의 12% 회복 (2026-07-31 하향: 20% → 12%)
+3ab2ca92-c5bc-8134-afd0-d1c57b867e9a | bulleted_list_item | 🛡 반격: 근접 피격 시 40% 반사
+3ab2ca92-c5bc-8179-9fc2-f72214a8e08c | bulleted_list_item | 🔥 광전사: HP가 낮을수록 공격력 최대 +80% (HP 0%에서 최대) — 위험도 공식의 벼랑끝 보너스(3-2)와 같은 방향이라, '피 깎인 채로 버틴다'가 화력과 시청자 양쪽으로 보상된다.
+3ae2ca92-c5bc-818f-9e7b-e9c3e56cf58a | bulleted_list_item | 🩸 전사의 피: 처치 시 최대체력의 1% 즉시 회복
+3ae2ca92-c5bc-81e6-9d92-e1351be03f47 | bulleted_list_item | 💥 묵직한 강타: 3번째 공격마다 150% 피해 + 0.5초 경직
+3ae2ca92-c5bc-815f-9eef-da742db10cf8 | bulleted_list_item | 🛡 강철의 의지: HP 50% 이하일 때 방어력 +20%
+3ae2ca92-c5bc-8141-90d4-e172d7f362fc | bulleted_list_item | 🩹 가시 돋친 검: 적중 시 15% 확률로 3초 출혈(초당 공격력의 20%)
+3ae2ca92-c5bc-81b5-9f5f-ddc6b70c4085 | bulleted_list_item | ⚔️ 거합도: 전투 시작 후 첫 공격은 반드시 치명타
+3ae2ca92-c5bc-81da-bc10-dde3b8e06c73 | bulleted_list_item | 🌪️ 바람 가르기: 공격 시 사거리 밖 가장 가까운 적에게도 50% 피해
+3ae2ca92-c5bc-81b4-b8f3-f9f98bf76967 | bulleted_list_item | 📢 전투의 함성: 카드를 얻을 때마다 전체 몬스터 2초 기절
+3ae2ca92-c5bc-81a3-8175-e40e589c8189 | bulleted_list_item | 🔥 화염검: 적중 시 5초간 중첩되는 화상 부여(최대 3중첩, 스택당 초당 공격력의 15%)
+3ae2ca92-c5bc-810f-98b4-df793089a5b5 | bulleted_list_item | ❄️ 빙결의 일격: 치명타 시 대상을 2초간 빙결(보스는 0.6초 둔화만)
+3ae2ca92-c5bc-81b0-9c37-c8aed130124c | bulleted_list_item | ⚡ 뇌전 방출: 적중 시 20% 확률로 주변 최대 3명에게 60% 비율로 전이 피해
+3ae2ca92-c5bc-8137-9255-c57e36a716d4 | bulleted_list_item | 👥 그림자 분신: 공격 시 10% 확률로 분신이 같은 공격을 한 번 더
+3ae2ca92-c5bc-8196-abeb-e048e6014e89 | bulleted_list_item | 💢 폭발적인 분노: 피격 시 주변 적 전체에게 공격력의 200% 피해
+3ae2ca92-c5bc-8160-a3ee-dd07918dbe26 | bulleted_list_item | 💃 무한의 검무: 이동 중 공속·이속이 서서히 증가해 최대 +50%(정지 시 초기화)
+3ae2ca92-c5bc-816b-870a-e9d8120ebfb3 | bulleted_list_item | 🗡️ 거인의 대검: 공속 70%, 사거리 2배(습득 즉시 1회 적용) + 상시 피해 +50%
+3ae2ca92-c5bc-81b6-915e-f682c0918a36 | bulleted_list_item | 🪶 불사조의 깃털: 치명적인 피해를 받으면 1회, 체력 50%로 부활 + 전체 화상(5초, 초당 공격력의 15%)
+3ae2ca92-c5bc-81bb-af84-f84fea732165 | bulleted_list_item | ✨ 엑스칼리버의 강림: 모든 공격 사거리 대폭 증가(사거리 상한까지 즉시 도달, 3-6 참고) + 피해 +300%
+3ae2ca92-c5bc-81d0-9832-f70e35ffbf79 | bulleted_list_item | ⏳ 시공간 베기: 10번째 공격마다 2초 시간 정지 + 그 동안 피해 1.5배
+3aa2ca92-c5bc-80a5-94a4-e343a16c0279 | divider
+3aa2ca92-c5bc-80f6-835f-c0ff1582e972 | heading_2 | 4. 육성 (방송 사이 강화 화면)
+3aa2ca92-c5bc-80b9-a9f6-cf2e3e0245bf | paragraph | 골드를 소비해 용사를 강화한다. 매 방송 종료 후 진입.
+3aa2ca92-c5bc-80a9-b3cf-f14c89a93e90 | table
+  3aa2ca92-c5bc-805f-878d-c2af14a69edc | table_row | 항목 | 효과 | 초기 비용 | 비용 증가
+  3aa2ca92-c5bc-8030-bf83-fb067fec9e46 | table_row | 체력 단련 | HP +38 | 200G | ×1.5
+  3aa2ca92-c5bc-8062-9623-da2d2f6c43d3 | table_row | 검술 수련 | 공격력 +6 | 250G | ×1.5
+  3aa2ca92-c5bc-8066-89e0-d562d211ccb4 | table_row | 속공 훈련 | 공격속도 +0.07 | 300G | ×1.6
+  3aa2ca92-c5bc-8046-8bb7-c5dc6e1495d1 | table_row | 경보법 | 이동속도 +6 | 180G | ×1.4
+  3aa2ca92-c5bc-8080-8272-ef1012230be7 | table_row | 장창 구매 | 사거리 +7 | 220G | ×1.5
+  3aa2ca92-c5bc-80a9-9fee-d0de5ced7717 | table_row | 스킬 습득 | 신규 스킬 해금 (최대 4개) | 500G | 고정
+3aa2ca92-c5bc-80ad-8466-c692e0b5407e | heading_2 | 4-1. 카드 시스템 (Card System)
+3aa2ca92-c5bc-80fe-b9db-dccd7d057a45 | paragraph | 도네이션 발생 시 카드 1장을 획득한다. 카드는 스탯 카드(조건 없이 즉시 스탯 반영) 또는 특성 카드(전투 규칙을 바꾸는 트리거형 — 3-10 참고) 중 하나이며, 먼저 등급(common 85% / uncommon 10% / magic 4% / epic 0.8% / 
+3ae2ca92-c5bc-8161-9cec-d03cce522735 | table
+  3ae2ca92-c5bc-8126-9aec-dcf0a1c2b89d | table_row | 카드 | 등급 | 효과
+  3ae2ca92-c5bc-81ed-8c0b-f4ba2154a59e | table_row | 🗡️ 날카로운 칼날 | 일반 | 기본 공격력 +10%
+  3ae2ca92-c5bc-8128-9621-f7a548092aa5 | table_row | 🛡️ 튼튼한 흉갑 | 일반 | 받는 피해 -5%
+  3ae2ca92-c5bc-81e7-a5f0-ded8c3a106f1 | table_row | 👟 가벼운 발걸음 | 일반 | 이동 속도 +10%
+  3ae2ca92-c5bc-813c-919e-e03e6c16f16c | table_row | ❤️ 기초 체력 단련 | 일반 | 최대체력 +20
+  3ae2ca92-c5bc-81cd-bf07-f20303e2331a | table_row | ⚔️ 연속 베기 | 일반 | 공격 속도 +5%
+  3ae2ca92-c5bc-8160-97bd-f23062aabf5d | table_row | 🩹 응급 처치 | 일반 | 비전투 시 5초마다 체력 +2 추가 회복
+  3ae2ca92-c5bc-8113-b979-e0e39e98a754 | table_row | 🎯 정확한 조준 | 일반 | 치명타 확률 +5%
+  3ae2ca92-c5bc-81d4-b70b-c748693bff26 | table_row | 🌀 넓은 궤적 | 일반 | 공격 범위 +10%
+  3ae2ca92-c5bc-8195-9856-d6507f1cf539 | table_row | 🔰 방패 밀치기 | 일반 | 피격 시 주변 적 밀쳐낼 확률 +10%
+  3ae2ca92-c5bc-8180-b6bd-c0d8deae0bb4 | table_row | 💨 회피의 기본 | 일반 | 회피 확률 +5%
+  3ae2ca92-c5bc-8189-9bbd-f17dc3c839fd | table_row | 💰 실전 경험 | 고급 | 처치 골드 +15%
+  3ae2ca92-c5bc-8157-b9b4-df9cb6c68338 | table_row | 🩸 흡혈귀의 굶주림 | 희귀 | 가한 피해의 3% 흡혈
+  3ae2ca92-c5bc-8143-858b-d01b07bb9998 | table_row | 🌟 검성(劍聖)의 경지 | 영웅 | 치명타 확률 +20%, 치명타 피해 +100%
+3aa2ca92-c5bc-8023-befd-d6f15544e23d | divider
+3aa2ca92-c5bc-8043-a1ac-eb0e8f8a4717 | heading_2 | 5. UI / UX
+3aa2ca92-c5bc-8047-a3f2-ec8f6b8a76b1 | heading_3 | 5-1. 인게임 화면 레이아웃
+3ab2ca92-c5bc-80c3-b572-d7fd44e637ff | image
+3aa2ca92-c5bc-8059-a803-cf8da050754f | heading_3 | 5-2. 조작 분리 원칙
+3aa2ca92-c5bc-8034-8b22-feef155a7315 | bulleted_list_item | C키로 마왕 시점(마우스로 소환 카드 조작) ↔ 용사 시점(WASD 이동 · Shift 대시 · 1~4 스킬 시전) 전환. 소환은 전환과 무관하게 계속 자동 진행된다.
+3aa2ca92-c5bc-804f-82ea-ca9268d544ef | bulleted_list_item | 전환은 언제든 즉시 가능하고 용사 시점에서도 소환 카드는 계속 돌아간다 — 두 시점을 오가며 운영하는 것이 이 게임 조작 설계의 핵심이다.
+3aa2ca92-c5bc-80bf-95e8-d4644409d7e4 | heading_3 | 5-3. 채팅창 (저비용 고효율 연출)
+3aa2ca92-c5bc-8092-b615-e1051d34f756 | paragraph | 게임 상태에 따라 사전 정의된 대사 풀에서 랜덤 출력.
+3aa2ca92-c5bc-8029-8e42-dfdcf17cb505 | table
+  3aa2ca92-c5bc-8090-b8d3-da340bb5c560 | table_row | 트리거 | 출력 예시
+  3aa2ca92-c5bc-804a-971b-fa51addc34f7 | table_row | 위험도 < 0.2 지속 5초 | "노잼이네요", "다른 방 갑니다", "매니저 뭐하냐"
+  3aa2ca92-c5bc-80db-9b99-f4347cbde38e | table_row | 위험도 > 0.75 | "헐", "죽는다죽는다", "!!!!!!!!"
+  3aa2ca92-c5bc-80c9-8102-f54e3e24bad0 | table_row | ALL PERFECT | "ㅁㅊ", "이게 사람이야?", "클립 따간다"
+  3aa2ca92-c5bc-80c9-85ff-fc82297dad27 | table_row | 용사 사망 | "..." , "방송 종료"
+3aa2ca92-c5bc-803a-8c0e-d727295e2807 | paragraph | 출력 속도는 시청자 수에 비례 (초당 1줄 → 초당 8줄).
+3aa2ca92-c5bc-80cb-97d2-d72e52bb5747 | heading_3 | 5-4. 화면 플로우
+3aa2ca92-c5bc-806e-89da-e71ae5986b06 | paragraph | 타이틀 → 프롤로그(마왕 독백) → 방송 준비 → 인게임(3분)
+3aa2ca92-c5bc-80f3-b06e-ef1713f4f0ba | paragraph | → 정산 → 육성 → (반복 ×3) → 최종화 → 엔딩 → 결과/해금
+3b22ca92-c5bc-81ee-b263-cb735152563d | heading_3 | 5-5. 일시정지
+3b22ca92-c5bc-8149-b76a-f8e406f38877 | paragraph | ESC로 여닫는 일시정지 오버레이. 도네이션 팝업이나 보스 등장 컷씬처럼 전투가 이미 다른 이유로 멈춰 있는 상태(scene.pause 중)라면 ESC를 눌러도 끼어들지 않는다 — 그 팝업들이 각자 알아서 재개를 책임진다.
+3aa2ca92-c5bc-80aa-8481-e96d936aeaa8 | divider
+3aa2ca92-c5bc-803f-b5a6-fde956ab103b | heading_2 | 6. 진행 구조 & 밸런싱 테이블 - 검토 필요
+3aa2ca92-c5bc-8007-b861-ecc233140d94 | table
+  3aa2ca92-c5bc-80cf-9844-df46d22ce605 | table_row | 방송 | 목표 동접 | 예상 획득 골드 | 몬스터 소환 예산(권장) | 용사 권장 HP
+  3aa2ca92-c5bc-803e-80f2-e53fa2d68bb4 | table_row | 1화 | 300 | 1,000G | 슬라임 위주 | 100
+  3aa2ca92-c5bc-8024-957b-fb4a5533cb9d | table_row | 2화 | 1,200 | 3,000G | + 궁수 투입 | 260
+  3aa2ca92-c5bc-80d7-a353-e27054436e91 | table_row | 3화 | 4,000 | 5,000G | + 골렘 투입 | 420
+  3aa2ca92-c5bc-8003-b49b-ea31dff78916 | table_row | 최종화 | — | — | 마왕 직접 전투 | —
+3aa2ca92-c5bc-808c-9324-c973837b38b6 | paragraph | 튜토리얼 설계 (1화 = 강제 학습 구간)
+3aa2ca92-c5bc-8031-a069-fa4d2d649543 | bulleted_list_item | 0:00~0:30 소환 없이 관전 → 시청자 감소 체험 ("노잼이면 돈이 안 벌린다")
+3aa2ca92-c5bc-80db-8972-fda59aa8426a | bulleted_list_item | 0:30 슬라임 소환 유도 → 시청자 상승 체험
+3aa2ca92-c5bc-80f4-8ef8-de24a7af82de | bulleted_list_item | 1:00 첫 도네이션 → 리듬 튜토리얼 (느린 4노트)
+3aa2ca92-c5bc-809c-9b35-ec8e2d14a1cd | bulleted_list_item | 이후 자유
+3aa2ca92-c5bc-807e-a429-f13e5286ca67 | divider
+3aa2ca92-c5bc-8068-bebf-d760f9258d36 | heading_2 | 7. 최종화 & 엔딩
+3aa2ca92-c5bc-8078-8e8d-c3818961c413 | paragraph | 최종화는 마왕(플레이어) vs 용사의 라이브 방송이다.
+3aa2ca92-c5bc-80ec-9a13-c4052d6df567 | bulleted_list_item | 최종화에서는 용사만 플레이 가능 / 도네이션 금지
+3aa2ca92-c5bc-805a-a81e-ec795ca416bd | bulleted_list_item | 승패는 용사 스탯과 리듬 성적으로 자동 판정
+3aa2ca92-c5bc-80f1-9c27-f24d3448ca9a | bulleted_list_item | 평가 기준은 승패가 아니라 최종 시청률
+3aa2ca92-c5bc-80d5-8b73-e113d770ca3f | table
+  3aa2ca92-c5bc-8019-8703-c2aee28b375c | table_row | 조건 | 엔딩
+  3aa2ca92-c5bc-80a7-84d4-d0bec91e30a0 | table_row | 용사가 너무 약함 (스탯 목표 60% 미만) | BAD — "싱겁네요" 시청자 이탈, 마왕은 이겼지만 채널은 망함
+  3aa2ca92-c5bc-80f8-822b-f2d99b881236 | table_row | 용사 적정 성장 + 리듬 성적 양호 | BEST — "전설의 방송" 마왕은 쓰러지지만 역대 최고 동접 달성
+  3aa2ca92-c5bc-80c7-adcf-ff6497526132 | table_row | 용사 과성장 (마왕 즉사) | HIDDEN — "1분 컷" 너무 빨리 끝나 클립만 남음
+3aa2ca92-c5bc-8048-9125-f549bef39b75 | divider
+3aa2ca92-c5bc-8033-8547-fe07b5060290 | heading_2 | 8. 기술 설계
+3aa2ca92-c5bc-80e5-b05a-cd38b14e1a0b | table
+  3aa2ca92-c5bc-809a-be5e-ea23ca36364d | table_row | 항목 | 결정
+  3aa2ca92-c5bc-8024-8e02-e4d19ea64aee | table_row | 엔진 | Phaser 3 (arcade physics)
+  3aa2ca92-c5bc-8060-ae3f-e2cff6a4c820 | table_row | 빌드 | Vite
+  3aa2ca92-c5bc-80d6-9aaf-d29e5029c938 | table_row | 언어 | TypeScript (전체 전환 완료)
+  3aa2ca92-c5bc-8089-aea5-eb6ac29700d3 | table_row | 배포 | GitHub Pages + Actions 자동 배포
+  3aa2ca92-c5bc-8013-ae35-d68de21dd4a7 | table_row | 상태 관리 | 단일 GameState 싱글턴 (시청자/골드/마력/용사스탯)
+  3aa2ca92-c5bc-8015-8abe-f0efa810bb66 | table_row | 씬 구성 | Phaser: BootScene / BattleScene / HeroPanelScene · 상단 정보바(InfoLayer)·리듬(RhythmLane)·메뉴(타이틀/정산/육성/엔딩)는 React 컴포넌트로 분리 (2026-08-03 HudScene 제거, I
+  3aa2ca92-c5bc-80f3-ba5e-d443a0cdabc9 | table_row | 오디오 | HTMLAudioElement 직접 사용 (Howler·Phaser sound 아님 — 도네이션 팝업으로 씬이 pause된 동안에도 재생돼야 해서). 리듬 판정은 AudioContext.currentTime 기준 (requestAnimationFrame 금지
+  3aa2ca92-c5bc-8016-bbff-e7b4d6d9b96f | table_row | 저장 | localStorage: 해금 목록, 최고 기록
+  3aa2ca92-c5bc-80b7-aaac-c12d426b1bf2 | table_row | 성능 목표 | 동시 몬스터 200마리 @ 60fps → 오브젝트 풀링 필수
+3aa2ca92-c5bc-8038-a373-c0247a7858c5 | heading_3 | 주요 기술 리스크
+3aa2ca92-c5bc-80bf-a907-f6a96dfc5cfc | numbered_list_item | 리듬 싱크 — 웹 오디오 레이턴시. 오디오 클럭 기준 + 캘리브레이션 옵션으로 대응
+3aa2ca92-c5bc-80e0-88ff-e8cef375b34b | numbered_list_item | 대량 스프라이트 성능 — 풀링 + 화면 밖 컬링 필수
+3aa2ca92-c5bc-8073-b884-ec8b24f5b35f | numbered_list_item | 탭 비활성화 시 delta 폭주 — document.visibilitychange로 일시정지 처리
+3aa2ca92-c5bc-8012-bf57-c6c83957c9a2 | divider
+3aa2ca92-c5bc-800e-91df-fa8953704af7 | heading_2 | 9. 2주 개발 일정
+3aa2ca92-c5bc-80a0-a0d0-ec3dd9649c9f | table
+  3aa2ca92-c5bc-80fe-a230-fddd4a500e09 | table_row | 일차 | A (게임플레이) | B (UI/리듬/메타)
+  3aa2ca92-c5bc-802f-81cd-cefc5f0fef07 | table_row | D1–2 | Phaser 셋업, 용사 AI 이동/공격 | 프로젝트 구조, 씬 골격, GitHub Pages 배포 파이프라인
+  3aa2ca92-c5bc-805f-979c-d8b627889e03 | table_row | D3–4 | 몬스터 3종 + 소환/마력 | 상태바 UI, 채팅창
+  3aa2ca92-c5bc-802b-95e7-cfc56163c750 | table_row | D5–6 | 긴장도 → 시청자 로직 | 도네이션 → 리듬 노트 시스템
+  3aa2ca92-c5bc-8057-bec0-de7e1c2560a3 | table_row | D7–8 | 스킬 4종 + 이펙트 | 판정·스코어링, 정산 화면
+  3aa2ca92-c5bc-80b7-9ced-c64049f74308 | table_row | D9–10 | 방송 1~5화 진행 구조 | 육성 화면, localStorage
+  3aa2ca92-c5bc-80c8-8ef8-d9859961473a | table_row | D11–12 | 밸런싱 집중 | 최종화 + 엔딩 3종
+  3aa2ca92-c5bc-8026-a57b-c8bcc6f72d34 | table_row | D13 | 사운드·연출 폴리시 | 튜토리얼 흐름
+  3aa2ca92-c5bc-801f-b799-f74b92d02062 | table_row | D14 | 버그 수정 / 배포 / 시연 준비 | 
+3aa2ca92-c5bc-808f-9783-d754af9d0146 | paragraph | 중단 기준(Kill Criteria): D8 종료 시점에 "소환 → 시청자 상승 → 리듬 → 스킬" 루프가 한 번도 안 돌아가면, 육성/엔딩을 잘라내고 단일 방송 3분 아케이드로 축소한다.
+3aa2ca92-c5bc-80a5-b76f-da2898d5fdd4 | divider
+3aa2ca92-c5bc-80ae-8b35-fcb7614998d4 | heading_2 | 10. MVP 범위 정리
+3aa2ca92-c5bc-8013-ae2f-c6561a3e1c72 | paragraph | 반드시 넣는다
+3aa2ca92-c5bc-80c6-8bb7-ec6c20a1c82e | bulleted_list_item | 용사 1명, 아레나 1개
+3aa2ca92-c5bc-8064-8017-cfd04816c75e | bulleted_list_item | 몬스터 5종
+3aa2ca92-c5bc-80fd-aecc-d9da222659aa | bulleted_list_item | 긴장도 → 시청자 → 도네이션 → 리듬 → 스킬 루프 전체
+3aa2ca92-c5bc-80d1-af12-efd1be36243e | bulleted_list_item | 스킬 4종, 강화 5종
+3aa2ca92-c5bc-8011-8bf5-e67d05235bab | bulleted_list_item | 방송 3화 + 간이 최종화
+3aa2ca92-c5bc-807d-b82d-cb24e8856a07 | bulleted_list_item | 채팅창 연출
+3aa2ca92-c5bc-8069-a7ff-e4bcdacc5e42 | paragraph | 시간 남으면
+3aa2ca92-c5bc-8055-9414-eeec2e36e76a | bulleted_list_item | 마왕 직접 조작, 스킬 슬롯 지정, 시청자 수 랭킹, 여러 아레나, 클립 저장
+3aa2ca92-c5bc-80bc-b3db-c2d15343994d | divider
+3aa2ca92-c5bc-8048-88dd-e05fbdc2c183 | paragraph
