@@ -135,6 +135,8 @@ const HP_BAR_W = 48; // ponytail: 체력바 크기 knob
 const HP_BAR_H = 8;
 const KNOCKBACK_RADIUS = 120; // ponytail: 방패 밀치기 발동 반경(px) — GDD엔 확률만 있고 거리는 없어 여기서 정한다
 const KNOCKBACK_DIST = 60; // 밀려나는 거리(px)
+const HIT_KNOCKBACK_DIST = 22; // ponytail: 공격 적중마다 밀려나는 기본 거리(px) — monsters.ts의 kb 배율이 곱해진다
+const HIT_KNOCKBACK_DUR = 0.15; // 넉백이 슬라이드로 보이는 시간(초) — 이 안에 위 거리만큼 이동
 // 용사 원본은 92×92 캔버스에 인물 ~20×46px.
 // 1 = 리샘플 없음 = pixelArt 필터에서 가장 깨끗하다. ponytail: 화면상 크기 knob, 줄이면 축소 시 픽셀이 떤다.
 const HERO_SCALE = 1;
@@ -259,9 +261,23 @@ export default class BattleScene extends Phaser.Scene {
     // 리듬 판정은 RhythmLane(React)이 담당.
     this.scene.launch('HeroPanel');
 
-    // 리듬 결과는 씬이 멈춰 있는 동안 도착한다 — 스킬 발동은 재개 시점(endDonation)까지 미룬다
+    // 전투 정지는 딱 리듬 미니게임이 시작되는 순간부터다 — 알림(alert)·춤 연출(reaction) 동안은
+    // 화면을 안 덮으니 안 멈춘다. rhythm:start는 React(DonationEvent)가 그 시점에만 쏜다.
+    busBind(this, 'rhythm:start', () => {
+      this.donationPaused = true;
+      this.scene.pause();
+      bus.emit('battle:pause', null); // InfoLayer/ComboMeter 등 React UI도 같이 멈춰야 한다
+    });
+    // 리듬 결과는 씬이 멈춰 있는 동안 도착한다. 카드 룰렛(donation-widget)은 화면을 안 덮으니
+    // 전투를 계속 멈춰둘 필요가 없다 — 리듬이 끝나는 이 시점에 바로 재개한다. 스킬 발동/카드 지급
+    // 자체는 룰렛이 다 끝난 뒤(donation:end → endDonation)까지 미룬다.
     busBind(this, 'rhythm:result', (res) => {
       this.pendingSkill = res;
+      if (this.donationPaused) {
+        this.donationPaused = false;
+        this.scene.resume();
+        bus.emit('battle:resume', null);
+      }
     });
     busBind(this, 'donation:end', ({ card }) => this.endDonation(card));
     busBind(this, 'mode:toggle', () => this.switchMode());
@@ -555,35 +571,28 @@ export default class BattleScene extends Phaser.Scene {
     const msg = `${name}님 ${amount.toLocaleString()}G${jackpot ? ' 대박 후원!!' : '!'}`;
     this.pushChat('🎁 후원', msg, jackpot ? '#ff66cc' : '#ffdd44');
     this.pendingSkill = null;
+    // 대박 시 전투를 멈추는 로직은 donation:arrive 리스너(create()) 쪽에 있다 — 이 emit이 그걸 트리거한다.
     bus.emit('donation:arrive', { amount, donor: name, jackpot, tier, message: pickDonationMessage() });
-    if (jackpot) {
-      // 리듬 판정에 집중해야 하니 이때만 멈춘다. donationPaused로 "내가 멈춘 것"을 기록해둬야
-      // endDonation이 ESC 일시정지 등 다른 이유의 pause까지 잘못 풀어버리지 않는다.
-      this.donationPaused = true;
-      this.scene.pause();
-      bus.emit('battle:pause', null); // InfoLayer/ComboMeter 등 React UI도 같이 멈춰야 한다
-    }
   }
 
-  // 카드 확정 → 강화 적용. 대박이라 멈춰뒀던 경우에만 재개하고, 리액션이었다면 예약된 스킬도 여기서 터진다.
-  endDonation(card: Card) {
-    if (this.donationPaused) {
-      this.donationPaused = false;
-      this.scene.resume();
-      bus.emit('battle:resume', null);
+  // 카드 확정 → 강화 적용. 전투 재개는 이미 rhythm:result 시점에 끝났다(카드 룰렛은 화면을 안 덮으니
+  // 안 멈춰도 된다) — 여기선 카드/특성 지급과 예약된 스킬(resolveRhythmResult) 발동만 담당한다.
+  // card === null: 리듬 완전 실패(penalty) — 보상 없이 페널티만(아래 resolveRhythmResult가 처리) 적용한다.
+  endDonation(card: Card | null) {
+    if (card) {
+      if (card.trait) {
+        // 특성 카드는 스탯이 아니라 전투 규칙을 준다 — grantCard/applyLiveCard 경로를 안 탄다
+        gameState().grantTrait(card.trait);
+        const t = TRAITS[card.trait];
+        this.cameras.main.flash(400, 255, 120, 220);
+        this.floatText(this.hero.x, this.hero.y - 40, `${t.icon} ${t.name} 각성!`, '#ff66cc');
+        this.pushChat('시스템', `🎁 특성 획득 — ${t.icon} ${t.name}: ${t.desc}`, '#ff66cc');
+      } else {
+        gameState().grantCard(card);
+        this.applyLiveCard(card, `🎁 ${RARITY[card.rarity].label} 카드!`);
+      }
+      this.onCardGranted(card);
     }
-    if (card.trait) {
-      // 특성 카드는 스탯이 아니라 전투 규칙을 준다 — grantCard/applyLiveCard 경로를 안 탄다
-      gameState().grantTrait(card.trait);
-      const t = TRAITS[card.trait];
-      this.cameras.main.flash(400, 255, 120, 220);
-      this.floatText(this.hero.x, this.hero.y - 40, `${t.icon} ${t.name} 각성!`, '#ff66cc');
-      this.pushChat('시스템', `🎁 특성 획득 — ${t.icon} ${t.name}: ${t.desc}`, '#ff66cc');
-    } else {
-      gameState().grantCard(card);
-      this.applyLiveCard(card, `🎁 ${RARITY[card.rarity].label} 카드!`);
-    }
-    this.onCardGranted(card);
     if (this.pendingSkill) {
       this.resolveRhythmResult(this.pendingSkill);
       this.pendingSkill = null;
@@ -940,6 +949,22 @@ export default class BattleScene extends Phaser.Scene {
     this.floatText(H.x, H.y - 50, '💫 밀쳐내기!', '#ffaa66');
   }
 
+  // 공격 적중 넉백: 매 타격마다 살짝 밀어낸다. 거리는 몬스터별 kb 배율(monsters.ts)로 갈린다 —
+  // 슬라임처럼 가벼운 몬스터는 많이, 골렘/미니보스는 조금, 보스(kb: 0)는 전혀 밀리지 않는다.
+  // 즉시 순간이동시키지 않고 kbT/kbVx/kbVy로 속도를 실어 stepMonster가 몇 프레임에 걸쳐
+  // 밀어내게 한다 — 그래야 한 프레임짜리 점프가 아니라 눈에 보이는 슬라이드가 된다.
+  attackKnockback(m: MonsterEntity) {
+    const kb = m.def.kb ?? 1;
+    if (kb <= 0 || m.dead) return;
+    const H = this.hero;
+    const d = Phaser.Math.Distance.Between(m.x, m.y, H.x, H.y);
+    if (d <= 0) return;
+    const speed = (HIT_KNOCKBACK_DIST * kb) / HIT_KNOCKBACK_DUR;
+    m.kbT = HIT_KNOCKBACK_DUR;
+    m.kbVx = ((m.x - H.x) / d) * speed;
+    m.kbVy = ((m.y - H.y) / d) * speed;
+  }
+
   // 불사조의 깃털: 치명적인 피해를 받으면 이번 런 1회, 체력 50%로 부활 + 전체 화상
   phoenixProc() {
     const H = this.hero;
@@ -973,6 +998,7 @@ export default class BattleScene extends Phaser.Scene {
       applyStun(m, HEAVY_STRIKE_STUN);
     }
     this.hitFx(m, total);
+    this.attackKnockback(m);
     // 흡혈(카드 lifesteal)은 여기서 안 준다 — 스윙당 한 번만(아래 updateHero) 적용해야 한다.
     // 예전엔 대상마다 여기서 흡혈해 사거리↑ → 동시 타격 수↑ → 흡혈량↑로 무한 증식했다(#피드백:
     // "사거리 늘어나면 사기". vamp 특성도 원래부터 광역과 무관하게 1회분만 준다 — 카드 쪽도 그 규칙에 맞춘다).

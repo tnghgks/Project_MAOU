@@ -41,7 +41,7 @@ export interface HudTick {
 export interface BusEvents {
   'chat:line': ChatLine;
   'donation:arrive': Donation;
-  'donation:end': { card: Card };
+  'donation:end': { card: Card | null }; // null = 리듬 완전 실패(penalty) — 보상 없이 재개만
   'rhythm:start': null;
   'rhythm:result': SkillOutcome;
   'combo:hit': { combo: number };

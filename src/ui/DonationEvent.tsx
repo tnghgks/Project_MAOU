@@ -10,13 +10,15 @@ import RhythmLane from './RhythmLane.tsx';
 // alert(트위치풍 후원 알림) → [jackpot이면 reaction→rhythm 전체화면 미니게임] → roulette(카드 룰렛 스핀) → reveal
 // alert·roulette·reveal은 채팅창(.chat) 왼쪽에 뜨는 같은 작은 위젯(.donation-widget) 안에서 이어지고,
 // 전투는 계속 진행된다 — 화면을 덮고 전투를 멈추는 건 실제 조작이 필요한 reaction/rhythm 미니게임뿐이다
-// (BattleScene.fireDonation이 대박일 때만 scene.pause()를 건다).
-type Stage = 'idle' | 'alert' | 'reaction' | 'rhythm' | 'roulette' | 'reveal';
+// (BattleScene이 donation:arrive의 jackpot을 보고 scene.pause()를 건다).
+// fail: 리듬 완전 실패(Judgement 과반 miss) 전용 — 룰렛 없이 실패만 알리고 끝낸다(GDD 3-4 "Miss 과반"엔 카드가 없다).
+type Stage = 'idle' | 'alert' | 'reaction' | 'rhythm' | 'roulette' | 'reveal' | 'fail';
 
 // ponytail: 연출 길이 knob — 합이 길수록 전투 정지 시간이 늘어난다
 const ALERT_MS = 2400; // 캐릭터 + 후원 메시지 알림 노출 — styles.css alert-pop 애니메이션 길이와 일치
 const REACTION_MS = 1400; // 춤 연출 → 노트 시작
 const REVEAL_MS = 1600; // 당첨 카드 노출
+const FAIL_MS = 1400; // 실패 배너 노출
 
 // 세로 룰렛 릴 지오메트리 — ITEM_H는 styles.css .roulette-vitem height와 반드시 같아야 한다.
 const ITEM_H = 44;
@@ -79,7 +81,18 @@ export default function DonationEvent() {
     });
   });
 
-  useBusEvent('rhythm:result', (res) => spinTo(reactionCard(!!res.highTier, gameState().traits)));
+  // 완전 실패(res.penalty)면 룰렛 없이 실패만 알린다 — 시청자 페널티 자체는 BattleScene.resolveRhythmResult가 처리.
+  const failOut = () => {
+    setStage('fail');
+    after(FAIL_MS, () => {
+      setStage('idle');
+      bus.emit('donation:end', { card: null });
+    });
+  };
+  useBusEvent('rhythm:result', (res) => {
+    if (res.penalty) return failOut();
+    spinTo(reactionCard(!!res.highTier, gameState().traits));
+  });
 
   if (stage === 'idle' || !don) return null;
 
@@ -128,7 +141,7 @@ export default function DonationEvent() {
       <div className="donation-widget-head">
         <img className="donation-widget-hero" src={heroSrc} alt="" />
         <p className="roulette-head">
-          🎰 {don.donor}님의 {don.amount.toLocaleString()}G 카드 룰렛!
+          {stage === 'fail' ? `💦 리듬 실패...` : `🎰 ${don.donor}님의 ${don.amount.toLocaleString()}G 카드 룰렛!`}
         </p>
       </div>
 
@@ -156,6 +169,12 @@ export default function DonationEvent() {
             <div className="roulette-vitem">{won.name}</div>
           </div>
           <span className="reveal-desc">{won.desc}</span>
+        </div>
+      )}
+
+      {stage === 'fail' && (
+        <div className="roulette-vmask fail">
+          <div className="roulette-vitem">💦 보상 없음...</div>
         </div>
       )}
     </div>

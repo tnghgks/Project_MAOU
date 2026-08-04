@@ -91,6 +91,7 @@ export default function RhythmLane() {
     <Fragment>
       {/* 노트만 가로로 클리핑 — 화면 밖에서 날아오는 연출용 */}
       <div className="rhythm-lane">
+        <div className="rhythm-track-bg" />
         <div className="rhythm-target" />
         {notes.map((n) => (
           <span
