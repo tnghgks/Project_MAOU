@@ -62,6 +62,9 @@ export interface MonsterEntity {
   stunT?: number; // 기절/빙결 남은 시간 — stepMonster가 이 동안 AI를 건너뛴다
   dotT?: number; // 화상/출혈 남은 시간
   dotDps?: number; // 위 dot의 초당 피해
+  kbT?: number; // 공격 넉백 남은 시간(초) — 이 동안 stepMonster가 AI 대신 kbVx/kbVy로만 밀어낸다
+  kbVx?: number; // 넉백 속도(px/s)
+  kbVy?: number;
 }
 
 export interface Arrow {
@@ -116,7 +119,7 @@ export interface SkillContext {
   readonly hero: HeroEntity;
   readonly monsters: readonly MonsterEntity[];
   hit(m: MonsterEntity, dmg: number): void; // 데미지 + 타격 이펙트
-  fxCircle(x: number, y: number, r: number): void; // 위치 강타 연출
+  fxCircle(x: number, y: number, r: number, kind?: 'lightning' | 'fire'): void; // 위치 강타 연출 — kind로 테마(기본 lightning)
   heal(ratio: number): void; // hero.hp = min(maxHp, hp + maxHp*ratio)
   freeze(ms: number): void; // 몬스터 시간 정지
   now(): number; // 씬 시계(ms)

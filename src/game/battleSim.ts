@@ -220,6 +220,14 @@ export type MonsterIntent =
 export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): MonsterIntent {
   const H = hero;
   m.atkCd = Math.max(0, m.atkCd - dt);
+  // 공격 넉백 슬라이드 — 기절/사거리 판단보다 우선. 'move'로 반환해야 씬이 매 프레임 스프라이트
+  // 위치를 실제로 갱신한다('idle'은 위치를 안 건드려 넉백이 안 보이는 버그가 났었다).
+  if (m.kbT && m.kbT > 0) {
+    m.kbT = Math.max(0, m.kbT - dt);
+    m.x += (m.kbVx ?? 0) * dt;
+    m.y += (m.kbVy ?? 0) * dt;
+    return { kind: 'move', facing: facingOf(H.x - m.x, H.y - m.y) ?? 'south' };
+  }
   // 기절/빙결(경직 포함) 중엔 AI 자체를 건너뛴다 — heavyStrike 경직·frostStrike 빙결이 여길 통해 먹힌다.
   // 당기던 중이었다면 windupT는 그대로 멈춰 있다가 풀린 뒤 이어진다.
   if (m.stunT && m.stunT > 0) {
