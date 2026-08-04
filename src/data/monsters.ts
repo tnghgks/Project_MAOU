@@ -32,7 +32,7 @@ export interface MonsterDef {
 export const MONSTERS = {
   slime:  { name: '슬라임',      hp: 20,  dmg: 3,  atkCd: 1.0, speed: 60,  range: 24,  gold: 5,  size: 16, unlock: 1, char: 'slime', sheet: 32, kb: 1.6 },
   archer: { name: '고블린 궁수', hp: 15,  dmg: 4,  atkCd: 2.0, speed: 70,  range: 240, gold: 8,  size: 15, unlock: 1, ranged: true, char: 'goblinarcher', kb: 1 },
-  golem:  { name: '골렘',        hp: 120, dmg: 8,  atkCd: 1.5, speed: 35,  range: 30,  gold: 20, size: 26, unlock: 1, kb: 0.3 },
+  golem:  { name: '사이클롭스',        hp: 120, dmg: 8,  atkCd: 1.5, speed: 35,  range: 30,  gold: 20, size: 26, unlock: 1, kb: 0.3, char: 'cyclops' },
   bat:    { name: '폭탄 박쥐',   hp: 10,  dmg: 20, atkCd: 0.1, speed: 120, range: 22,  gold: 12, size: 14, unlock: 2, suicide: true, char: 'bombbat', sheet: 64, kb: 1.2 },
   knight: { name: '정예 기사',   hp: 300, dmg: 15, atkCd: 1.2, speed: 45,  range: 34,  gold: 60, size: 28, unlock: 3, kb: 0.15 },
 
