@@ -119,7 +119,7 @@ export interface SkillContext {
   readonly hero: HeroEntity;
   readonly monsters: readonly MonsterEntity[];
   hit(m: MonsterEntity, dmg: number): void; // 데미지 + 타격 이펙트
-  fxCircle(x: number, y: number, r: number): void; // 위치 강타 연출
+  fxCircle(x: number, y: number, r: number, kind?: 'lightning' | 'fire'): void; // 위치 강타 연출 — kind로 테마(기본 lightning)
   heal(ratio: number): void; // hero.hp = min(maxHp, hp + maxHp*ratio)
   freeze(ms: number): void; // 몬스터 시간 정지
   now(): number; // 씬 시계(ms)

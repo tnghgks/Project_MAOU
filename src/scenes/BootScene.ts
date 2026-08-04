@@ -28,6 +28,12 @@ export const SHEETS = new Map(
 // 아틀라스 없는 캐릭터가 쓰는 대체 상자. 테두리만 흰색이라 tint가 테두리 색으로 먹는다.
 export const BOX_TEXTURE = 'box';
 
+// 부드러운 원형 글로우 두 장 — 스킬 이펙트(BattleScene.fireSlashFx 등)가 여기 의존한다.
+// Graphics.circle은 테두리가 딱딱해서 "에너지가 번지는" 느낌이 안 난다. 캔버스 radial gradient로
+// 만들어두고, 쓰는 쪽에서 setTint + ADD 블렌드로 색을 입히고 겹쳐 쌓으면 훨씬 "빛나는" 느낌이 난다.
+export const GLOW_TEXTURE = 'glow'; // 중심이 밝고 바깥으로 갈수록 투명해지는 꽉 찬 원 — 코어 플래시용
+export const RING_GLOW_TEXTURE = 'glow-ring'; // 중심·바깥은 투명하고 중간 띠만 밝은 도넛 — 퍼져나가는 링용
+
 // 휘두를 때마다 나가는 참격. 색상은 행으로 고른다 — 다른 색이 필요하면 FX_BASH_ROW만 바꾼다.
 export const FX_BASH = 'fx-bash';
 const FX_BASH_ROW = 5; // 0-based. 5 = 흰색 ponytail: 색상 knob
@@ -64,6 +70,33 @@ export default class BootScene extends Phaser.Scene {
     g.lineStyle(2, 0xffffff, 1).strokeRect(1, 1, 14, 14);
     g.generateTexture(BOX_TEXTURE, 16, 16);
     g.destroy();
+
+    // 글로우: Graphics가 아니라 캔버스 API로 직접 그린다 — Phaser Graphics엔 radial gradient fill이
+    // 없어서 이 부드러운 번짐은 캔버스 2D 컨텍스트를 직접 써야 나온다.
+    const glowSize = 256;
+    const glow = this.textures.createCanvas(GLOW_TEXTURE, glowSize, glowSize);
+    const gctx = glow!.context;
+    const grad = gctx.createRadialGradient(glowSize / 2, glowSize / 2, 0, glowSize / 2, glowSize / 2, glowSize / 2);
+    grad.addColorStop(0, 'rgba(255,255,255,1)');
+    grad.addColorStop(0.35, 'rgba(255,255,255,0.7)');
+    grad.addColorStop(1, 'rgba(255,255,255,0)');
+    gctx.fillStyle = grad;
+    gctx.fillRect(0, 0, glowSize, glowSize);
+    glow!.refresh();
+
+    // 링 글로우: 중심·바깥은 투명, 55~80% 대에만 밝은 띠 — 이걸 키우면서 페이드하면 레퍼런스처럼
+    // 빛나는 원이 바깥으로 퍼져나가는 모양이 된다(꽉 찬 원으로는 이 모양이 안 나온다).
+    const ring = this.textures.createCanvas(RING_GLOW_TEXTURE, glowSize, glowSize);
+    const rctx = ring!.context;
+    const rgrad = rctx.createRadialGradient(glowSize / 2, glowSize / 2, 0, glowSize / 2, glowSize / 2, glowSize / 2);
+    rgrad.addColorStop(0, 'rgba(255,255,255,0)');
+    rgrad.addColorStop(0.55, 'rgba(255,255,255,0)');
+    rgrad.addColorStop(0.68, 'rgba(255,255,255,1)');
+    rgrad.addColorStop(0.8, 'rgba(255,255,255,0)');
+    rgrad.addColorStop(1, 'rgba(255,255,255,0)');
+    rctx.fillStyle = rgrad;
+    rctx.fillRect(0, 0, glowSize, glowSize);
+    ring!.refresh();
 
     // 애니메이션은 게임 전역 — BattleScene은 화마다 재생성되므로 여기서 한 번만 등록한다.
     // 로드에 실패한 아틀라스는 건너뛴다 (registerAnims가 없는 텍스처를 만지지 않도록).

@@ -18,11 +18,11 @@ const { gameStore, gameState, saveGame, loadGame, heroPower, BASE_HERO, RANGE_CA
 const { UPGRADES } = await import('../src/data/upgrades.ts');
 
 // save → 오염 → load 라운드트립: 해금·기록만 복원
-gameStore.setState({ skills: ['낙뢰', '화염참격'], records: { bestViewers: 5000, bestGold: 12000 } });
+gameStore.setState({ skills: ['낙뢰', '화염폭발'], records: { bestViewers: 5000, bestGold: 12000 } });
 saveGame();
 gameStore.setState({ skills: ['낙뢰'], records: { bestViewers: 0, bestGold: 0 } });
 loadGame();
-assert.deepStrictEqual(gameState().skills, ['낙뢰', '화염참격']);
+assert.deepStrictEqual(gameState().skills, ['낙뢰', '화염폭발']);
 assert.strictEqual(gameState().records.bestViewers, 5000);
 assert.strictEqual(gameState().records.bestGold, 12000);
 

@@ -22,7 +22,7 @@ import {
   type ViewerAlert,
 } from '../formulas.ts';
 import { dirOf, playAnim, playOnce, makeActor, type Dir } from '../game/anims.ts';
-import { HERO_CHAR, BOX_TEXTURE, FX_BASH } from './BootScene.ts';
+import { HERO_CHAR, BOX_TEXTURE, FX_BASH, GLOW_TEXTURE, RING_GLOW_TEXTURE } from './BootScene.ts';
 import { gameState, heroPower } from '../game/store.ts';
 import { bus, busBind } from '../game/events.ts';
 import { ARENA, CANVAS, SUMMON_Y, CX, arenaBounds } from '../game/layout.ts';
@@ -83,7 +83,7 @@ import { MONSTERS, type MonsterId, type MonsterDef } from '../data/monsters.ts';
 import { syncRoster } from '../data/nicknames.ts';
 import { upgradeCostRange } from '../data/upgrades.ts';
 import { RARITY, type Card, type StatMod } from '../data/cards.ts';
-import { SKILLS, pickSkillReward, type SkillId } from '../data/skills.ts';
+import { SKILLS, pickSkillReward, type Skill, type SkillId } from '../data/skills.ts';
 import { CHAT_POOLS, pickChatMood, pickDonationMessage } from '../data/chat.ts';
 import {
   pickRequest,
@@ -348,7 +348,7 @@ export default class BattleScene extends Phaser.Scene {
     if (!id || (this.skillCd[id] ?? 0) > 0) return;
     this.skillCd[id] = SKILLS[id].cd;
     SKILLS[id].effect(this.skillContext(), 1);
-    this.cameras.main.flash(150, 255, 255, 200);
+    if (!(SKILLS[id] as Skill).noScreenFlash) this.cameras.main.flash(150, 255, 255, 200);
     this.floatText(this.hero.x, this.hero.y - 40, `⚡ ${SKILLS[id].name}`, '#ffee44');
   }
 
@@ -701,7 +701,7 @@ export default class BattleScene extends Phaser.Scene {
       hero: this.hero,
       monsters: this.monsters,
       hit: (m, dmg) => this.hitFx(m, dmg),
-      fxCircle: (x, y, r) => this.impactFx(x, y, r),
+      fxCircle: (x, y, r, kind) => (kind === 'fire' ? this.fireSlashFx(x, y, r) : this.skillStrikeFx(x, y, r)),
       heal: (ratio) => {
         this.hero.hp = Math.min(this.hero.maxHp, this.hero.hp + this.hero.maxHp * ratio);
       },
@@ -718,36 +718,133 @@ export default class BattleScene extends Phaser.Scene {
     this.impactFx(m.x, m.y, 14);
   }
 
-  // 스킬/피격 임팩트 원 — 스스로 페이드아웃 후 파괴한다. 예전엔 이 원을 만든 쪽이 아니라
-  // fireSkill 한 곳에서만 뒤늦게 청소했는데, 그 경로를 안 타는 castSkill(직접 시전) 등에서
-  // 원이 안 지워지고 계속 쌓이는 버그(#6: 낙뢰/반사 임팩트가 안 사라짐)가 있었다.
+  // 칼에 맞았을 때의 히트 스파크 — 작게 튀어나왔다 빠르게 사그라드는 흰 스파크 한 번으로 단순화했다
+  // (뇌전 등 다른 이펙트와 겹쳐도 이건 늘 "칼에 맞았다"로 읽히게, 화려한 잔상 없이 짧고 굵게).
+  // 스스로 페이드아웃 후 파괴한다 — fireSkill 한 곳에서만 뒤늦게 청소하면 castSkill(직접 시전) 등
+  // 그 경로를 안 타는 곳에서 안 지워지고 쌓이는 버그(#6)가 났었다.
   impactFx(x: number, y: number, r: number) {
-    const c = this.add.circle(x, y, r, 0xffffaa, 0.8).setDepth(3);
-    this.tweens.add({ targets: c, alpha: 0, duration: 220, onComplete: () => c.destroy() });
+    const c = this.add.circle(x, y, r * 0.5, 0xffffff, 0.95).setDepth(3);
+    this.tweens.add({ targets: c, radius: r, alpha: 0, duration: 140, ease: 'Cubic.Out', onComplete: () => c.destroy() });
+  }
+
+  // 스킬 착탄 지점 연출(SkillContext.fxCircle — 낙뢰 등) — 칼 스파크(impactFx)와 같은 걸 쓰면
+  // "뭔가 떨어졌다"가 아니라 그냥 또 한 번 베인 것처럼 보였다. 커지는 원 두 겹은 과했다(2026-08-04
+  // 1차 수정) — 위에서 지그재그로 내리꽂히는 번개 줄기 + 착지 스파크로 단순화해 전기 느낌을 낸다.
+  skillStrikeFx(x: number, y: number, r: number) {
+    const topY = y - 160;
+    const bolt = this.add.graphics().setDepth(4);
+    bolt.lineStyle(3, 0xddf6ff, 0.95);
+    bolt.beginPath();
+    bolt.moveTo(x, topY);
+    bolt.lineTo(x + (Math.random() - 0.5) * 24, topY + (y - topY) * 0.5);
+    bolt.lineTo(x, y);
+    bolt.strokePath();
+    this.tweens.add({ targets: bolt, alpha: 0, duration: 160, onComplete: () => bolt.destroy() });
+    const spark = this.add.circle(x, y, r * 0.3, 0xddf6ff, 0.95).setDepth(4);
+    this.tweens.add({
+      targets: spark,
+      radius: r * 0.7,
+      alpha: 0,
+      duration: 200,
+      ease: 'Cubic.Out',
+      onComplete: () => spark.destroy(),
+    });
+  }
+
+  // 화염폭발 착탄 연출 — 용사를 중심으로 화염색 충격파가 반경 전체로 퍼진다. 뇌전(청록/번개 줄기)과는
+  // 색과 모양 둘 다 다르게 해서 스킬끼리도 한눈에 구분되게 한다.
+  // 2026-08-04 2차 수정: Graphics.circle은 테두리가 딱딱해 "빛나는 에너지"가 아니라 그냥 도형처럼
+  // 보였다 — GLOW_TEXTURE/RING_GLOW_TEXTURE(캔버스 radial gradient) + ADD 블렌드로 겹쳐 쌓아
+  // 실제로 빛이 번지는 느낌을 내고, 화면 전체를 덮는 카메라 flash 없이도(noScreenFlash) 존재감을
+  // 대신하도록 코어 플래시 + 이중 링 + 튀는 불씨로 구성했다.
+  fireSlashFx(x: number, y: number, r: number) {
+    const scaleFor = (px: number) => (px * 2) / 256; // 글로우 텍스처 지름 256px 기준 스케일 환산
+
+    const core = this.add
+      .image(x, y, GLOW_TEXTURE)
+      .setBlendMode(Phaser.BlendModes.ADD)
+      .setTint(0xffcc66)
+      .setScale(scaleFor(r * 0.4))
+      .setDepth(4);
+    this.tweens.add({
+      targets: core,
+      scale: scaleFor(r * 0.95),
+      alpha: 0,
+      duration: 300,
+      ease: 'Cubic.Out',
+      onComplete: () => core.destroy(),
+    });
+
+    // 두 겹을 살짝 시차를 두고 퍼뜨려 "두께감 있는 충격파"처럼 보이게 한다.
+    for (let i = 0; i < 2; i++) {
+      const ring = this.add
+        .image(x, y, RING_GLOW_TEXTURE)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setTint(0xff4411)
+        .setAlpha(0.95)
+        .setScale(scaleFor(r * 0.5))
+        .setDepth(4);
+      this.tweens.add({
+        targets: ring,
+        scale: scaleFor(r * 1.35),
+        alpha: 0,
+        delay: i * 70,
+        duration: 420 + i * 100,
+        ease: 'Cubic.Out',
+        onComplete: () => ring.destroy(),
+      });
+    }
+
+    // 튀는 불씨 6개 — 중심에서 사방으로 흩어지며 사그라든다.
+    for (let i = 0; i < 6; i++) {
+      const angle = (i / 6) * Math.PI * 2 + Math.random() * 0.5;
+      const dist = r * (0.6 + Math.random() * 0.3);
+      const ember = this.add
+        .image(x, y, GLOW_TEXTURE)
+        .setBlendMode(Phaser.BlendModes.ADD)
+        .setTint(0xffaa33)
+        .setScale(scaleFor(16))
+        .setDepth(4);
+      this.tweens.add({
+        targets: ember,
+        x: x + Math.cos(angle) * dist,
+        y: y + Math.sin(angle) * dist,
+        scale: scaleFor(4),
+        alpha: 0,
+        duration: 350 + Math.random() * 150,
+        ease: 'Cubic.Out',
+        onComplete: () => ember.destroy(),
+      });
+    }
   }
 
   // 칼 궤적 — angle(rad) 방향 호가 훑고 지나간다. impactFx와 같은 자기 청소 규칙.
   // 판정은 반경 r 반원인데 시트 프레임(64px) 안에 여백이 있어 그대로 r*2를 주면 작아 보인다.
+  // 심플하게 정리(2026-08-04): 배율 3→2, 알파를 살짝 낮추고 페이드아웃을 얹어 잔상이 덜 튄다.
   // ponytail: 눈으로 맞추는 배율 knob — 판정보다 커 보이면 줄인다
-  static readonly FX_BASH_SCALE = 3;
+  static readonly FX_BASH_SCALE = 2;
 
   swingFx(x: number, y: number, r: number, angle: number) {
     // 용사 중앙에서 시작해 사거리를 덮는다. 초승달이 대상 쪽으로 볼록해야 베는 것처럼 보이는데
     // 시트 원본은 볼록한 쪽이 -x라 π를 더한다.
-    this.add
+    const s = this.add
       .sprite(x, y, FX_BASH)
       .setDepth(4)
+      .setAlpha(0.75)
       .setRotation(angle + Math.PI)
       .setDisplaySize(r * BattleScene.FX_BASH_SCALE, r * BattleScene.FX_BASH_SCALE)
-      .play(FX_BASH)
-      .once(Phaser.Animations.Events.ANIMATION_COMPLETE, (_a: unknown, _f: unknown, s: Phaser.GameObjects.Sprite) =>
-        s.destroy(),
-      );
+      .play(FX_BASH);
+    this.tweens.add({ targets: s, alpha: 0, delay: 120, duration: 120 });
+    s.once(Phaser.Animations.Events.ANIMATION_COMPLETE, (_a: unknown, _f: unknown, spr: Phaser.GameObjects.Sprite) =>
+      spr.destroy(),
+    );
   }
 
-  // silent = 도트(화상/출혈) 틱 전용 — 매 프레임 발생해 콤보에 끼면 실력 지표가 왜곡된다.
+  // silent = 도트(화상/출혈) 틱 전용 — 매 프레임 발생해 콤보에 끼면 실력 지표가 왜곡되고,
+  // 데미지 숫자도 프레임마다 스팸이 된다(아래 damageText도 같이 건너뛴다).
   damageMonster(m: MonsterEntity, dmg: number, silent = false) {
     m.hp -= dmg;
+    if (!silent) this.damageText(m.x, m.y - 20, dmg);
     m.spr.setAlpha(0.5);
     this.time.delayedCall(80, () => {
       if (m.spr.active) m.spr.setAlpha(1);
@@ -781,6 +878,20 @@ export default class BattleScene extends Phaser.Scene {
   floatText(x: number, y: number, msg: string, color: string) {
     const t = this.add.text(x, y, msg, { fontSize: '16px', fontStyle: 'bold', color }).setOrigin(0.5).setDepth(9);
     this.tweens.add({ targets: t, y: y - 30, alpha: 0, duration: 900, onComplete: () => t.destroy() });
+  }
+
+  // 피격 대미지 숫자 — 몬스터 머리 위로 살짝 떠오르며 사라진다. x를 살짝 흔들어 스윙 한 번에
+  // 여러 마리(또는 뇌전 전이)가 동시에 맞아도 숫자끼리 완전히 겹치지 않게 한다.
+  damageText(x: number, y: number, dmg: number) {
+    const t = this.add
+      .text(x + Phaser.Math.Between(-6, 6), y, Math.round(dmg).toString(), {
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color: '#ffffff',
+      })
+      .setOrigin(0.5)
+      .setDepth(9);
+    this.tweens.add({ targets: t, y: y - 26, alpha: 0, duration: 700, onComplete: () => t.destroy() });
   }
 
   // ── 메인 루프 ──
@@ -1018,7 +1129,9 @@ export default class BattleScene extends Phaser.Scene {
     if (hasTrait(traits, 'shadowClone') && rollChance(SHADOW_CLONE_CHANCE * 100)) this.hitFx(m, dmg);
   }
 
-  // 뇌전 방출: 적중 대상 주변 가장 가까운 몬스터들에게 전이 피해
+  // 뇌전 방출: 적중 대상 주변 가장 가까운 몬스터들에게 전이 피해.
+  // hitFx(칼 스파크)를 그대로 재사용하면 "칼에 또 맞은 것"처럼 겹쳐 보여 구분이 안 됐다 —
+  // 대미지 적용(damageMonster)은 그대로 쓰되 연출은 lightningFx(전선 + 스파크)로 따로 그린다.
   chainLightningProc(origin: MonsterEntity, dmg: number) {
     const targets = this.monsters
       .filter((x) => x !== origin && !x.dead)
@@ -1028,7 +1141,22 @@ export default class BattleScene extends Phaser.Scene {
           Phaser.Math.Distance.Between(b.x, b.y, origin.x, origin.y),
       )
       .slice(0, CHAIN_LIGHTNING_TARGETS);
-    for (const t of targets) this.hitFx(t, dmg * CHAIN_LIGHTNING_RATIO);
+    for (const t of targets) {
+      this.damageMonster(t, dmg * CHAIN_LIGHTNING_RATIO);
+      this.lightningFx(origin.x, origin.y, t.x, t.y);
+    }
+  }
+
+  // 뇌전 전용 연출 — 두 점 사이에 한 번 꺾인 전선을 그리고, 도착점에 옅은 청색 스파크를 남긴다.
+  // impactFx(흰색, 칼 스파크)와 색·모양을 다르게 해서 "이건 전기 피해"라고 한눈에 구분되게 한다.
+  lightningFx(x1: number, y1: number, x2: number, y2: number) {
+    const mx = (x1 + x2) / 2 + (Math.random() - 0.5) * 24;
+    const my = (y1 + y2) / 2 + (Math.random() - 0.5) * 24;
+    const g = this.add.graphics().setDepth(4);
+    g.lineStyle(2.5, 0x66ddff, 0.9).beginPath().moveTo(x1, y1).lineTo(mx, my).lineTo(x2, y2).strokePath();
+    this.tweens.add({ targets: g, alpha: 0, duration: 140, onComplete: () => g.destroy() });
+    const spark = this.add.circle(x2, y2, 8, 0x66ddff, 0.9).setDepth(4);
+    this.tweens.add({ targets: spark, radius: 14, alpha: 0, duration: 160, onComplete: () => spark.destroy() });
   }
 
   // 바람 가르기: 공격이 발동하면(사거리 안 명중 여부와 무관) 사거리 밖 가장 가까운 적에게도 피해
