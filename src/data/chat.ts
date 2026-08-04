@@ -53,3 +53,21 @@ export function pickChatMood(D: number): ChatPick {
   if (D < 0.75) return { pool: CHAT_POOLS.normal, color: '#cccccc' };
   return { pool: CHAT_POOLS.hot, color: '#ff9966' };
 }
+
+// 도네이션 알림(트위치풍 얼럿)에 얹히는 후원 한마디. 신규 대사 = 아래 풀에 한 줄 추가.
+export const DONATION_MESSAGES = [
+  '항상 잘 보고 있어요!',
+  '용사님 화이팅!',
+  '오늘도 재밌게 보고 갑니다',
+  '치킨 사드세요 ㅋㅋ',
+  '레이드 왔습니다!',
+  '늦었지만 응원합니다',
+  '이 방송 왜 이렇게 꿀잼이냐',
+  '첫 후원인데 떨리네요',
+  '용사야 죽지마',
+  '마왕 응원합니다(?)',
+];
+
+export function pickDonationMessage(rnd: () => number = Math.random): string {
+  return DONATION_MESSAGES[Math.floor(rnd() * DONATION_MESSAGES.length)];
+}

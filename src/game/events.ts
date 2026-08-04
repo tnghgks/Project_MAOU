@@ -18,6 +18,7 @@ export interface Donation {
   donor: string;
   jackpot: boolean;
   tier: DonationTier; // 효과음 단계. 금액만으로는 판정할 수 없어(업그레이드 가격 연동) emit 쪽에서 계산해 싣는다
+  message: string; // 트위치풍 알림에 얹히는 후원 한마디 (data/chat.ts DONATION_MESSAGES)
 }
 
 // HUD(React InfoLayer) 전용 스냅샷 — BattleScene 인스턴스 전용 필드(매 프레임 변함)만 담는다.
@@ -49,6 +50,7 @@ export interface BusEvents {
   'battle:resume': null;
   'hud:tick': HudTick;
   'mode:toggle': null; // React 시점 전환 버튼 → BattleScene.switchMode()
+  'pause:toggle': null; // React(ESC/일시정지 버튼) → BattleScene: scene.pause()/resume() 토글 요청
 }
 
 // ponytail: Phaser EventEmitter는 제네릭이 없어 as로 타입만 씌움 — 런타임은 그대로

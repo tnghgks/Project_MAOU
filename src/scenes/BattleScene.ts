@@ -84,7 +84,7 @@ import { syncRoster } from '../data/nicknames.ts';
 import { upgradeCostRange } from '../data/upgrades.ts';
 import { RARITY, type Card, type StatMod } from '../data/cards.ts';
 import { SKILLS, pickSkillReward, type SkillId } from '../data/skills.ts';
-import { CHAT_POOLS, pickChatMood } from '../data/chat.ts';
+import { CHAT_POOLS, pickChatMood, pickDonationMessage } from '../data/chat.ts';
 import {
   pickRequest,
   startRequest,
@@ -178,6 +178,7 @@ export default class BattleScene extends Phaser.Scene {
   facingDir: Dir = 'south'; // 마지막으로 바라본 방향 — 정지 시 이 방향 대기 모션으로 선다
   heroHpBar!: Phaser.GameObjects.Graphics;
   pendingSkill: SkillOutcome | null = null; // 리액션 리듬 결과 — 전투 재개 시점에 발동
+  donationPaused = false; // fireDonation이 대박이라 scene.pause()를 걸었는지 — endDonation이 자기 몫만 resume하게
   chatT = 0;
   req: ActiveRequest | null = null; // 진행 중인 시청자 요청 (React InfoLayer가 hud:tick으로 받아 배너 렌더)
   reqPct = 0; // 요청 진행률 0~1 — HUD용 캐시
@@ -264,6 +265,7 @@ export default class BattleScene extends Phaser.Scene {
     });
     busBind(this, 'donation:end', ({ card }) => this.endDonation(card));
     busBind(this, 'mode:toggle', () => this.switchMode());
+    busBind(this, 'pause:toggle', () => this.toggleUserPause());
 
     // 입력: 슬라이더 드래그(카드 밖으로 나가도 추적) + 숫자키 = 해당 카드 ON/OFF
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
@@ -538,7 +540,8 @@ export default class BattleScene extends Phaser.Scene {
     });
   }
 
-  // ── 도네이션: 전투를 멈추고 React(DonationEvent)에 넘긴다. 재개는 endDonation. ──
+  // ── 도네이션: 대박(리듬 미니게임)만 전투를 멈추고 React(DonationEvent)에 넘긴다.
+  // 일반 후원은 화면 구석 위젯(알림→룰렛)만 뜨고 전투는 계속 진행된다. 재개는 endDonation. ──
   fireDonation() {
     const { min, max } = upgradeCostRange(gameState().upgradeLevels);
     const rolled = rollDonation(this.viewers);
@@ -552,16 +555,23 @@ export default class BattleScene extends Phaser.Scene {
     const msg = `${name}님 ${amount.toLocaleString()}G${jackpot ? ' 대박 후원!!' : '!'}`;
     this.pushChat('🎁 후원', msg, jackpot ? '#ff66cc' : '#ffdd44');
     this.pendingSkill = null;
-    bus.emit('donation:arrive', { amount, donor: name, jackpot, tier });
-    // Rhythm은 계속 돌려야 한다 (리액션 이벤트의 QWER 판정 담당)
-    this.scene.pause();
-    bus.emit('battle:pause', null); // InfoLayer/ComboMeter 등 React UI도 같이 멈춰야 한다
+    bus.emit('donation:arrive', { amount, donor: name, jackpot, tier, message: pickDonationMessage() });
+    if (jackpot) {
+      // 리듬 판정에 집중해야 하니 이때만 멈춘다. donationPaused로 "내가 멈춘 것"을 기록해둬야
+      // endDonation이 ESC 일시정지 등 다른 이유의 pause까지 잘못 풀어버리지 않는다.
+      this.donationPaused = true;
+      this.scene.pause();
+      bus.emit('battle:pause', null); // InfoLayer/ComboMeter 등 React UI도 같이 멈춰야 한다
+    }
   }
 
-  // 카드 확정 → 강화 적용 후 재개. 리액션이었다면 예약된 스킬도 여기서 터진다.
+  // 카드 확정 → 강화 적용. 대박이라 멈춰뒀던 경우에만 재개하고, 리액션이었다면 예약된 스킬도 여기서 터진다.
   endDonation(card: Card) {
-    this.scene.resume();
-    bus.emit('battle:resume', null);
+    if (this.donationPaused) {
+      this.donationPaused = false;
+      this.scene.resume();
+      bus.emit('battle:resume', null);
+    }
     if (card.trait) {
       // 특성 카드는 스탯이 아니라 전투 규칙을 준다 — grantCard/applyLiveCard 경로를 안 탄다
       gameState().grantTrait(card.trait);
@@ -577,6 +587,18 @@ export default class BattleScene extends Phaser.Scene {
     if (this.pendingSkill) {
       this.resolveRhythmResult(this.pendingSkill);
       this.pendingSkill = null;
+    }
+  }
+
+  // ESC 일시정지: 도네이션/보스 컷씬과 같은 scene.pause()라 실제로 전투 루프가 멈춘다.
+  // 이미 다른 이유로 멈춰 있을 때 이 경로를 타지 않게 하는 건 PauseOverlay(React) 쪽 책임이다.
+  toggleUserPause() {
+    if (this.scene.isPaused()) {
+      this.scene.resume();
+      bus.emit('battle:resume', null);
+    } else {
+      this.scene.pause();
+      bus.emit('battle:pause', null);
     }
   }
 
@@ -1020,9 +1042,7 @@ export default class BattleScene extends Phaser.Scene {
       if (intent.swingAngle !== null) {
         this.swingFx(H.x, H.y, H.range, intent.swingAngle);
         // 공격 모션도 같은 축을 본다 — 궤적과 스프라이트가 따로 놀면 타격감이 어긋난다
-        const [dir, flip] = dirOf(
-          facingOf(Math.cos(intent.swingAngle), Math.sin(intent.swingAngle)) ?? this.facingDir,
-        );
+        const [dir, flip] = dirOf(facingOf(Math.cos(intent.swingAngle), Math.sin(intent.swingAngle)) ?? this.facingDir);
         this.facingDir = dir;
         this.heroSpr.setFlipX(flip);
         playOnce(this.heroSpr, HERO_CHAR, 'attack', dir);
