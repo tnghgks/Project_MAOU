@@ -5,7 +5,6 @@ import ChatPanel from './ChatPanel.tsx';
 
 // 실제 스트리밍 플랫폼 레이아웃(상단바 / 플레이어 / 방송정보 / 채팅)을 흉내낸 껍데기.
 // 게임 캔버스와 오버레이는 children으로 .screen 안에 들어간다 — 좌표계(1280x720 %)는 그대로 유지.
-// ponytail: 검색창은 분위기용 정적 장식 — 게임 로직 없음
 export default function BroadcastFrame({ children }: { children: ReactNode }) {
   const phase = useStore(gameStore, (s) => s.phase);
   const episode = useStore(gameStore, (s) => s.episode);
@@ -22,21 +21,22 @@ export default function BroadcastFrame({ children }: { children: ReactNode }) {
         <span className="logo">
           마왕채널<sup>beta</sup>
         </span>
-        <input className="search" placeholder="스트리머, 게임 영상 검색" disabled />
-        {/* 채팅을 숨겨도 버튼은 남아야 하므로 헤더에 고정 */}
-        <button className="chat-toggle" onClick={() => setShowChat((v) => !v)}>
-          {showChat ? '💬 채팅 숨기기' : '💬 채팅 보기'}
-        </button>
-        {/* 실제 재생/정지는 useBgm이 bgmOn을 보고 판단한다 — 여긴 설정만 뒤집는다.
-            타이틀 화면(전체를 덮는 오버레이) 위로도 보이게 .bgm-toggle이 z-index를 올린다. */}
-        <button
-          className="chat-toggle bgm-toggle"
-          onClick={() => gameState().toggleBgm()}
-          aria-pressed={bgmOn}
-          title="BGM 켜기/끄기"
-        >
-          {bgmOn ? '🔊 BGM' : '🔇 BGM'}
-        </button>
+        <div className="topbar-actions">
+          {/* 채팅을 숨겨도 버튼은 남아야 하므로 헤더에 고정 */}
+          <button className="chat-toggle" onClick={() => setShowChat((v) => !v)}>
+            {showChat ? '💬 채팅 숨기기' : '💬 채팅 보기'}
+          </button>
+          {/* 실제 재생/정지는 useBgm이 bgmOn을 보고 판단한다 — 여긴 설정만 뒤집는다.
+              타이틀 화면(전체를 덮는 오버레이) 위로도 보이게 .bgm-toggle이 z-index를 올린다. */}
+          <button
+            className="chat-toggle bgm-toggle"
+            onClick={() => gameState().toggleBgm()}
+            aria-pressed={bgmOn}
+            title="BGM 켜기/끄기"
+          >
+            {bgmOn ? '🔊 BGM' : '🔇 BGM'}
+          </button>
+        </div>
       </header>
 
       <main className="player">

@@ -6,8 +6,8 @@ import { gameStore } from './game/store.ts';
 import { preloadSfx } from './game/sfx.ts';
 import BroadcastFrame from './ui/BroadcastFrame.tsx';
 import InfoLayer from './ui/InfoLayer.tsx';
-import DonationToast from './ui/DonationToast.tsx';
 import DonationEvent from './ui/DonationEvent.tsx';
+import PauseOverlay from './ui/PauseOverlay.tsx';
 import ComboMeter from './ui/ComboMeter.tsx';
 import MenuOverlay from './ui/MenuOverlay.tsx';
 import TitleView from './ui/TitleView.tsx';
@@ -51,8 +51,8 @@ export default function App() {
         <div className="ui-layer">
           {phase === 'broadcast' && (
             <>
-              <DonationToast />
               <DonationEvent />
+              <PauseOverlay />
               <HelpPopup />
               <ComboMeter />
             </>

@@ -11,14 +11,15 @@ export type Rarity = 'common' | 'uncommon' | 'magic' | 'epic' | 'legend';
 // 강력한 특성이 뜨는 셈이었다. 기본은 common만 나오다시피 하도록 common 비중을 확 늘리고 나머지는
 // 등급이 오를수록 훨씬 가파르게 줄인다 (합계는 1000 기준 — common 85% · uncommon 10% · magic 4% ·
 // epic 0.8% · legend 0.2%).
+// stars: 룰렛 결과 배너에 표시하는 등급 강도(1~5) — weight와 반대로 등급이 높을수록 커진다.
 // prettier-ignore
 export const RARITY = {
-  common:   { label: '일반', weight: 850, color: '#8fd17a' },
-  uncommon: { label: '고급', weight: 100, color: '#4fa3ff' },
-  magic:    { label: '희귀', weight: 40,  color: '#b366ff' },
-  epic:     { label: '영웅', weight: 8,   color: '#ffcc33' },
-  legend:   { label: '전설', weight: 2,   color: '#ff4444' },
-} satisfies Record<Rarity, { label: string; weight: number; color: string }>;
+  common:   { label: '일반', weight: 850, color: '#8fd17a', stars: 1 },
+  uncommon: { label: '고급', weight: 100, color: '#4fa3ff', stars: 2 },
+  magic:    { label: '희귀', weight: 40,  color: '#b366ff', stars: 3 },
+  epic:     { label: '영웅', weight: 8,   color: '#ffcc33', stars: 4 },
+  legend:   { label: '전설', weight: 2,   color: '#ff4444', stars: 5 },
+} satisfies Record<Rarity, { label: string; weight: number; color: string; stars: number }>;
 
 const ALL: Rarity[] = ['common', 'uncommon', 'magic', 'epic', 'legend'];
 

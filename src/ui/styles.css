@@ -26,6 +26,7 @@
   --top-h: 48px;
   --meta-h: 92px;
   --chrome-h: 140px; /* top-h + meta-h — .screen 높이 계산의 유일한 knob */
+  --chat-w: clamp(190px, 27%, 330px); /* .chat과 .donation-widget(채팅 왼쪽 배치)이 공유 */
 }
 * {
   margin: 0;
@@ -93,17 +94,10 @@ button {
   font-weight: 500;
   margin-left: 3px;
 }
-.search {
-  flex: 0 1 420px;
-  margin: 0 auto;
-  padding: 7px 14px;
-  font-size: 13px;
-  color: var(--text);
-  background: #14142a;
-  border: 2px solid var(--line);
-}
-.search::placeholder {
-  color: var(--muted);
+.topbar-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
 }
 .chat-toggle {
   flex: 0 0 auto;
@@ -226,7 +220,7 @@ button {
   top: 10%;
   right: 2%;
   z-index: 3;
-  width: clamp(190px, 27%, 330px);
+  width: var(--chat-w);
   height: auto; /* 줄 수만큼만 차지 — 노출 개수는 ChatPanel이 자른다 */
   max-height: 40%;
   display: flex;
@@ -613,50 +607,6 @@ button {
   color: var(--muted);
 }
 
-/* ── 도네 토스트 (화면 위쪽 중앙) ── */
-.toasts {
-  position: absolute;
-  top: 9%;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: center;
-  pointer-events: none;
-}
-.toast {
-  background: #ffcf3a;
-  border: 2px solid #2a1800;
-  color: #2a1800;
-  font-weight: 700;
-  font-size: clamp(10px, 1vw, 15px);
-  padding: 6px 16px;
-  white-space: nowrap;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
-  animation: toast-pop 2.2s ease forwards;
-}
-@keyframes toast-pop {
-  0% {
-    transform: translateY(14px) scale(0.8);
-    opacity: 0;
-  }
-  12% {
-    transform: translateY(0) scale(1.05);
-    opacity: 1;
-  }
-  20% {
-    transform: scale(1);
-  }
-  80% {
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(-24px);
-    opacity: 0;
-  }
-}
-
 /* ── 도네이션 이벤트 팝업 (게임 일시정지 중) ──
    항상 전체 화면을 덮는다. 리듬 레인이 RhythmLane으로 옮겨가 팝업 안쪽(춤추는 영역)에서
    그려지므로, 예전처럼 캔버스 레인을 비춰주려고 하단에 구멍을 뚫어둘 필요가 없다. */
@@ -783,57 +733,197 @@ button {
   color: #ff5555;
 }
 
-.don-cards {
+/* ── 도네이션 위젯 (alert → roulette → reveal) ──
+   화면을 덮지 않고, 채팅창(.chat)과는 별개의 UI로 그 왼쪽에 나란히 뜬다 — 전투는 계속 진행된다
+   (대박 리듬 미니게임만 예외로 화면을 덮고 멈춘다, .don-event 참고).
+   같은 컨테이너가 stage-alert(아바타+후원 메시지 배너 2줄) → stage-draw(룰렛 스핀·결과 공개)로 내용만 바뀐다.
+   ALERT_MS(2400ms, DonationEvent.tsx)와 alert-pop 애니메이션 길이가 반드시 같아야 한다. */
+.donation-widget {
+  position: absolute;
+  top: 10%;
+  /* 채팅(.chat right:2%, width:--chat-w) 바로 왼쪽에 나란히 붙인다 */
+  right: calc(2% + var(--chat-w) + 12px);
+  z-index: 4;
   display: flex;
-  gap: clamp(8px, 1.4vw, 20px);
+  flex-direction: column;
+  gap: 6px;
+  width: clamp(220px, 28%, 320px);
+  pointer-events: none;
 }
-.don-card {
-  width: clamp(84px, 11vw, 160px);
-  padding: clamp(8px, 1.2vw, 16px) 6px;
+.donation-widget.stage-draw {
+  animation: widget-in 0.2s ease;
+}
+.donation-widget-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.donation-widget-hero {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  animation: dance 0.42s ease-in-out infinite alternate;
+}
+
+/* 알림 단계 — 박스/배경 없이 춤추는 용사 이미지(위) + 텍스트 두 줄(1줄 = 후원자·금액, 2줄 = 메시지).
+   뒤로 게임 화면이 그대로 비치므로 text-shadow로만 어떤 배경 위에서도 읽히게 한다. */
+.alert-hero {
+  align-self: center;
+  width: clamp(56px, 7vw, 84px);
+  image-rendering: pixelated;
+  animation: dance 0.42s ease-in-out infinite alternate;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.6));
+}
+.alert-line {
+  font-size: clamp(11px, 1.1vw, 14px);
+  font-weight: 700;
+  line-height: 1.4;
+  color: #fff;
+  text-align: center;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.9),
+    0 0 6px rgba(0, 0, 0, 0.7);
+  animation: alert-pop 2.4s ease forwards;
+}
+.alert-line .amt {
+  color: #5ac8ff;
+}
+.alert-jackpot {
+  color: #ff66cc;
+}
+.alert-msg-line {
+  font-size: clamp(10px, 1vw, 13px);
+  font-weight: 500;
+  color: #eee;
+}
+@keyframes alert-pop {
+  0% {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  8% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes widget-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+/* ── 카드 룰렛 (roulette 세로 스핀 → reveal 공개, .donation-widget 안) ──
+   ITEM_H(44) · SPIN_MS(1700)는 DonationEvent.tsx의 동명 상수와 반드시 일치해야 한다.
+   박스 없이 텍스트만인 alert과 이어지도록 헤더도 투명 배경 + text-shadow로 맞춘다. */
+.roulette-head {
+  font-size: clamp(11px, 1.1vw, 14px);
+  font-weight: 700;
+  color: #66ddff;
+  line-height: 1.3;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.9),
+    0 0 6px rgba(0, 0, 0, 0.7);
+}
+/* 알약형 초록 배너 안에서 카드 이름이 위로 스쳐 지나가다 멈춘다(고전 세로 슬롯머신) —
+   .reveal에서는 등급 색(--rar)으로, 스핀 중엔 기본 초록으로 보인다. */
+.roulette-vmask {
+  position: relative;
+  width: 100%;
+  height: 44px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #6fbf3c 0%, #3f8f1f 55%, #2c6b12 100%);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.35),
+    0 4px 10px rgba(0, 0, 0, 0.5);
+}
+.roulette-vmask.reveal {
+  background: var(--rar);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -14px 18px rgba(0, 0, 0, 0.35),
+    0 4px 10px rgba(0, 0, 0, 0.5);
+  animation: don-in 0.2s ease;
+}
+.roulette-vtrack {
+  display: flex;
+  flex-direction: column;
+  transition: transform 1.7s cubic-bezier(0.1, 0.7, 0.15, 1);
+  will-change: transform;
+}
+.roulette-vitem {
+  flex: 0 0 auto;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  color: #fff;
+  font-weight: 800;
+  font-size: 13px;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.roulette-result {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  border: 2px solid var(--rar);
-  background: #1a1a2c;
-  box-shadow: 0 0 0 rgba(0, 0, 0, 0);
-  transition:
-    transform 0.12s,
-    box-shadow 0.12s,
-    opacity 0.2s;
+  gap: 6px;
 }
-.don-card .rar {
-  font-size: clamp(9px, 0.85vw, 13px);
-  font-weight: 800;
-  color: var(--rar);
+.roulette-stars {
+  font-size: clamp(13px, 1.4vw, 18px);
+  color: #ffcf3a;
+  letter-spacing: 1px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
-.don-card .cname {
-  font-size: clamp(11px, 1.1vw, 17px);
-  font-weight: 700;
-  color: #fff;
-}
-.don-card .cdelta {
-  font-size: clamp(10px, 1vw, 15px);
-  color: #44ddff;
-}
-/* 특성 카드는 숫자 대신 설명 한 줄이라 좁은 카드 폭에서 접힌다 */
-.don-card.trait .cdelta {
-  font-size: clamp(9px, 0.8vw, 12px);
-  color: #ff9ada;
+.reveal-desc {
+  font-size: 11px;
+  color: #eee;
   text-align: center;
-  line-height: 1.3;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9);
 }
-.don-card.on {
-  transform: translateY(-8%) scale(1.04);
-  box-shadow: 0 0 18px var(--rar);
+
+/* ── ESC 일시정지 오버레이 ── */
+.pause-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 6, 12, 0.82);
+  animation: don-in 0.15s ease;
+  z-index: 30;
 }
-.don-card.win {
-  transform: translateY(-8%) scale(1.12);
-  box-shadow: 0 0 26px var(--rar);
+.pause-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(8px, 1.2vw, 16px);
+  padding: clamp(20px, 3vw, 40px) clamp(28px, 4vw, 56px);
+  background: var(--panel);
+  border: 2px solid var(--line);
+  box-shadow: var(--bevel);
 }
-.don-card.lose {
-  opacity: 0.3;
-  filter: grayscale(1);
+.pause-title {
+  font-size: clamp(20px, 2.6vw, 34px);
+  font-weight: 800;
+  color: var(--text);
+}
+.pause-tip {
+  font-size: clamp(11px, 1.1vw, 16px);
+  color: var(--muted);
+}
+.pause-resume {
+  margin-top: 4px;
 }
 
 /* ── 개발자 패널 (DevPanel.tsx, DEV 빌드 전용) — 항상 최상단 ── */

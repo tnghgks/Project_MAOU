@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { bus } from '../game/events.ts';
 import { gameState, type Phase } from '../game/store.ts';
 import type { DonationTier } from '../formulas.ts';
+import { pickDonationMessage } from '../data/chat.ts';
 
 // 개발 모드 전용 디버그 패널. 프로덕션 빌드에는 포함되지 않는다 (App.tsx에서 import.meta.env.DEV로 게이팅).
 // 페이즈 점프 + 도네이션 이벤트(일반/대박)를 즉시 트리거해서, 플레이를 쭉 진행하지 않고도
@@ -28,7 +29,13 @@ export default function DevPanel() {
   // 여기선 효과음 3종을 바로 들어보려고 금액과 함께 직접 지정한다.
   const donate = (tier: DonationTier, jackpot = false) => {
     if (gameState().phase !== 'broadcast') goPhase('broadcast');
-    bus.emit('donation:arrive', { donor: '테스터', amount: DEV_AMOUNT[tier], jackpot, tier });
+    bus.emit('donation:arrive', {
+      donor: '테스터',
+      amount: DEV_AMOUNT[tier],
+      jackpot,
+      tier,
+      message: pickDonationMessage(),
+    });
   };
 
   return (
