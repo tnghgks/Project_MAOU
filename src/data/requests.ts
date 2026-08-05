@@ -22,7 +22,6 @@ export interface RequestDef {
   needs?: MonsterId[]; // 이 몬스터가 해금돼야 출제
   noScale?: boolean; // 비율 목표(HP 등) — 전투력으로 늘리면 말이 안 된다
   max?: number; // 스케일 상한. 동시 생존 상한(BattleScene.MAX_ALIVE=60)을 넘기면 달성 자체가 불가능하다
-  heroOnly?: boolean; // 용사 시점에서만 출제 — 소환 조작으로는 못 채우는 요구
   needsBoss?: boolean; // 보스 등장 후에만 출제
 }
 
@@ -43,10 +42,10 @@ export const REQUESTS: RequestDef[] = [
   { text: '용사 피 30% 밑으로 만들어봐',        dur: 30, need: 0.7, now: (c) => 1 - c.hpRatio, noScale: true },
   { text: '폭탄 박쥐 {n}마리 터뜨려줘',         dur: 20, need: 3,   now: (c) => c.count('bat'),    needs: ['bat'] },
   { text: '정예 기사 {n}명 붙여봐',             dur: 25, need: 1,   now: (c) => c.count('knight'), needs: ['knight'] },
-  // 용사 전용 — 기존 8종이 전부 소환 조작을 요구해 용사 시점에선 손 놓고 기다리게 되던 구멍을 막는다
-  { text: '노 데미지 20초 가보자',              dur: 28, need: 20,  now: (c) => c.noHitT,       noScale: true, heroOnly: true },
-  { text: '{n}킬 연속으로 끊지 말고',           dur: 25, need: 4,   now: (c) => c.combo,        max: 12, heroOnly: true },
-  { text: '잡몹 말고 보스만 노려! 30% 깎아라',  dur: 25, need: 0.3, now: (c) => c.bossDmgRatio, noScale: true, heroOnly: true, needsBoss: true },
+  // 용사를 직접 움직여야 채울 수 있는 요구 — 소환 조작만으로는 못 채운다
+  { text: '노 데미지 20초 가보자',              dur: 28, need: 20,  now: (c) => c.noHitT,       noScale: true },
+  { text: '{n}킬 연속으로 끊지 말고',           dur: 25, need: 4,   now: (c) => c.combo,        max: 12 },
+  { text: '잡몹 말고 보스만 노려! 30% 깎아라',  dur: 25, need: 0.3, now: (c) => c.bossDmgRatio, noScale: true, needsBoss: true },
 ];
 
 export interface ActiveRequest {
@@ -79,18 +78,13 @@ export const reqProgress = (r: ActiveRequest, c: ReqCtx) => Math.min(1, Math.max
 // 출제 가능 여부를 가르는 현재 방송 상태. 인자를 하나로 묶어 플래그가 늘어도 시그니처가 안 자란다.
 export interface ReqPool {
   unlocked: readonly MonsterId[];
-  hero: boolean; // 지금 용사 시점인가
   boss: boolean; // 보스가 등장해 살아있는가
 }
 
 // 지금 낼 수 있는 요청 중 하나. 직전 요청은 제외 (같은 요구가 연달아 뜨면 티가 난다).
 export function pickRequest(p: ReqPool, rnd: () => number = Math.random, exclude?: RequestDef): RequestDef | null {
   const pool = REQUESTS.filter(
-    (r) =>
-      r !== exclude &&
-      (r.needs ?? []).every((m) => p.unlocked.includes(m)) &&
-      (!r.heroOnly || p.hero) &&
-      (!r.needsBoss || p.boss),
+    (r) => r !== exclude && (r.needs ?? []).every((m) => p.unlocked.includes(m)) && (!r.needsBoss || p.boss),
   );
   return pool.length ? pool[Math.floor(rnd() * pool.length)] : null;
 }

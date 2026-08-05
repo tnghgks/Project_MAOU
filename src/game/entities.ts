@@ -24,8 +24,6 @@ export interface HeroEntity {
   regenFlat: number;
   goldBonus: number;
   atkCd: number;
-  retreatT: number; // 자동 AI 전용 — 수동 조작 중엔 안 쓴다
-  retreatCd: number;
   dashT: number; // 대시 남은 시간 (용사 모드)
   dashCd: number;
   invulnT: number; // 무적 남은 시간 — hurtHero가 읽는다
@@ -96,8 +94,6 @@ export function spawnHero(s: HeroStats, at: { x: number; y: number }): HeroEntit
     regenFlat: s.regenFlat,
     goldBonus: s.goldBonus,
     atkCd: 0,
-    retreatT: 0,
-    retreatCd: 0,
     dashT: 0,
     dashCd: 0,
     invulnT: 0,

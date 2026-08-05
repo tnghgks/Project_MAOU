@@ -28,8 +28,6 @@ export interface HeroStats {
   goldBonus: number; // 처치 골드 보너스(%)
 }
 export type Phase = 'boot' | 'title' | 'broadcast' | 'result' | 'upgrade' | 'ending';
-// 시점 전환(C키): maou = 소환 카드 조작 · hero = 용사 직접 조작. 같은 BattleScene을 이어받는다.
-export type ViewMode = 'maou' | 'hero';
 // clear = 목표 후원 달성 · death = 용사 사망 · abandoned = 시청자 이탈로 방송 종료
 export type RunOutcome = 'clear' | 'death' | 'abandoned';
 export interface RunSummary {
@@ -54,7 +52,6 @@ export interface GameState {
   unlockedMonsters: MonsterId[];
   records: Records;
   viewers: number; // React 채팅 헤더용 (스로틀 반영)
-  mode: ViewMode; // 시점 — Phaser 씬은 gameState()로, React는 useStore로 읽는다
   lastRun: RunSummary;
   cuts: string[]; // 재생 대기 중인 컷씬 id 큐 (CutsceneView가 소비)
   bossUp: boolean; // 보스 등장 여부 — BGM 전환용. 실체(BattleScene.boss)는 씬이 갖고 있고 여기엔 사실만 미러링한다
@@ -63,7 +60,6 @@ export interface GameState {
   setPhase: (phase: Phase) => void;
   setBossUp: (up: boolean) => void;
   toggleBgm: () => void;
-  toggleMode: () => ViewMode;
   playCuts: (ids: string | string[], after?: () => void) => void;
   advanceCut: () => void;
   setViewers: (viewers: number) => void;
@@ -125,7 +121,6 @@ const freshRun = () => ({
   skills: ['낙뢰'] as SkillId[], // 스킬은 런 한정 — 사망/타이틀 복귀 시 세이브에서도 지워진다
   traits: [] as TraitId[],
   viewers: 0,
-  mode: 'maou' as ViewMode, // 방송은 항상 마왕 시점에서 시작
   bossUp: false,
 });
 
@@ -146,13 +141,6 @@ export const gameStore = createStore<GameState>()((set, get) => ({
   toggleBgm: () => {
     set({ bgmOn: !get().bgmOn });
     saveGame(); // 소리 설정은 새로고침해도 유지되는 게 맞다
-  },
-
-  // 시점 전환. 전환 후 모드를 돌려줘 호출부(BattleScene)가 한 번 더 읽지 않게 한다.
-  toggleMode: () => {
-    const mode: ViewMode = get().mode === 'maou' ? 'hero' : 'maou';
-    set({ mode });
-    return mode;
   },
 
   // 컷씬 재생 요청. after는 큐가 끝났을 때(스킵으로 끝나도) 정확히 한 번 실행된다.

@@ -2,9 +2,23 @@ import { useState, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
 import { gameStore, gameState } from '../game/store.ts';
 import { stageCut } from '../data/cutscenes.ts';
-import { CONTROLS } from './HelpPopup.tsx';
 
 type Panel = 'help' | 'options' | 'credits' | null;
+
+// 타이틀 화면 "조작법" 패널 전용 — 예전엔 방송 중 떠 있는 별도 팝업(HelpPopup)과 공유했지만,
+// 그 팝업은 시점 통합(2026-08-05) 이후 하단 패널만 보면 조작이 다 드러나서 없앴다.
+// 여긴 시작 전에 한 번 훑어보는 용도라 그대로 남기고, 내용만 최신 조작으로 갱신한다.
+const CONTROLS = [
+  '방향키: 이동 · Shift: 대시(무적)',
+  '1~4: 몬스터 즉시 소환 (하단 패널 버튼 클릭도 동일)',
+  'Q W E R: 스킬 시전 · 도네이션 리듬 중엔 같은 키로 노트 판정',
+  '짧은 간격으로 연속 처치하면 콤보가 쌓여 하이프가 오른다',
+  'HP 30% 이하를 버티면 시청자가 몰린다 — 벼랑끝이 제일 잘 팔린다',
+  '후원 카드에서 드물게 특성(흡혈·반격·광전사 등)이 나온다 — 이번 방송 한정',
+  '목표 골드를 채우면 보스 등장 · 용사가 보스를 잡으면 방송 성공',
+  '시청자가 다 나가면 채널 폐지',
+  '용사를 죽이지 마라. 단, 죽기 직전까지 몰아붙여라.',
+];
 
 // public/ 자산이라 번들러가 경로를 안 바꾼다 — 상대경로 빌드(base './')를 직접 붙여준다.
 // CSS 변수로 넘기는 url() 은 상대경로면 스타일시트(/assets/*.css) 기준으로 풀려 assets/assets/ 가 된다.

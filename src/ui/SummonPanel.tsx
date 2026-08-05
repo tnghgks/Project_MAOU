@@ -1,0 +1,194 @@
+import { useRef, useState } from 'react';
+import { useStore } from 'zustand';
+import { gameStore } from '../game/store.ts';
+import { bus } from '../game/events.ts';
+import { useBusEvent } from './useBusEvent.ts';
+import { MONSTERS, type MonsterId } from '../data/monsters.ts';
+import { UPGRADES, statOf, type UpgradeKey } from '../data/upgrades.ts';
+import { SKILLS, type SkillId } from '../data/skills.ts';
+import { TRAITS } from '../data/traits.ts';
+import { FINAL_EP } from '../data/progression.ts';
+import { SUMMON_Y, CANVAS } from '../game/layout.ts';
+
+const PANEL_TOP_PCT = (SUMMON_Y / CANVAS.H) * 100;
+const SKILL_KEYS = ['Q', 'W', 'E', 'R'];
+const ALL_SKILL_IDS = Object.keys(SKILLS) as SkillId[];
+const UPGRADE_KEYS = Object.keys(UPGRADES) as UpgradeKey[];
+// 진짜 진행도 개념(경험치 등)이 없어 순수 장식 — 레벨 10에서 꽉 찬다는 감만 준다.
+const UPGRADE_BAR_MAX_LV = 10;
+
+// 하단 패널 — 예전엔 Phaser 소환 카드 바 + 별도 HeroPanelScene(HP/대시/특성/스킬)이 같은 자리를
+// 모드에 따라 갈아끼웠다. 시점 통합(2026-08-05)으로 소환도 항상 켜져 있어야 해서 React로 이관 —
+// InfoLayer(상단바)와 같은 패턴. 소환은 이제 자동 반복이 아니라 버튼 클릭/숫자키 = 즉시 1마리.
+// 용사 HP는 아레나 안 heroHpBar로 이미 보이니 여기선 안 그린다 — 육성 정보만 남긴다.
+// 특성(traits)은 스탯과 달리 전투 규칙 자체를 바꾸는 별도 개념이라(GDD 3-10), 같은 줄에 섞지 않고
+// 버튼으로 열리는 팝업에 따로 모아 보여준다.
+const MONSTER_ICON: Partial<Record<MonsterId, string>> = {
+  slime: '🟢',
+  archer: '🏹',
+  golem: '🗿',
+  bat: '🦇',
+  knight: '⚔️',
+};
+const SKILL_ICON: Record<SkillId, string> = {
+  화염폭발: '🔥',
+  낙뢰: '⚡',
+  회복의성가: '💚',
+  시간정지: '⏳',
+};
+const UPGRADE_ICON: Record<UpgradeKey, string> = {
+  hp: '♥',
+  atk: '⚔️',
+  atkSpd: '⚡',
+  speed: '👟',
+  range: '📏',
+};
+
+export default function SummonPanel() {
+  const episode = useStore(gameStore, (s) => s.episode);
+  const upgradeLevels = useStore(gameStore, (s) => s.upgradeLevels);
+  const hero = useStore(gameStore, (s) => s.hero);
+  const skills = useStore(gameStore, (s) => s.skills);
+  const traits = useStore(gameStore, (s) => s.traits);
+  const isFinal = episode >= FINAL_EP; // 최종화: 도네이션 금지와 같은 규칙(GDD 7장) — 소환도 막는다
+
+  // 스킬/대시 쿨타임은 BattleScene 전용 실시간 값이라 store엔 없다 — hud:tick으로만 받는다.
+  // tick.skillCd는 BattleScene의 같은 객체를 매번 그대로 넘겨준다 — 그대로 setState하면 참조가
+  // 안 바뀌어서 React가 "값이 그대로"라고 오판해 리렌더를 건너뛴다(dashCd가 변할 때만 얹혀서 갱신되다가,
+  // 대시가 멈추면 같이 멈춰 보이던 버그의 원인). 매번 새 객체로 복사해 넘겨야 확실히 리렌더된다.
+  const [skillCd, setSkillCd] = useState<Partial<Record<SkillId, number>>>({});
+  const [dashCd, setDashCd] = useState(0);
+  // 대시는 summon:request/skill:request 같은 discrete 이벤트가 없다 — Shift는 매 프레임 폴링돼서
+  // "누른 순간"이 따로 없다. 대신 dashCd는 쿨 중엔 줄기만 하다가 발동하는 프레임에만 갑자기
+  // DASH_CD로 튀어오른다 — 그 "감소가 아니라 증가"를 대시가 막 발동한 신호로 써서 팝을 건다.
+  const prevDashCd = useRef(0);
+  const [dashPop, setDashPop] = useState(0);
+  useBusEvent('hud:tick', (tick) => {
+    setSkillCd({ ...tick.skillCd });
+    if (tick.dashCd > prevDashCd.current + 0.01) setDashPop((p) => p + 1);
+    prevDashCd.current = tick.dashCd;
+    setDashCd(tick.dashCd);
+  });
+
+  // 클릭 피드백용 — 요청이 들어올 때마다 값을 올려서 key로 써먹는다. key가 바뀌면 React가 그 타일을
+  // 새로 그리면서 CSS "등장" 애니메이션(tile-pop)이 다시 걸린다 — 타이머로 클래스를 붙였다 떼는 것보다
+  // 훨씬 단순하다. summon:request/skill:request를 직접 emit하는 게 아니라 구독해서 반응하는 이유는
+  // 숫자키·QWER 입력(BattleScene)도 같은 이벤트를 타므로, 버튼 클릭과 키 입력 둘 다 여기서 한 번에 잡힌다.
+  const [summonPop, setSummonPop] = useState<Partial<Record<MonsterId, number>>>({});
+  useBusEvent('summon:request', ({ type }) => setSummonPop((p) => ({ ...p, [type]: (p[type] ?? 0) + 1 })));
+
+  const [skillPop, setSkillPop] = useState<Partial<Record<SkillId, number>>>({});
+  useBusEvent('skill:request', ({ index }) => {
+    const id = skills[index];
+    if (id) setSkillPop((p) => ({ ...p, [id]: (p[id] ?? 0) + 1 }));
+  });
+
+  const [showTraits, setShowTraits] = useState(false);
+
+  const available = (Object.keys(MONSTERS) as MonsterId[]).filter((k) => MONSTERS[k].unlock <= episode);
+
+  return (
+    <div className="summon-panel" style={{ top: `${PANEL_TOP_PCT}%`, height: `${100 - PANEL_TOP_PCT}%` }}>
+      {!isFinal && (
+        <div className="tile-row">
+          {available.map((t, i) => {
+            const def = MONSTERS[t];
+            return (
+              <button
+                key={`${t}-${summonPop[t] ?? 0}`}
+                type="button"
+                className="tile summon-tile"
+                onClick={() => bus.emit('summon:request', { type: t })}
+              >
+                <span className="tile-key">{i + 1}</span>
+                <span className="tile-icon">{MONSTER_ICON[t] ?? '❔'}</span>
+                <span className="tile-name">{def.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="tile-row">
+        <div key={`dash-${dashPop}`} className="tile skill-tile">
+          <span className="tile-key">Shift</span>
+          <span className="tile-icon" style={{ opacity: dashCd > 0 ? 0.4 : 1 }}>
+            💨
+          </span>
+          <span className="tile-name">대시{dashCd > 0 ? ` ${dashCd.toFixed(1)}s` : ''}</span>
+        </div>
+        {/* 아직 안 얻은 스킬도 자리는 잡아둔다(점선 비활성, 클릭 불가) — 몇 종류가 더 있는지 미리 보여야 목표가 생긴다. */}
+        {ALL_SKILL_IDS.map((id) => {
+          const idx = skills.indexOf(id);
+          const owned = idx >= 0;
+          const left = owned ? (skillCd[id] ?? 0) : 0;
+          const inner = (
+            <>
+              <span className="tile-key">{owned ? (SKILL_KEYS[idx] ?? '') : ''}</span>
+              <span className="tile-icon" style={{ opacity: !owned ? 0.35 : left > 0 ? 0.4 : 1 }}>
+                {SKILL_ICON[id]}
+              </span>
+              <span className="tile-name">
+                {SKILLS[id].name}
+                {owned && left > 0 ? ` ${left.toFixed(1)}s` : ''}
+              </span>
+            </>
+          );
+          return owned ? (
+            <button
+              key={`${id}-${skillPop[id] ?? 0}`}
+              type="button"
+              className="tile skill-tile"
+              onClick={() => bus.emit('skill:request', { index: idx })}
+            >
+              {inner}
+            </button>
+          ) : (
+            <div key={id} className="tile skill-tile locked">
+              {inner}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="upgrade-info">
+        {UPGRADE_KEYS.map((k) => (
+          <div key={k} className="upgrade-row">
+            <span className="upgrade-icon">{UPGRADE_ICON[k]}</span>
+            <span className="upgrade-name">{UPGRADES[k].name}</span>
+            <span className="upgrade-lv">L{upgradeLevels[k]}</span>
+            <span className="upgrade-bar">
+              <span
+                className="upgrade-bar-fill"
+                style={{ width: `${Math.min(100, (upgradeLevels[k] / UPGRADE_BAR_MAX_LV) * 100)}%` }}
+              />
+            </span>
+            <span className="upgrade-value">{statOf(k, hero)}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* 업그레이드 목록 밑에 한 줄 더 쌓지 않고, 패널의 다른 구획들처럼 옆에 나란히 놓는다. */}
+      <div className="traits-wrap">
+        <button type="button" className="traits-toggle" onClick={() => setShowTraits((v) => !v)}>
+          🎭 특성 {traits.length}
+        </button>
+        {showTraits && (
+          <div className="traits-popup">
+            {traits.length === 0 ? (
+              <p className="traits-empty">아직 얻은 특성이 없습니다</p>
+            ) : (
+              traits.map((id) => (
+                <div key={id} className="trait-card">
+                  <span className="trait-card-icon">{TRAITS[id].icon}</span>
+                  <span className="trait-card-name">{TRAITS[id].name}</span>
+                  <span className="trait-card-desc">{TRAITS[id].desc}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

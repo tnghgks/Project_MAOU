@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import type { DonationTier, SkillOutcome, ViewerAlert } from '../formulas.ts';
 import type { Card } from '../data/cards.ts';
+import type { MonsterId } from '../data/monsters.ts';
+import type { SkillId } from '../data/skills.ts';
 
 // 순간적으로 터지는 사건 버스 (지속값은 store). 이벤트 계약은 BusEvents가 강제.
 //
@@ -22,7 +24,7 @@ export interface Donation {
 }
 
 // HUD(React InfoLayer) 전용 스냅샷 — BattleScene 인스턴스 전용 필드(매 프레임 변함)만 담는다.
-// 시청자수·골드·mode처럼 store에 이미 있는 값은 여기 안 넣는다(중복 전달 방지, useStore로 직접 구독).
+// 시청자수·골드처럼 store에 이미 있는 값은 여기 안 넣는다(중복 전달 방지, useStore로 직접 구독).
 // 스로틀 주기(HUD_SYNC_INTERVAL)로만 쏘아 React 리렌더가 프레임마다 터지지 않게 한다.
 export interface HudTick {
   D: number; // 위험도(흥분도) 0~1
@@ -31,11 +33,12 @@ export interface HudTick {
   alert: ViewerAlert;
   critical: boolean;
   critT: number;
-  modeCd: number; // 시점 전환 쿨타임 잔여
   boss: { name: string; hp: number; maxHp: number } | null;
   stageGold: number;
   target: number;
   req: { label: string; pct: number; t: number } | null;
+  skillCd: Partial<Record<SkillId, number>>; // QWER 쿨타임 잔여 — React SummonPanel이 스킬 칸에 표시
+  dashCd: number; // Shift 대시 쿨타임 잔여 — 위와 같은 이유로 SummonPanel이 표시
 }
 
 export interface BusEvents {
@@ -49,8 +52,9 @@ export interface BusEvents {
   'battle:pause': null;
   'battle:resume': null;
   'hud:tick': HudTick;
-  'mode:toggle': null; // React 시점 전환 버튼 → BattleScene.switchMode()
   'pause:toggle': null; // React(ESC/일시정지 버튼) → BattleScene: scene.pause()/resume() 토글 요청
+  'summon:request': { type: MonsterId }; // React(SummonPanel 버튼) → BattleScene.summonRandom
+  'skill:request': { index: number }; // React(SummonPanel 버튼) 또는 QWER 키 → BattleScene.castSkill
 }
 
 // ponytail: Phaser EventEmitter는 제네릭이 없어 as로 타입만 씌움 — 런타임은 그대로
