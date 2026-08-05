@@ -10,15 +10,9 @@ import { ATTACK_RELEASE_SEC } from './anims.ts'; // 값만 가져온다 — anim
 // ── AI 튜닝 상수 (로직 옆에 둔다) ──
 export const SUMMON_MIN_RADIUS = 150; // 용사 반경 이 안에는 소환 금지
 export const NEAR_RADIUS = 200; // 위험도·회복 판정용 "근접" 반경
-const SEEK_RANGE = 300; // 용사가 노리는 최대 탐지 거리
 const REGEN_RATE = 0.05; // 근접 0마리일 때 초당 회복 비율
 const REGEN_DELAY = 1.5; // 근접 0마리가 이 시간(초) 이상 유지돼야 회복 시작 — 스치듯 벌린 거리로는 안 참다
 const REGEN_FLAT_INTERVAL = 5; // 응급 처치(regenFlat) 고정 회복 주기(초)
-const RETREAT_HP = 0.25; // 이 비율 이하로 떨어지면 후퇴
-const RETREAT_DUR = 2; // 후퇴 지속(초)
-const RETREAT_CD = 6; // 후퇴 쿨다운(초)
-const HOME_SPEED_MULT = 0.5; // 스폰 복귀 이동 속도 배율
-const HOME_THRESHOLD = 20; // 스폰에서 이 거리 이내면 정지
 const ARROW_SPEED = 300; // 화살 속도(px/s)
 const ARROW_REACH = 8; // 화살이 목표점에 "도달"했다고 보는 거리
 const ARROW_HERO_HIT = 30; // 목표점이 용사에서 이 안이면 명중
@@ -62,7 +56,7 @@ export function facingOf(vx: number, vy: number): Facing | null {
   return vy < 0 ? 'north' : 'south';
 }
 
-// 용사 모드 입력. 넘기면 자동 AI(추적·후퇴·복귀)를 대체한다 — 공격만 기존대로 자동.
+// 용사는 항상 수동 조작(방향키 이동 + 사거리·시야 안이면 자동 공격) — 자동 AI(추적·후퇴·복귀)는 없다.
 export interface HeroInput {
   dx: number;
   dy: number;
@@ -73,16 +67,13 @@ export function stepHero(
   monsters: readonly MonsterEntity[],
   nearCount: number,
   dt: number,
-  home: { x: number; y: number },
   bounds: { minX: number; maxX: number; minY: number; maxY: number },
-  input?: HeroInput,
+  input: HeroInput,
   traits: readonly TraitId[] = [],
 ): HeroIntent {
   const H = hero;
   const alive = monsters.filter((m) => !m.dead);
   H.atkCd = Math.max(0, H.atkCd - dt);
-  H.retreatT = Math.max(0, H.retreatT - dt);
-  H.retreatCd = Math.max(0, H.retreatCd - dt);
   H.dashT = Math.max(0, H.dashT - dt);
   H.dashCd = Math.max(0, H.dashCd - dt);
   H.invulnT = Math.max(0, H.invulnT - dt);
@@ -92,7 +83,6 @@ export function stepHero(
   const dancing = hasTrait(traits, 'infiniteDance');
   const buffMult = 1 + (dancing ? H.moveBuffStack : 0);
 
-  // 자동 회복은 수동 조작에서도 유지 — 구석 도망은 시청자 이탈로 이미 벌점이 걸려 있다
   if (nearCount === 0) {
     H.safeT += dt;
     if (H.safeT >= REGEN_DELAY) {
@@ -110,88 +100,36 @@ export function stepHero(
     H.safeT = 0;
     H.regenTickT = 0;
   }
-  // 자동 후퇴는 조작권을 뺏으므로 수동 조작 중엔 발동시키지 않는다
-  if (!input && H.hp / H.maxHp <= RETREAT_HP && H.retreatCd <= 0) {
-    H.retreatT = RETREAT_DUR;
-    H.retreatCd = RETREAT_CD;
-  }
 
   let vx = 0,
     vy = 0;
+  if (input.dash && H.dashCd <= 0) {
+    H.dashT = DASH_DUR;
+    H.dashCd = DASH_CD;
+    H.invulnT = DASH_DUR; // 대시 = 관통 회피. 제자리 대시도 무적은 붙는다 (패닉 버튼)
+  }
+  const len = Math.hypot(input.dx, input.dy);
+  if (len) {
+    const spd = H.speed * buffMult * (H.dashT > 0 ? DASH_SPEED : 1);
+    vx = (input.dx / len) * spd;
+    vy = (input.dy / len) * spd;
+  }
+  // 조준은 바라보는 쪽 고정. 정지하면 마지막 방향이 남으므로(facingOf가 null) 제자리 공격도 방향이 정해진다.
+  H.facing = facingOf(vx, vy) ?? H.facing;
+  const [ux, uy] = FACING_VEC[H.facing];
   // 근접은 단일 타겟이 아니라 휘두르기 — 사거리 안에서 (ux,uy) 쪽 180°가 맞는다.
   // 반평면 판정은 내적 ≥ 0 — atan2 각도 차이와 달리 ±π 경계에서 뒤집히지 않는다.
+  const hits = alive.filter((m) => dist(m, H) <= H.range && (m.x - H.x) * ux + (m.y - H.y) * uy >= 0);
   let attacks: MonsterEntity[] = [];
   let swung = false;
   let swingAngle: number | null = null;
-  const swing = (ux: number, uy: number) =>
-    alive.filter((m) => dist(m, H) <= H.range && (m.x - H.x) * ux + (m.y - H.y) * uy >= 0);
-  if (input) {
-    if (input.dash && H.dashCd <= 0) {
-      H.dashT = DASH_DUR;
-      H.dashCd = DASH_CD;
-      H.invulnT = DASH_DUR; // 대시 = 관통 회피. 제자리 대시도 무적은 붙는다 (패닉 버튼)
-    }
-    const len = Math.hypot(input.dx, input.dy);
-    if (len) {
-      const spd = H.speed * buffMult * (H.dashT > 0 ? DASH_SPEED : 1);
-      vx = (input.dx / len) * spd;
-      vy = (input.dy / len) * spd;
-    }
-    // 조준은 바라보는 쪽 고정 — 자동 조준이 등 뒤 몬스터로 방향을 틀면 조작감이 어긋난다.
-    // 정지하면 마지막 방향이 남으므로(facingOf가 null) 제자리 공격도 방향이 정해진다.
-    H.facing = facingOf(vx, vy) ?? H.facing;
-    const [ux, uy] = FACING_VEC[H.facing];
-    const hits = swing(ux, uy);
-    // 앞이 비었으면 휘두르지 않는다 — 등 뒤 몬스터 때문에 쿨다운만 날리는 헛스윙이 된다
-    if (hits.length && H.atkCd <= 0) {
-      H.atkCd = 1 / (H.atkSpd * buffMult);
-      H.atkCount++;
-      swung = true;
-      attacks = hits;
-      swingAngle = Math.atan2(uy, ux);
-    }
-  } else if (H.retreatT > 0 && alive.length) {
-    // 몬스터 무리 반대 방향으로 도주
-    let sx = 0,
-      sy = 0;
-    for (const m of alive) {
-      sx += H.x - m.x;
-      sy += H.y - m.y;
-    }
-    const len = Math.hypot(sx, sy) || 1;
-    vx = (sx / len) * H.speed * buffMult;
-    vy = (sy / len) * H.speed * buffMult;
-  } else {
-    // 가장 가까운 대상 추적 → 사거리 안이면 공격
-    let target: MonsterEntity | null = null,
-      best = SEEK_RANGE;
-    for (const m of alive) {
-      const d = dist(m, H);
-      if (d < best) {
-        best = d;
-        target = m;
-      }
-    }
-    if (target) {
-      const d = best;
-      if (d > H.range) {
-        vx = ((target.x - H.x) / d) * H.speed * buffMult;
-        vy = ((target.y - H.y) / d) * H.speed * buffMult;
-      } else if (H.atkCd <= 0) {
-        // 자동 AI는 대상 쪽을 그대로 축으로 쓴다 — 스스로 붙은 대상이라 정면이 곧 그 방향이다
-        H.atkCd = 1 / (H.atkSpd * buffMult);
-        H.atkCount++;
-        swung = true;
-        const [ux, uy] = [target.x - H.x, target.y - H.y];
-        attacks = swing(ux, uy);
-        swingAngle = Math.atan2(uy, ux);
-      }
-    } else if (dist(H, home) > HOME_THRESHOLD) {
-      // 대상 없으면 스폰으로 천천히 복귀
-      const d = dist(H, home);
-      vx = ((home.x - H.x) / d) * H.speed * HOME_SPEED_MULT;
-      vy = ((home.y - H.y) / d) * H.speed * HOME_SPEED_MULT;
-    }
+  // 앞이 비었으면 휘두르지 않는다 — 등 뒤 몬스터 때문에 쿨다운만 날리는 헛스윙이 된다
+  if (hits.length && H.atkCd <= 0) {
+    H.atkCd = 1 / (H.atkSpd * buffMult);
+    H.atkCount++;
+    swung = true;
+    attacks = hits;
+    swingAngle = Math.atan2(uy, ux);
   }
   if (dancing) {
     if (vx !== 0 || vy !== 0) {

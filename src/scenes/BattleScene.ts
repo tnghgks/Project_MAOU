@@ -102,35 +102,9 @@ import { FINAL_EP, targetGold, bossOf, START_VIEWERS, viewerCap } from '../data/
 import { bossCut } from '../data/cutscenes.ts';
 import type { RunOutcome } from '../game/store.ts';
 
-// 소환 카드 바 (자동 소환 전용). ponytail: 밸런스 knob은 전부 여기
-const CARD = { w: 240, h: 108, gap: 12, x: 20, y: SUMMON_Y + (CANVAS.H - SUMMON_Y - 108) / 2 }; // 소환 바 세로 중앙
-const SLIDER = { x: 96, w: 136, h: 12 }; // 카드 좌상단 기준 오프셋
-const INTERVAL_MIN = 0.5;
-const INTERVAL_MAX = 6;
-const COUNT_MIN = 1;
-const COUNT_MAX = 5;
 const MAX_ALIVE = 60; // 동시 생존 상한 — 넘으면 소환 스킵 (프레임 보호)
-// 시점 전환 쿨타임. 무한 토글이면 최적해가 "위험할 때만 용사 모드"로 수렴한다 — 언제 넘어갈지가 판단이어야 한다.
-const MODE_CD = 4; // ponytail: 전환 리스크 knob
 const RARITY_LABEL: Record<SkillRarity, string> = { common: 'Common', uncommon: 'Uncommon', epic: '에픽' }; // GDD 3-4 표기 그대로
 
-// 몬스터 종류 1개 = 카드 1장. 활성화된 카드는 서로 독립적으로 자기 주기마다 count마리씩 소환한다.
-interface SummonSlot {
-  type: MonsterId;
-  on: boolean;
-  interval: number;
-  count: number;
-  t: number; // 다음 소환까지 남은 시간
-  bg: Phaser.GameObjects.Rectangle;
-  chip: Phaser.GameObjects.Text;
-  cd: Phaser.GameObjects.Rectangle; // 하단 주기 게이지
-  iv: SliderView;
-  ct: SliderView;
-}
-interface SliderView {
-  label: Phaser.GameObjects.Text;
-  fill: Phaser.GameObjects.Rectangle;
-}
 const HP_BAR_W = 48; // ponytail: 체력바 크기 knob
 const HP_BAR_H = 8;
 const KNOCKBACK_RADIUS = 120; // ponytail: 방패 밀치기 발동 반경(px) — GDD엔 확률만 있고 거리는 없어 여기서 정한다
@@ -161,9 +135,8 @@ export default class BattleScene extends Phaser.Scene {
   alert: ViewerAlert = 'normal'; // React InfoLayer가 hud:tick으로 받아 시청자 수 색을 바꾼다
   audience: string[] = []; // 현재 접속 중인 시청자 닉네임 — 채팅·후원자가 여기서만 나온다
   drift = 0; // 시청자 증감률에 얹히는 흔들림 (기계적인 지수곡선 방지)
-  combo = 0; // 처치 콤보 — ComboMeter가 읽고, FULL이면 도네이션 확률도 보정된다 (용사 모드에서만 쌓인다)
+  combo = 0; // 처치 콤보 — ComboMeter가 읽고, FULL이면 도네이션 확률도 보정된다
   comboT = 0;
-  modeCd!: number; // 시점 전환 쿨타임 잔여
   noHitT!: number; // 마지막 피격 이후 경과(초) — "노 데미지" 요청이 읽는다
   donateT!: number;
   freezeUntil!: number; // 시간 정지 스킬
@@ -171,11 +144,8 @@ export default class BattleScene extends Phaser.Scene {
   tier!: HypeTier; // React InfoLayer가 hud:tick으로 읽음
   over!: boolean;
   available!: MonsterId[];
-  slots!: SummonSlot[];
-  dragging: { slot: SummonSlot; kind: 'interval' | 'count'; x: number } | null = null; // 드래그 중인 슬라이더
-  summonObjs: Phaser.GameObjects.GameObject[] = []; // 소환 바 오브젝트 전부 — 용사 모드에선 통째로 숨긴다
   keys!: Record<string, Phaser.Input.Keyboard.Key>; // 용사 이동/대시 (폴링)
-  skillCd: Partial<Record<SkillId, number>> = {}; // 용사 모드 직접 시전 쿨타임 (HeroPanelScene이 읽는다)
+  skillCd: Partial<Record<SkillId, number>> = {}; // QWER 스킬 시전 쿨타임 (castSkill 재사용 가능 판정용)
   heroSpr!: Phaser.GameObjects.Sprite;
   facingDir: Dir = 'south'; // 마지막으로 바라본 방향 — 정지 시 이 방향 대기 모션으로 선다
   heroHpBar!: Phaser.GameObjects.Graphics;
@@ -220,7 +190,6 @@ export default class BattleScene extends Phaser.Scene {
     this.drift = 0;
     this.combo = 0;
     this.comboT = 0;
-    this.modeCd = 0;
     this.noHitT = 0;
     this.donateT = donationInterval(this.viewers);
     this.freezeUntil = 0;
@@ -233,18 +202,11 @@ export default class BattleScene extends Phaser.Scene {
     this.lastReq = null;
 
     this.available = (Object.keys(MONSTERS) as MonsterId[]).filter((k) => MONSTERS[k].unlock <= S.episode);
-    this.dragging = null;
-    this.summonObjs = [];
     this.skillCd = {};
 
     this.buildUI();
-    this.setSummonVisible(S.mode === 'maou'); // 시점은 화가 바뀌어도 유지 (resetRun만 마왕으로 되돌린다)
-    // 최종화: 용사만 플레이 가능, 도네이션 금지 (GDD 7장, 2026-07-28 정정) — 시점 강제 전환 + 소환 바 숨김.
+    // 최종화: 도네이션 금지(GDD 7장) — 소환 버튼도 숨긴다(React SummonPanel이 isFinal을 직접 계산해 처리).
     // 도네이션 차단은 update()의 donateT 블록에서 isFinal로 건너뛴다.
-    if (this.isFinal) {
-      if (gameState().mode !== 'hero') gameState().toggleMode();
-      this.setSummonVisible(false);
-    }
     this.heroSpr = makeActor(this, this.hero.x, this.hero.y, HERO_CHAR, 48, BOX_TEXTURE).spr.setScale(HERO_SCALE);
     // 대기 모션은 별도 스프라이트 없이 트윈으로. y는 매 프레임 덮어써지므로 scaleY만 건드린다.
     this.tweens.add({
@@ -256,10 +218,6 @@ export default class BattleScene extends Phaser.Scene {
       ease: 'Sine.easeInOut',
     });
     this.heroHpBar = this.add.graphics().setDepth(3); // 몬스터·화살 위로
-
-    // 병렬 씬: HeroPanel(용사 스탯). HUD 수치는 React InfoLayer가 hud:tick 구독으로 그린다.
-    // 리듬 판정은 RhythmLane(React)이 담당.
-    this.scene.launch('HeroPanel');
 
     // 전투 정지는 딱 리듬 미니게임이 시작되는 순간부터다 — 알림(alert)·춤 연출(reaction) 동안은
     // 화면을 안 덮으니 안 멈춘다. rhythm:start는 React(DonationEvent)가 그 시점에만 쏜다.
@@ -280,29 +238,26 @@ export default class BattleScene extends Phaser.Scene {
       }
     });
     busBind(this, 'donation:end', ({ card }) => this.endDonation(card));
-    busBind(this, 'mode:toggle', () => this.switchMode());
     busBind(this, 'pause:toggle', () => this.toggleUserPause());
+    // React SummonPanel 버튼 클릭 → 즉시 1마리 소환. 최종화 여부는 React가 직접 판단해 버튼을 안 그린다.
+    busBind(this, 'summon:request', ({ type }) => this.summonRandom(type));
+    busBind(this, 'skill:request', ({ index }) => this.castSkill(index));
 
-    // 입력: 슬라이더 드래그(카드 밖으로 나가도 추적) + 숫자키 = 해당 카드 ON/OFF
-    this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
-      if (this.dragging && p.isDown) this.dragTo(p.x);
-    });
-    this.input.on('pointerup', () => {
-      this.dragging = null;
-    });
-    // 용사 이동/대시는 폴링 (매 프레임 눌림 상태를 읽어야 한다)
-    this.keys = this.input.keyboard!.addKeys('W,A,S,D,UP,DOWN,LEFT,RIGHT,SHIFT') as Record<
+    // 용사 이동/대시는 폴링 (매 프레임 눌림 상태를 읽어야 한다). 방향키만 — WASD를 겹쳐 쓰면
+    // W가 스킬(Q/W/E/R)과 부딪힌다.
+    this.keys = this.input.keyboard!.addKeys('UP,DOWN,LEFT,RIGHT,SHIFT') as Record<
       string,
       Phaser.Input.Keyboard.Key
     >;
-    // 숫자키는 모드에 따라 두 역할: 마왕=소환 카드 토글 / 용사=스킬 시전.
-    // 도네이션 중엔 이 씬이 pause라 QWER(RhythmLane)와 동시 발화하지 않는다.
+    // 숫자키 1~4 = 즉시 소환, Q/W/E/R = 스킬 1~4 시전 — 둘 다 상시 동작한다(더 이상 모드 구분 없음).
+    // 도네이션 중엔 이 씬이 pause라 QWER(RhythmLane 리듬 판정)와 동시 발화하지 않는다.
+    // 숫자키·QWER 모두 summonRandom/castSkill을 직접 부르지 않고 이벤트로 emit한다 — React
+    // SummonPanel 버튼 클릭과 같은 경로를 타야 그쪽의 클릭 피드백(팝 애니메이션)이 키 입력에도 걸린다.
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
-      if (e.key === 'c' || e.key === 'C') return this.switchMode();
       const digit = parseInt(e.key, 10);
-      if (!(digit >= 1)) return;
-      if (gameState().mode === 'hero') this.castSkill(digit - 1);
-      else if (digit <= this.slots.length) this.toggleSlot(this.slots[digit - 1]);
+      if (digit >= 1 && digit <= this.available.length) return bus.emit('summon:request', { type: this.available[digit - 1] });
+      const qwer = ['q', 'w', 'e', 'r'].indexOf(e.key.toLowerCase());
+      if (qwer >= 0) bus.emit('skill:request', { index: qwer });
     });
 
     this.pushChat(
@@ -310,39 +265,10 @@ export default class BattleScene extends Phaser.Scene {
       this.isFinal ? '최종화 — 마왕이 직접 나선다!' : `${S.episode}화 방송이 시작되었습니다.`,
       '#888888',
     );
-    this.pushChat('시스템', '카드를 눌러 자동 소환 ON/OFF · 바를 드래그해 주기·수량 조절', '#888888');
-    this.pushChat('시스템', '[C] 용사 시점으로 전환 — 직접 조작할 수 있다', '#ffcc55');
+    if (!this.isFinal) this.summonRandom(this.available[0]); // 시작하자마자 한 마리는 있어야 방송이 굴러간다
   }
 
-  // ── 시점 전환 (C키) ── 소환은 계속 돌아간다. 바뀌는 건 조작 표면과 하단 패널뿐.
-  // 쿨타임 중엔 거절 — 되돌아올 수 없는 몇 초가 있어야 "지금 넘어갈까"가 선택이 된다.
-  switchMode() {
-    if (this.isFinal) {
-      this.floatText(this.hero.x, this.hero.y - 60, '최종화 — 용사 시점 고정', '#ff9933');
-      return;
-    }
-    if (this.modeCd > 0) {
-      this.floatText(this.hero.x, this.hero.y - 60, `전환 대기 ${this.modeCd.toFixed(1)}s`, '#ff9933');
-      return;
-    }
-    this.modeCd = MODE_CD;
-    const mode = gameState().toggleMode();
-    this.setSummonVisible(mode === 'maou');
-    this.cameras.main.flash(200, 200, 160, 80);
-    this.pushChat(
-      '시스템',
-      mode === 'hero' ? '⚔ 용사 시점 — WASD 이동 · Shift 대시 · 1~4 스킬' : '👑 마왕 시점 — 소환 카드 조작',
-      '#ffcc55',
-    );
-  }
-
-  // 소환 바 표시 토글. Phaser는 invisible 오브젝트에 입력을 안 보내므로 슬라이더 히트박스도 같이 죽는다.
-  setSummonVisible(v: boolean) {
-    for (const o of this.summonObjs) (o as Phaser.GameObjects.Image).setVisible(v);
-    if (!v) this.dragging = null; // 숨기는 순간 잡고 있던 슬라이더를 놓는다
-  }
-
-  // 용사 모드 스킬 시전 (1~4키). 도네 리듬 경로(resolveRhythmResult)와 달리 배율 없이 쿨타임으로 제한한다.
+  // 스킬 시전 (QWER키). 도네 리듬 경로(resolveRhythmResult)와 달리 배율 없이 쿨타임으로 제한한다.
   castSkill(i: number) {
     const id = gameState().skills[i];
     if (!id || (this.skillCd[id] ?? 0) > 0) return;
@@ -377,151 +303,7 @@ export default class BattleScene extends Phaser.Scene {
           .setScale(2)
           .setDepth(-9);
 
-    // 전투 영역 chrome (상단바=React InfoLayer, 리듬레인=Rhythm)
-    this.reg(add.rectangle(CX, (SUMMON_Y + CANVAS.H) / 2, ARENA.w, CANVAS.H - SUMMON_Y, 0x1a1a24).setDepth(5)); // 소환 바
-    this.reg(add.line(0, 0, ARENA.x, SUMMON_Y, ARENA.w, SUMMON_Y, 0x333344).setOrigin(0).setDepth(5));
-    this.slots = this.available.map((k, i) => this.buildCard(k, i));
-    this.toggleSlot(this.slots[0]); // 첫 카드는 켜둔다 — 수동 소환이 없어 전부 OFF면 방송이 안 굴러간다
-  }
-
-  // 소환 바 오브젝트 등록 — 용사 모드 전환 때 setSummonVisible이 한 번에 껐다 켠다
-  reg<T extends Phaser.GameObjects.GameObject>(o: T): T {
-    this.summonObjs.push(o);
-    return o;
-  }
-
-  // 소환 카드 1장: 초상화 + 종류 정보 + 주기/수량 슬라이더. 카드 본체 클릭 = ON/OFF.
-  buildCard(t: MonsterId, i: number): SummonSlot {
-    const add = this.add;
-    const def: MonsterDef = MONSTERS[t];
-    const x = CARD.x + i * (CARD.w + CARD.gap);
-    const y = CARD.y;
-
-    const bg = this.reg(
-      add.rectangle(x, y, CARD.w, CARD.h, 0x22222e).setOrigin(0).setDepth(6).setStrokeStyle(2, 0x3a3a4a),
-    ).setInteractive();
-    this.reg(
-      add
-        .rectangle(x + 8, y + 8, 44, 44, 0x11111a)
-        .setOrigin(0)
-        .setDepth(7)
-        .setStrokeStyle(1, 0x4a4a5e),
-    );
-    // 초상화는 아틀라스의 정면 정지컷(rotations/south). 아트가 없으면 아레나와 같은 대체 상자.
-    const portrait =
-      def.char && this.textures.exists(def.char)
-        ? add.image(x + 30, y + 30, def.char, 'rotations/south')
-        : add.image(x + 30, y + 30, BOX_TEXTURE).setTint(def.tint ?? 0xffffff);
-    this.reg(portrait.setDisplaySize(40, 40).setDepth(8));
-    this.reg(add.text(x + 60, y + 10, def.name, { fontSize: '13px', fontStyle: 'bold', color: '#ffffff' }).setDepth(8));
-    this.reg(
-      add
-        .text(x + 60, y + 30, `[${i + 1}] ⚔${def.dmg} ♥${def.hp} 💰${def.gold}`, {
-          fontSize: '11px',
-          color: '#8a8aa0',
-        })
-        .setDepth(8),
-    );
-    const chip = this.reg(
-      add
-        .text(x + CARD.w - 10, y + 10, '', { fontSize: '12px', fontStyle: 'bold' })
-        .setOrigin(1, 0)
-        .setDepth(8),
-    );
-    const cd = this.reg(
-      add
-        .rectangle(x + 2, y + CARD.h - 6, 0, 4, 0xffaa33)
-        .setOrigin(0)
-        .setDepth(8),
-    );
-
-    const iv = this.buildSlider(x, y + 58);
-    const ct = this.buildSlider(x, y + 82);
-    const slot: SummonSlot = { type: t, on: false, interval: 3, count: 1, t: 0, bg, chip, cd, iv, ct };
-
-    bg.on('pointerdown', () => this.toggleSlot(slot));
-    iv.hit.on('pointerdown', (p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => {
-      ev.stopPropagation(); // 슬라이더 조작이 카드 토글로 새지 않게
-      this.dragging = { slot, kind: 'interval', x: x + SLIDER.x };
-      this.dragTo(p.x);
-    });
-    ct.hit.on('pointerdown', (p: Phaser.Input.Pointer, _lx: number, _ly: number, ev: Phaser.Types.Input.EventData) => {
-      ev.stopPropagation();
-      this.dragging = { slot, kind: 'count', x: x + SLIDER.x };
-      this.dragTo(p.x);
-    });
-    this.refreshCard(slot);
-    return slot;
-  }
-
-  // 트랙 + 채움 + 판정용 히트박스(트랙보다 세로로 넉넉하게 — 얇은 바를 정확히 집기 어렵다)
-  buildSlider(x: number, ry: number): SliderView & { hit: Phaser.GameObjects.Rectangle } {
-    const add = this.add;
-    const label = this.reg(add.text(x + 10, ry, '', { fontSize: '11px', color: '#c8c8dd' }).setDepth(8));
-    this.reg(
-      add
-        .rectangle(x + SLIDER.x, ry - 1, SLIDER.w, SLIDER.h, 0x11111a)
-        .setOrigin(0)
-        .setDepth(7),
-    );
-    const fill = this.reg(
-      add
-        .rectangle(x + SLIDER.x, ry - 1, 0, SLIDER.h, 0x5566cc)
-        .setOrigin(0)
-        .setDepth(8),
-    );
-    const hit = this.reg(
-      add
-        .rectangle(x + SLIDER.x, ry - 6, SLIDER.w, SLIDER.h + 12, 0xffffff, 0)
-        .setOrigin(0)
-        .setDepth(9),
-    ).setInteractive();
-    return { label, fill, hit };
-  }
-
-  toggleSlot(s: SummonSlot) {
-    s.on = !s.on;
-    s.t = 0; // 켜자마자 1회
-    this.refreshCard(s);
-  }
-
-  // 클릭/드래그 x → 슬라이더 값. 트랙 밖으로 나가도 양 끝에 물린다.
-  dragTo(px: number) {
-    const d = this.dragging;
-    if (!d) return;
-    const r = clamp((px - d.x) / SLIDER.w, 0, 1);
-    if (d.kind === 'interval') {
-      d.slot.interval = Math.round((INTERVAL_MIN + r * (INTERVAL_MAX - INTERVAL_MIN)) * 10) / 10;
-      d.slot.t = Math.min(d.slot.t, d.slot.interval);
-    } else {
-      d.slot.count = Math.round(COUNT_MIN + r * (COUNT_MAX - COUNT_MIN));
-    }
-    this.refreshCard(d.slot);
-  }
-
-  refreshCard(s: SummonSlot) {
-    s.bg.setFillStyle(s.on ? 0x2c3350 : 0x22222e).setStrokeStyle(2, s.on ? 0xffaa33 : 0x3a3a4a);
-    s.chip.setText(s.on ? '● ON' : '○ OFF').setColor(s.on ? '#ffcc44' : '#666677');
-    s.iv.label.setText(`주기 ${s.interval.toFixed(1)}s`);
-    s.iv.fill.width = (SLIDER.w * (s.interval - INTERVAL_MIN)) / (INTERVAL_MAX - INTERVAL_MIN);
-    s.ct.label.setText(`수량 ×${s.count}`);
-    s.ct.fill.width = (SLIDER.w * (s.count - COUNT_MIN)) / (COUNT_MAX - COUNT_MIN);
-  }
-
-  // 카드별 자동 소환: 활성 카드는 서로 독립적으로 자기 주기마다 count마리
-  stepSummon(dt: number) {
-    for (const s of this.slots) {
-      if (!s.on) {
-        s.cd.width = 0;
-        continue;
-      }
-      s.t -= dt;
-      if (s.t <= 0) {
-        for (let i = 0; i < s.count; i++) this.summonRandom(s.type);
-        s.t = s.interval;
-      }
-      s.cd.width = (CARD.w - 4) * (1 - clamp(s.t / s.interval, 0, 1));
-    }
+    // 전투 영역 chrome — 상단바(InfoLayer)·하단 소환/용사 패널(SummonPanel)·리듬레인(Rhythm) 전부 React.
   }
 
   // ── 소환: 용사 반경(SUMMON_MIN_RADIUS) 밖 랜덤 지점 ──
@@ -859,9 +641,8 @@ export default class BattleScene extends Phaser.Scene {
     this.time.delayedCall(80, () => {
       if (m.spr.active) m.spr.setAlpha(1);
     });
-    // 콤보는 용사 모드 전용 — 카드를 켜두고 방치하면 쌓이는 자동 소환 공격까지 세면 의미가 없다.
     // 2026-07-30: 처치가 아니라 타격마다 쌓이도록 변경 — 명중 자체가 실력 지표라는 판단.
-    if (!silent && gameState().mode === 'hero') {
+    if (!silent) {
       bumpCombo(this);
       bus.emit('combo:hit', { combo: this.combo });
     }
@@ -916,8 +697,6 @@ export default class BattleScene extends Phaser.Scene {
       this.spawnBoss();
     }
 
-    this.stepSummon(dt);
-
     const near = countNear(this.monsters, H);
     // this는 { viewers, peakViewers, drift } 필드를 가져 ViewerState로 그대로 넘긴다.
     const step = stepViewers(this, H.hp / H.maxHp, near, dt, viewerCap(gameState().episode));
@@ -939,7 +718,6 @@ export default class BattleScene extends Phaser.Scene {
     }
 
     for (const id of Object.keys(this.skillCd) as SkillId[]) this.skillCd[id] = Math.max(0, this.skillCd[id]! - dt);
-    this.modeCd = Math.max(0, this.modeCd - dt);
     this.noHitT += dt; // hurtHero가 0으로 되돌린다
 
     this.updateHero(dt, near);
@@ -954,7 +732,7 @@ export default class BattleScene extends Phaser.Scene {
       this.viewerSyncT = 0.25;
     }
 
-    // React InfoLayer — 씬 전용(store에 없는) 실시간 값만 스로틀로 쏜다. viewers/gold/mode는 store가 이미 커버.
+    // React InfoLayer — 씬 전용(store에 없는) 실시간 값만 스로틀로 쏜다. viewers/gold는 store가 이미 커버.
     this.hudSyncT -= dt;
     if (this.hudSyncT <= 0) {
       bus.emit('hud:tick', {
@@ -964,11 +742,12 @@ export default class BattleScene extends Phaser.Scene {
         alert: this.alert,
         critical: this.critical,
         critT: this.critT,
-        modeCd: this.modeCd,
         boss: this.boss ? { name: this.boss.def.name, hp: Math.max(0, this.boss.hp), maxHp: this.boss.def.hp } : null,
         stageGold: this.stageGold,
         target: this.target,
         req: this.req ? { label: this.req.label, pct: this.reqPct, t: Math.max(0, this.req.t) } : null,
+        skillCd: this.skillCd,
+        dashCd: this.hero.dashCd,
       });
       this.hudSyncT = 0.1;
     }
@@ -1008,14 +787,12 @@ export default class BattleScene extends Phaser.Scene {
     }
   }
 
-  // 용사 모드일 때만 입력 벡터를 만든다. 마왕 모드면 undefined → stepHero가 자동 AI로 돈다.
-  heroInput(): HeroInput | undefined {
-    if (gameState().mode !== 'hero') return undefined;
+  // 방향키 입력 벡터 — 상시 수동 조작이라 항상 값을 만든다(자동 AI 없음).
+  heroInput(): HeroInput {
     const k = this.keys;
-    const down = (a: Phaser.Input.Keyboard.Key, b: Phaser.Input.Keyboard.Key) => (a.isDown || b.isDown ? 1 : 0);
     return {
-      dx: down(k.D, k.RIGHT) - down(k.A, k.LEFT),
-      dy: down(k.S, k.DOWN) - down(k.W, k.UP),
+      dx: (k.RIGHT.isDown ? 1 : 0) - (k.LEFT.isDown ? 1 : 0),
+      dy: (k.DOWN.isDown ? 1 : 0) - (k.UP.isDown ? 1 : 0),
       dash: k.SHIFT.isDown,
     };
   }
@@ -1190,7 +967,7 @@ export default class BattleScene extends Phaser.Scene {
     const H = this.hero;
     const traits = gameState().traits;
     // 결정 로직은 battleSim.stepHero(순수). 씬은 결과를 스프라이트에 반영 + 공격만 처리.
-    const intent = stepHero(H, this.monsters, nearCount, dt, { x: CX, y: 300 }, arenaBounds, this.heroInput(), traits);
+    const intent = stepHero(H, this.monsters, nearCount, dt, arenaBounds, this.heroInput(), traits);
     if (intent.swung) {
       const { dmg, crit } = this.heroDamage();
       for (const m of intent.attacks) this.heroHit(m, dmg, crit);
@@ -1342,7 +1119,7 @@ export default class BattleScene extends Phaser.Scene {
     if (this.reqT > 0) return;
     const boss = this.boss && !this.boss.dead ? this.boss : null;
     const def = pickRequest(
-      { unlocked: this.available, hero: gameState().mode === 'hero', boss: !!boss },
+      { unlocked: this.available, boss: !!boss },
       Math.random,
       this.lastReq ?? undefined,
     );

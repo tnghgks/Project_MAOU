@@ -6,12 +6,12 @@ import { gameStore } from './game/store.ts';
 import { preloadSfx } from './game/sfx.ts';
 import BroadcastFrame from './ui/BroadcastFrame.tsx';
 import InfoLayer from './ui/InfoLayer.tsx';
+import SummonPanel from './ui/SummonPanel.tsx';
 import DonationEvent from './ui/DonationEvent.tsx';
 import PauseOverlay from './ui/PauseOverlay.tsx';
 import ComboMeter from './ui/ComboMeter.tsx';
 import MenuOverlay from './ui/MenuOverlay.tsx';
 import TitleView from './ui/TitleView.tsx';
-import HelpPopup from './ui/HelpPopup.tsx';
 import CutsceneView from './ui/CutsceneView.tsx';
 import DevPanel from './ui/DevPanel.tsx';
 import { useBgm } from './ui/useBgm.ts';
@@ -36,24 +36,27 @@ export default function App() {
   useEffect(() => {
     const game = gameRef.current;
     if (!game) return;
-    if (phase === 'broadcast')
-      game.scene.start('Battle'); // Battle이 HeroPanel launch
-    else for (const k of ['Battle', 'HeroPanel']) if (game.scene.isActive(k)) game.scene.stop(k);
+    if (phase === 'broadcast') game.scene.start('Battle');
+    else if (game.scene.isActive('Battle')) game.scene.stop('Battle');
   }, [phase]);
 
   // 캔버스와 오버레이는 플레이어 영역(.screen) 안 — 채팅/사이드바는 BroadcastFrame가 소유.
-  // 3레이어(피드백 2026-07-31): 1=Phaser 캔버스 · 2=정보성 UI(InfoLayer) · 3=리듬/콤보 등 효과(ui-layer).
+  // 3레이어(피드백 2026-07-31): 1=Phaser 캔버스 · 2=정보성 UI(InfoLayer·SummonPanel) · 3=리듬/콤보 등 효과(ui-layer).
   return (
     <>
       <BroadcastFrame>
         <div ref={parentRef} className="canvas-layer" />
-        {phase === 'broadcast' && <InfoLayer />}
+        {phase === 'broadcast' && (
+          <>
+            <InfoLayer />
+            <SummonPanel />
+          </>
+        )}
         <div className="ui-layer">
           {phase === 'broadcast' && (
             <>
               <DonationEvent />
               <PauseOverlay />
-              <HelpPopup />
               <ComboMeter />
             </>
           )}

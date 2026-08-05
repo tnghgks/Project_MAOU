@@ -50,7 +50,7 @@ button {
   font: inherit;
 }
 
-/* 용사 시점(C키): 껍데기를 양피지/금테 톤으로. 색 변수만 덮어쓴다 —
+/* 방송 중(live)엔 껍데기를 양피지/금테 톤으로. 색 변수만 덮어쓴다 —
    --top-h/--meta-h/--chrome-h를 건드리면 layout.ts가 로드 시점에 고정한 캔버스 지오메트리가 깨진다. */
 .site.hero-mode {
   --bg: #14100a;
@@ -524,37 +524,6 @@ button {
   to {
     width: 100%;
   }
-}
-
-/* ── 조작법 floating popup: 방송 중 아무 때나 개폐 ── */
-.help-popup {
-  position: absolute;
-  left: 10px;
-  top: 12%;
-  z-index: 20;
-  width: max-content;
-  max-width: 46%;
-  background: #14142099;
-  border: 1px solid var(--line);
-  font-size: clamp(9px, 0.85vw, 13px);
-}
-.help-popup summary {
-  padding: 5px 10px;
-  cursor: pointer;
-  color: #ffcf3a;
-  list-style: none;
-  user-select: none;
-}
-.help-popup summary::-webkit-details-marker {
-  display: none;
-}
-.help-popup[open] {
-  background: #141420ee;
-}
-.help-popup ul {
-  padding: 4px 12px 10px 24px;
-  color: #ccc;
-  line-height: 1.9;
 }
 
 .upgrade .gold {
@@ -1061,14 +1030,6 @@ button {
 .info-hype-label {
   font-size: clamp(10px, 1.1vw, 15px);
 }
-.info-mode-btn {
-  border: none;
-  background: transparent;
-  font: inherit;
-  font-weight: 800;
-  cursor: pointer;
-  padding: 4px 6px;
-}
 .info-target {
   margin-left: auto;
   white-space: nowrap;
@@ -1101,6 +1062,245 @@ button {
 }
 .info-vignette {
   background: #ff0000;
+}
+
+/* ── 하단 소환/육성 패널 (SummonPanel.tsx) — Phaser 소환 카드 바 + HeroPanelScene을 대체.
+   top/height는 컴포넌트가 layout.ts(SUMMON_Y/CANVAS.H)로 계산해 인라인으로 준다. */
+/* 좁은 창(최소 캔버스 1280px)에서 소환 5종+스킬 4종+대시+육성+특성 버튼을 다 펴면 한 줄 폭을
+   넘을 수 있다 — 줄바꿈 대신 가로 스크롤로 받는다(패널 높이가 고정이라 줄바꿈은 위아래로 잘린다). */
+.summon-panel {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: clamp(16px, 2vw, 28px);
+  padding: 0 clamp(10px, 1.6vw, 20px);
+  background: var(--panel);
+  border-top: 2px solid var(--line);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  pointer-events: auto;
+}
+.summon-panel::-webkit-scrollbar {
+  height: 6px;
+}
+.summon-panel::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 3px;
+}
+/* 소환(마왕) / 대시·스킬(용사) — 구분선만으로 나눈다(라벨 없이, 타일 테두리 색으로 구분). */
+.tile-row {
+  display: flex;
+  flex-shrink: 0;
+  gap: clamp(6px, 0.7vw, 10px);
+}
+/* 구분선: 밋밋한 실선 대신 위아래로 옅어지는 그라디언트 바 — 패널 높이를 꽉 채우지 않아야
+   "장식"으로 보인다(border-left로 끝까지 닿으면 그냥 칸 나누기처럼 밋밋해 보였다). */
+.tile-row:not(:first-child),
+.upgrade-info,
+.traits-wrap {
+  position: relative;
+  padding-left: clamp(14px, 1.8vw, 26px);
+}
+.tile-row:not(:first-child)::before,
+.upgrade-info::before,
+.traits-wrap::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12%;
+  bottom: 12%;
+  width: 2px;
+  border-radius: 1px;
+  background: linear-gradient(to bottom, transparent, var(--brand) 15%, var(--brand) 85%, transparent);
+  opacity: 0.5;
+}
+/* 아이콘 + 이름을 같이 보여주는 타일 — 좌상단 키 배지, 가운데 아이콘, 아래 이름(+쿨타임은 이름에 이어붙임). */
+.tile {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: clamp(72px, 7.5vw, 96px);
+  padding: 8px 4px 6px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  animation: tile-pop 220ms ease-out;
+}
+@keyframes tile-pop {
+  from {
+    transform: scale(0.85);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+.summon-tile {
+  border-color: #9b7cff;
+  cursor: pointer;
+}
+.summon-tile:hover {
+  background: rgba(155, 124, 255, 0.2);
+}
+.summon-tile:active {
+  transform: translateY(1px);
+}
+.skill-tile {
+  border-color: #5aa9ff;
+  background: rgba(90, 169, 255, 0.12);
+}
+.skill-tile:not(.locked) {
+  cursor: pointer;
+}
+.skill-tile:not(.locked):hover {
+  background: rgba(90, 169, 255, 0.25);
+}
+.skill-tile:not(.locked):active {
+  transform: translateY(1px);
+}
+.skill-tile.locked {
+  border-style: dashed;
+  border-color: var(--line);
+  background: transparent;
+}
+.tile-key {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--muted);
+}
+.tile-icon {
+  font-size: clamp(18px, 2vw, 24px);
+}
+.tile-name {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text);
+  text-align: center;
+  line-height: 1.3;
+}
+/* 육성 정보 — 아이콘 + 이름 + 레벨 + (장식용) 진행 바 + 현재 값, 세로로 쌓는다.
+   구분선(::before)은 위쪽 공용 규칙에서 처리 — 여긴 레이아웃만. */
+.upgrade-info {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 5px;
+}
+.upgrade-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: clamp(10px, 1vw, 12px);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.upgrade-icon {
+  width: 16px;
+  text-align: center;
+}
+.upgrade-name {
+  width: clamp(70px, 7vw, 100px);
+  color: var(--text);
+}
+.upgrade-lv {
+  width: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+.upgrade-bar {
+  width: clamp(60px, 8vw, 110px);
+  height: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.upgrade-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+}
+.upgrade-value {
+  min-width: 30px;
+  text-align: right;
+}
+/* 특성(traits) — 스탯과 달리 전투 규칙을 바꾸는 별도 개념이라 같은 줄에 안 섞고 버튼+팝업으로 뗀다.
+   육성 목록 밑이 아니라 패널의 다른 구획들처럼 옆에 나란히 놓는다(구분선 ::before는 위쪽 공용 규칙). */
+.traits-wrap {
+  flex-shrink: 0;
+}
+.traits-toggle {
+  padding: 6px 10px;
+  font-size: clamp(10px, 1vw, 12px);
+  font-weight: 700;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.25);
+  border: 2px solid var(--line);
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+.traits-toggle:hover {
+  border-color: var(--brand);
+}
+/* 카드 형태로 가로 배치 — 세로 리스트였을 때보다 특성 하나하나가 "카드"로 읽힌다. */
+.traits-popup {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  width: clamp(320px, 42vw, 560px);
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: var(--panel);
+  border: 2px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  z-index: 5;
+}
+.traits-empty {
+  width: 100%;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  padding: 8px;
+}
+.trait-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 96px;
+  padding: 8px 6px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  text-align: center;
+}
+.trait-card-icon {
+  font-size: 18px;
+}
+.trait-card-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--brand);
+}
+.trait-card-desc {
+  font-size: 9px;
+  color: var(--text);
+  line-height: 1.3;
 }
 
 /* ── 처치 콤보 (ComboMeter.tsx) — 아레나 좌측 중앙, 컨트롤 중 시야 안에 들어오는 위치 ── */

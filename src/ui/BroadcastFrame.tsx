@@ -9,14 +9,13 @@ export default function BroadcastFrame({ children }: { children: ReactNode }) {
   const phase = useStore(gameStore, (s) => s.phase);
   const episode = useStore(gameStore, (s) => s.episode);
   const viewers = useStore(gameStore, (s) => s.viewers);
-  const mode = useStore(gameStore, (s) => s.mode);
   const bgmOn = useStore(gameStore, (s) => s.bgmOn);
   const [following, setFollowing] = useState(false);
   const [showChat, setShowChat] = useState(true); // 채팅은 화면 위 오버레이 — 숨겨도 내역은 ChatPanel 모듈이 보관
   const live = phase === 'broadcast';
 
   return (
-    <div className={mode === 'hero' && live ? 'site hero-mode' : 'site'}>
+    <div className={live ? 'site hero-mode' : 'site'}>
       <header className="topbar">
         <span className="logo">
           마왕채널<sup>beta</sup>

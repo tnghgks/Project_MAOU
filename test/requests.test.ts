@@ -23,10 +23,9 @@ const ctx = (p: Partial<ReqCtx> & { alive?: Partial<Record<MonsterId, number>> }
   noHitT: p.noHitT ?? 0,
   bossDmgRatio: p.bossDmgRatio ?? 0,
 });
-// 출제 게이트용 방송 상태 — 기본은 "용사 시점 + 보스 없음"이라 heroOnly가 풀에 남는다
+// 출제 게이트용 방송 상태 — 기본은 "보스 없음"
 const pool = (p: Partial<ReqPool> = {}): ReqPool => ({
   unlocked: p.unlocked ?? [],
-  hero: p.hero ?? true,
   boss: p.boss ?? false,
 });
 const def: RequestDef = { text: '슬라임 {n}', dur: 10, need: 3, now: (c) => c.count('slime') };
@@ -128,34 +127,28 @@ const active = (d = def): ActiveRequest => startRequest(d, 1, 0); // 전투력 1
 // 뽑을 게 없으면 null (씬은 출제를 건너뛴다)
 assert.strictEqual(pickRequest(pool(), () => 0) !== null, true, '해금 무관 요청은 항상 남는다');
 
-// ── 용사 전용 / 보스 전용 게이트 ──
+// ── 보스 전용 게이트 ──
 {
-  const heroReqs = REQUESTS.filter((r) => r.heroOnly);
-  assert.ok(heroReqs.length >= 3, '용사 시점 전용 요청이 있어야 소환 조작 없이도 할 게 생긴다');
-
-  // 마왕 시점에선 heroOnly가 절대 안 나온다
-  for (let i = 0; i < 400; i++) {
-    const r = pickRequest(pool({ hero: false, boss: true }));
-    assert.ok(r && !r.heroOnly, '마왕 시점에 용사 전용 요청이 출제됨');
-  }
-  // 보스가 없으면 needsBoss도 안 나온다
+  // 보스가 없으면 needsBoss는 안 나온다
   for (let i = 0; i < 400; i++) {
     const r = pickRequest(pool({ boss: false }));
     assert.ok(r && !r.needsBoss, '보스 없는데 보스 요청이 출제됨');
   }
-  // 용사 시점 + 보스 등장이면 전부 후보에 들어온다
+  // 보스 등장이면 needsBoss 요청도 후보에 들어온다
+  const bossReqs = REQUESTS.filter((r) => r.needsBoss);
+  assert.ok(bossReqs.length > 0, '보스 전용 요청이 있어야 함');
   const seen = new Set<RequestDef>();
   for (let i = 0; i < 2000; i++) seen.add(pickRequest(pool({ boss: true }))!);
   assert.ok(
-    heroReqs.every((r) => seen.has(r)),
-    '용사+보스 상황에선 전용 요청이 실제로 뽑혀야 한다',
+    bossReqs.every((r) => seen.has(r)),
+    '보스 등장 상황에선 전용 요청이 실제로 뽑혀야 한다',
   );
 }
 
 // 용사 요청 판정: 노 데미지 / 콤보 / 보스 딜은 각자 자기 ctx 필드만 본다
 {
   const noHit = REQUESTS.find((r) => r.now(ctx({ noHitT: 99 })) === 99)!;
-  assert.ok(noHit.heroOnly && noHit.need === 20, '노 데미지 요청 = 20초 도달형');
+  assert.strictEqual(noHit.need, 20, '노 데미지 요청 = 20초 도달형');
   assert.strictEqual(reqProgress(startRequest(noHit, 1, 0), ctx({ noHitT: 10 })), 0.5);
 
   const boss = REQUESTS.find((r) => r.needsBoss)!;
