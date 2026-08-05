@@ -1,6 +1,6 @@
 # blocks under 3a82ca92-c5bc-80b5-b6f0-e9a35e905acd
 3aa2ca92-c5bc-804a-a99c-dce0f55a24cd | heading_1 | 마왕 채널 — GDD (Game Design Document)
-3aa2ca92-c5bc-80ec-b5b7-d53b0ab2c70e | paragraph | 버전 v0.6 (초안) · 최종 수정 2026-08-04 · 상태 설계 확정 전 · 전제 2인 / 2주 / Phaser 3 / GitHub Pages
+3aa2ca92-c5bc-80ec-b5b7-d53b0ab2c70e | paragraph | 버전 v0.7 (초안) · 최종 수정 2026-08-05 · 상태 설계 확정 전 · 전제 2인 / 2주 / Phaser 3 / GitHub Pages
 3aa2ca92-c5bc-8084-a1f8-d09ce8ea98f8 | paragraph | ⚠️ 이 문서는 개발 내내 갱신된다. 수치는 전부 초기 제안값이며, 플레이 테스트 후 조정한다. 각 항목의 [MVP] 는 2주 안에 반드시 넣는 것, [STRETCH] 는 시간이 남으면 넣는 것.
 3ab2ca92-c5bc-812f-b75d-f367e1ed6be6 | heading_2 | 변경 이력
 3ab2ca92-c5bc-817c-8432-e46f7ce282d2 | table
@@ -31,6 +31,11 @@
     ◦ UI 흐름 재설계: 트위치풍 알림 → 카드 룰렛 → 등급색 배너 공개, 일반 후원은 전투 유지
     ◦ 간격 공식 재조정: 상/하한 25→30초·10→15초, 하한 도달 시점 1만→1.5만 명
 • 
+  3b32ca92-c5bc-8161-9649-c67f7672bd4f | table_row | 2026-08-05 | v0.7 | • [2-1.코어루프]
+    ◦ 시점 전환(C키) 폐지, 소환·용사조작 상시 동시 진행으로 정정
+• [3-5.몬스터소환]
+    ◦ 자동소환→숫자키 1~4/버튼 수동 소환(1마리, 무반복)으로 정정
+    ◦ 골렘→사이클롭스 개명(
 3aa2ca92-c5bc-8075-a890-d8693a70d9f9 | divider
 3aa2ca92-c5bc-8067-a72b-d50da7f29814 | heading_2 | 1. 게임 개요
 3aa2ca92-c5bc-80e9-a09e-ec5685da3f22 | table
@@ -46,13 +51,11 @@
 3aa2ca92-c5bc-8048-917e-c05a394fde0b | heading_3 | 2-1. 코어 루프 (초 단위)
 3aa2ca92-c5bc-8033-b99a-f507b56468fa | paragraph | 용사가 자동 전투
 3aa2ca92-c5bc-8032-9bd0-d5c11a127d48 | paragraph | ↓
-3aa2ca92-c5bc-802a-9257-db71d107987a | paragraph | 플레이어가 몬스터 소환 (마우스 클릭)
+3aa2ca92-c5bc-802a-9257-db71d107987a | paragraph | 플레이어가 몬스터 소환 (숫자키 1~4 또는 버튼 클릭)
 3aa2ca92-c5bc-8006-bde9-de008a2d78c1 | paragraph | ↓
 3aa2ca92-c5bc-80cf-86b4-c8099fb6f3fd | paragraph | 용사가 위험해짐 → 긴장도 상승 → 시청자 유입
 3aa2ca92-c5bc-8029-88c0-f90c5a299835 | paragraph | ↓
-3ab2ca92-c5bc-802f-87f2-e1f1abca2b41 | paragraph | 용사 모드로 전환 →  직접 조작 →  위험도 하락
-3ab2ca92-c5bc-802b-a065-e92ac118b94d | paragraph | ↓
-3ab2ca92-c5bc-8031-9210-df7abdddd47a | paragraph | 다시 마왕 모드로 전환 → 몬스터 추가  →  위험도 상승  → 반복
+3ab2ca92-c5bc-802f-87f2-e1f1abca2b41 | paragraph | 용사 조작(방향키 이동 · Shift 대시 · QWER 스킬)과 몬스터 소환(숫자키 1~4 또는 버튼)이 상시 동시 진행 → 위험도가 실시간으로 오르내림
 3ab2ca92-c5bc-80ee-8eec-c6896e34bec6 | paragraph | ↓
 3aa2ca92-c5bc-803b-8203-c4b2796fadc0 | paragraph | 시청자 수에 비례해 도네이션 발생
 3aa2ca92-c5bc-80c6-bd3b-d640e6545eba | paragraph | ↓
@@ -126,19 +129,20 @@
   3aa2ca92-c5bc-804b-ba86-d3e94bbacad4 | table_row | ALL PERFECT | 시청자 +5%(+에픽 스킬, 골드 도네이션 추가) |  도네이션 보상 UI 표출
   3aa2ca92-c5bc-8034-8c41-d4de3ea90764 | table_row | Perfect 과반 (GREAT) | 시청자 +3%(+Uncommon 스킬 획득) |  도네이션 보상 UI 표출
   3aa2ca92-c5bc-80ca-abcb-fd6c407bb6e0 | table_row | Good 위주 (GOOD) | 시청자 +1%(+Common 스킬 획득) |  도네이션 보상 UI 표출
-  3aa2ca92-c5bc-80d1-86d6-f04485d13e4a | table_row | Miss 과반 | 시청자 -5% | 시청자 -5%
+  3aa2ca92-c5bc-80d1-86d6-f04485d13e4a | table_row | Miss 과반 | 시청자 -5%(보상 카드 없음) | 실패 배너만 노출, 카드 룰렛 생략
 3ab2ca92-c5bc-8032-b391-f349b0444899 | bulleted_list_item | 리듬 결과는 위 표 참고
 3aa2ca92-c5bc-8053-a8e2-e64172c0de4a | paragraph | 의도적 설계: Miss해도 게임이 끝나지 않지만 시청자가 빠진다. 처벌은 즉사가 아니라 수익 감소.
 3ab2ca92-c5bc-813c-8712-dc245c869603 | paragraph | 구현 참고: ALL PERFECT는 에픽 스킬 획득 + 추가 골드 도네이션, GREAT는 Uncommon 스킬, GOOD은 Common 스킬을 지급한다(이미 보유한 스킬이면 다른 미보유 스킬로 대체, 4종 전부 보유 중이면 시청자%만 적용). 리액션 보상 카드(스탯/특
 3aa2ca92-c5bc-80ca-8803-f84111916f59 | heading_3 | 3-5. 몬스터 소환
-3aa2ca92-c5bc-8027-af96-dc7bd6b45af5 | paragraph | 몬스터는 자동 소환 시스템으로 동작한다. 플레이어는 UI 버튼을 통해 소환 주기(시간)와 소환 배율(수량)을 설정할 수 있다. 소환 시 용사 반경 150px 이내에는 생성되지 않는다(즉사 방지).
+3aa2ca92-c5bc-8027-af96-dc7bd6b45af5 | paragraph | 몬스터는 수동 소환이다. 숫자키 1~4 또는 UI 버튼 클릭 시 즉시 1마리 소환(자동 반복 없음). 소환 시 용사 반경 150px 이내에는 생성되지 않는다(즉사 방지).
 3aa2ca92-c5bc-80ad-b342-ef89768771c9 | table
   3aa2ca92-c5bc-8064-927f-fcea441bd223 | table_row | 몬스터 | MP (폐지) | HP | 역할 | 해금
   3aa2ca92-c5bc-8040-8ae3-f136ddcbd674 | table_row | 슬라임 | — | 20 | 물량. 긴장도 유발용 | 시작
   3aa2ca92-c5bc-804e-a475-fe9aee775bc0 | table_row | 고블린 궁수 | — | 15 | 원거리 견제. 용사 HP를 서서히 깎음 | 시작
-  3aa2ca92-c5bc-8018-82a1-dc3fb666b0e9 | table_row | 골렘 | — | 120 | 탱커. 용사를 오래 붙잡아둠 | 시작
+  3aa2ca92-c5bc-8018-82a1-dc3fb666b0e9 | table_row | 사이클롭스 | — | 120 | 탱커. 용사를 오래 붙잡아둠 | 시작
   3aa2ca92-c5bc-8049-8895-f7211cf368f2 | table_row | 폭탄 박쥐 | — | 10 | 자폭. 순간 위험도 스파이크 | 2화
   3aa2ca92-c5bc-809c-9b2f-f71871c97337 | table_row | 정예 기사 | — | 300 | 미니보스. 대형 도네 유발 | 3화
+  3b32ca92-c5bc-81f1-a626-e1b331ddc43c | table_row | 사르가스 | — | 600 | 1화 보스. 목표 골드 도달 시 자동 등장, 넉백 면역 | 1화
 3aa2ca92-c5bc-8093-83da-f42ac3195ba6 | heading_3 | 3-6. 용사 (AI)
 3aa2ca92-c5bc-8099-a3a9-c0620b58e7c8 | paragraph | 행동 규칙 (우선순위 순)
 3aa2ca92-c5bc-8096-9a8c-fd1b336796e3 | numbered_list_item | 반경 300px 내 가장 가까운 몬스터로 이동
@@ -161,8 +165,8 @@
 3aa2ca92-c5bc-8036-a885-e5f00e9200ec | bulleted_list_item | 높은 멘탈 (Buff): 공격 정확도 증가, 이동 속도 증가.
 3aa2ca92-c5bc-8091-9402-d42d9fc93f06 | heading_3 | 3-8. 이벤트 시스템 (Event System)
 3aa2ca92-c5bc-80c7-aeb2-e49f579d8350 | bulleted_list_item | 시청자 요청: 채팅으로 조건이 뜨고, 제한시간 안에 달성하면 시청자 ×1.35 / 실패하면 ×0.85. (TBD 해소 — 완전히 구현됨)
-3ab2ca92-c5bc-8115-9561-cc27a2409d9f | bulleted_list_item | 목표치는 그 시점 전투력 기준으로 스케일링(전투력 2배당 +50%, 로그 스케일)되고, 요청 시작 시점에 고정된다. 예시 11종: "슬라임 6마리 동시에", "용사 피 30% 밑으로", "노 데미지 20초"(용사 시점 전용) 등.
-3ab2ca92-c5bc-814f-baf4-fb5841a85e41 | bulleted_list_item | 요청 중 3종은 용사 시점(직접 조작) 전용이다 — 소환 조작만으로는 못 채우는 요구를 넣어 용사 시점에서 손 놓고 기다리게 되는 공백을 막는다.
+3ab2ca92-c5bc-8115-9561-cc27a2409d9f | bulleted_list_item | 목표치는 그 시점 전투력 기준으로 스케일링(전투력 2배당 +50%, 로그 스케일)되고, 요청 시작 시점에 고정된다. 예시 11종: "슬라임 6마리 동시에", "용사 피 30% 밑으로", "노 데미지 20초"(직접 조작 필요) 등.
+3ab2ca92-c5bc-814f-baf4-fb5841a85e41 | bulleted_list_item | 요청 중 3종은 직접 조작(방향키 이동 · QWER 스킬)이 필요하다 — 소환만으로는 못 채우는 요구를 넣어, 소환에만 의존하지 않고 직접 조작도 계속 쓰게 만든다.
 3aa2ca92-c5bc-80e6-bb35-c512691fd8e9 | bulleted_list_item | 도네이션 이벤트: 후원 발생 시 스탯/스킬 카드가 등장하며, 리듬 미니게임이 트리거된다. 리듬 게임 성적에 따라 에픽 등급 이상의 카드를 획득할 확률이 변동한다.
 3aa2ca92-c5bc-802c-a46c-dacc17175df4 | bulleted_list_item | 악성 댓글: 멘탈 수치 하락 유발. (눈에 띄는 빨간 글씨)
 3aa2ca92-c5bc-803c-97fe-c875ec6c8a03 | bulleted_list_item | 응원 댓글: 멘탈 수치 상승 유발. (눈에 띄는 파랑 글씨)
@@ -226,8 +230,8 @@
 3aa2ca92-c5bc-8047-a3f2-ec8f6b8a76b1 | heading_3 | 5-1. 인게임 화면 레이아웃
 3ab2ca92-c5bc-80c3-b572-d7fd44e637ff | image
 3aa2ca92-c5bc-8059-a803-cf8da050754f | heading_3 | 5-2. 조작 분리 원칙
-3aa2ca92-c5bc-8034-8b22-feef155a7315 | bulleted_list_item | C키로 마왕 시점(마우스로 소환 카드 조작) ↔ 용사 시점(WASD 이동 · Shift 대시 · 1~4 스킬 시전) 전환. 소환은 전환과 무관하게 계속 자동 진행된다.
-3aa2ca92-c5bc-804f-82ea-ca9268d544ef | bulleted_list_item | 전환은 언제든 즉시 가능하고 용사 시점에서도 소환 카드는 계속 돌아간다 — 두 시점을 오가며 운영하는 것이 이 게임 조작 설계의 핵심이다.
+3aa2ca92-c5bc-8034-8b22-feef155a7315 | bulleted_list_item | 숫자키 1~4(또는 하단 SummonPanel 버튼 클릭)로 즉시 몬스터 1마리 소환, 방향키 이동 · Shift 대시 · QWER 스킬 시전 — 더 이상 시점 전환 개념이 없고 소환과 용사 조작이 항상 동시에 입력된다.
+3aa2ca92-c5bc-804f-82ea-ca9268d544ef | bulleted_list_item | 소환 관리와 실시간 전투 조작을 동시에 처리하는 멀티태스킹이 이 게임 조작 설계의 핵심이다.
 3aa2ca92-c5bc-80bf-95e8-d4644409d7e4 | heading_3 | 5-3. 채팅창 (저비용 고효율 연출)
 3aa2ca92-c5bc-8092-b615-e1051d34f756 | paragraph | 게임 상태에 따라 사전 정의된 대사 풀에서 랜덤 출력.
 3aa2ca92-c5bc-8029-8e42-dfdcf17cb505 | table
@@ -248,7 +252,7 @@
   3aa2ca92-c5bc-80cf-9844-df46d22ce605 | table_row | 방송 | 목표 동접 | 예상 획득 골드 | 몬스터 소환 예산(권장) | 용사 권장 HP
   3aa2ca92-c5bc-803e-80f2-e53fa2d68bb4 | table_row | 1화 | 300 | 1,000G | 슬라임 위주 | 100
   3aa2ca92-c5bc-8024-957b-fb4a5533cb9d | table_row | 2화 | 1,200 | 3,000G | + 궁수 투입 | 260
-  3aa2ca92-c5bc-80d7-a353-e27054436e91 | table_row | 3화 | 4,000 | 5,000G | + 골렘 투입 | 420
+  3aa2ca92-c5bc-80d7-a353-e27054436e91 | table_row | 3화 | 4,000 | 5,000G | + 사이클롭스 투입 | 420
   3aa2ca92-c5bc-8003-b49b-ea31dff78916 | table_row | 최종화 | — | — | 마왕 직접 전투 | —
 3aa2ca92-c5bc-808c-9324-c973837b38b6 | paragraph | 튜토리얼 설계 (1화 = 강제 학습 구간)
 3aa2ca92-c5bc-8031-a069-fa4d2d649543 | bulleted_list_item | 0:00~0:30 소환 없이 관전 → 시청자 감소 체험 ("노잼이면 돈이 안 벌린다")

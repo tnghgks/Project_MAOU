@@ -1,7 +1,7 @@
 {
-  "version": "v0.6",
-  "lastGddEditedTime": "2026-08-04T05:28:00.000Z",
-  "lastSyncedCommit": "1e31402",
+  "version": "v0.7",
+  "lastGddEditedTime": "2026-08-05T10:10:00.000Z",
+  "lastSyncedCommit": "8f65692",
   "history": [
     {
       "direction": "push",
@@ -9,6 +9,13 @@
       "commit": "1e31402",
       "version": "v0.6",
       "summary": "도네이션 UI 재설계(알림→룰렛→배너) 및 ESC 일시정지 반영, 08-03 밸런스 하향 커밋(카드 등급 확률/강화 수치/도네 간격/사거리 상한/시청자 소프트캡/흡혈) 소급 반영, HudScene→InfoLayer 기술설계 정정"
+    },
+    {
+      "direction": "push",
+      "at": "2026-08-05T10:10:00.000Z",
+      "commit": "8f65692",
+      "version": "v0.7",
+      "summary": "시점 전환(C키) 시스템 폐지 반영 — 소환(숫자키/버튼, 수동 1마리)과 용사 조작이 상시 동시 진행으로 코어 루프/조작 분리 원칙 재기술, 골렘→사이클롭스 개명, 1화 보스 사르가스(HP600) 신규 문서화, 도네이션 일시정지 시점(리듬 시작~종료만) 정정, 리듬 Miss 시 보상 카드 없음 명시"
     }
   ]
 }
