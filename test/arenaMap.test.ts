@@ -1,9 +1,9 @@
 import assert from 'node:assert';
-import { buildArenaMap, DESERT_OBJECTS, MAP_W, MAP_H } from '../src/game/arenaMap.ts';
+import { buildArenaMap, DESERT_OBJECTS, GRAVEYARD_OBJECTS, MAP_W, MAP_H, type PropDef } from '../src/game/arenaMap.ts';
 import { ARENA } from '../src/game/layout.ts';
 
-// ── 광산(2화~): 크기와 벽 테두리는 시드와 무관하게 고정 ──
-for (const ep of [2, 3, 7]) {
+// ── 광산(3화~): 크기와 벽 테두리는 시드와 무관하게 고정 ──
+for (const ep of [3, 4, 7]) {
   const { ground, props, tiles } = buildArenaMap(ep);
   assert.strictEqual(tiles.key, 'tiles');
   assert.strictEqual(ground.length, MAP_H);
@@ -29,39 +29,54 @@ for (const ep of [2, 3, 7]) {
   });
 }
 
-// ── 사막(1화): wang 시트 범위 안이고, 소품이 아레나를 벗어나지 않는다 ──
-// 소품 원점은 밑변 중앙이라 y가 곧 발 위치다. 위쪽 띠에 놓인 소품의 머리(y - h×2)가 음수면
-// 아레나 밖 HUD를 침범한다 — DESERT_OBJECTS의 h가 실제 png 높이와 어긋나면 여기서 걸린다.
-{
-  const { ground, props, objects, tiles } = buildArenaMap(1);
-  assert.strictEqual(tiles.key, 'desert-tiles');
+// ── 코너 wang 스테이지(사막 1화 · 묘지 2화) ──
+// 두 화 다 같은 4×4 wang 셋을 쓰므로 검증도 같다: 타일이 시트 범위(0~15) 안이고, 낱장 소품이
+// 아레나를 벗어나지 않는다. 소품 원점은 밑변 중앙이라 y가 곧 발 위치다. 위쪽 띠에 놓인 소품의
+// 머리(y - h×2)가 음수면 아레나 밖 HUD를 침범한다 — 목록의 h가 실제 png 높이와 어긋나면
+// 여기서 걸린다.
+const WANG_STAGES: { ep: number; key: string; defs: PropDef[] }[] = [
+  { ep: 1, key: 'desert-tiles', defs: DESERT_OBJECTS },
+  { ep: 2, key: 'graveyard-tiles', defs: GRAVEYARD_OBJECTS },
+];
+
+for (const { ep, key, defs } of WANG_STAGES) {
+  const { ground, props, objects, tiles } = buildArenaMap(ep);
+  assert.strictEqual(tiles.key, key);
+  assert.strictEqual(tiles.spacing, 0);
   assert.strictEqual(ground.length, MAP_H);
   for (const row of ground) {
     assert.strictEqual(row.length, MAP_W);
-    for (const t of row) assert.ok(t >= 0 && t < 16, `사막 타일 범위 이탈: ${t}`);
+    for (const t of row) assert.ok(t >= 0 && t < 16, `ep${ep} 타일 범위 이탈: ${t}`);
   }
   assert.ok(
     props.every((row) => row.every((t) => t === -1)),
-    '사막은 타일 소품을 안 쓴다 (낱장 이미지로 얹는다)',
+    `ep${ep}은 타일 소품을 안 쓴다 (낱장 이미지로 얹는다)`,
   );
 
-  assert.ok(objects.length > 0, '사막 소품이 하나도 안 깔렸다');
-  const H = new Map(DESERT_OBJECTS.map((o) => [o.key, o.h]));
+  assert.ok(objects.length > 0, `ep${ep} 소품이 하나도 안 깔렸다`);
+  const H = new Map(defs.map((o) => [o.key, o.h]));
   for (const o of objects) {
     const h = H.get(o.key);
-    assert.ok(h !== undefined, `모르는 소품 키: ${o.key}`);
-    assert.ok(o.x >= 0 && o.x <= ARENA.w, `소품 x 이탈: ${o.x}`);
-    assert.ok(o.y <= ARENA.h, `소품이 아레나 아래로 내려갔다: ${o.y}`);
-    assert.ok(o.y - h! * 2 >= 0, `소품 머리가 아레나 위로 삐져나왔다: ${o.key} y=${o.y}`);
+    assert.ok(h !== undefined, `ep${ep} 모르는 소품 키: ${o.key}`);
+    assert.ok(o.x >= 0 && o.x <= ARENA.w, `ep${ep} 소품 x 이탈: ${o.x}`);
+    assert.ok(o.y <= ARENA.h, `ep${ep} 소품이 아레나 아래로 내려갔다: ${o.y}`);
+    assert.ok(o.y - h! * 2 >= 0, `ep${ep} 소품 머리가 아레나 위로 삐져나왔다: ${o.key} y=${o.y}`);
   }
 }
 
+// 소품 키는 화별로 안 겹친다 — 겹치면 BootScene이 한 키를 두 파일로 로드해 한쪽이 덮인다.
+{
+  const keys = [...DESERT_OBJECTS, ...GRAVEYARD_OBJECTS].map((o) => o.key);
+  assert.strictEqual(new Set(keys).size, keys.length, '소품 키 중복');
+}
+
 // 광산은 낱장 소품을 안 쓴다
-assert.deepStrictEqual(buildArenaMap(2).objects, []);
+assert.deepStrictEqual(buildArenaMap(3).objects, []);
 
 // ── 같은 화는 같은 맵, 다른 화는 다른 맵 ──
 const j = (ep: number) => JSON.stringify(buildArenaMap(ep));
 assert.strictEqual(j(2), j(2));
 assert.notStrictEqual(j(1), j(2));
+assert.notStrictEqual(j(2), j(3));
 
 console.log('arenaMap ok');

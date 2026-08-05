@@ -245,17 +245,15 @@ export default class BattleScene extends Phaser.Scene {
 
     // 용사 이동/대시는 폴링 (매 프레임 눌림 상태를 읽어야 한다). 방향키만 — WASD를 겹쳐 쓰면
     // W가 스킬(Q/W/E/R)과 부딪힌다.
-    this.keys = this.input.keyboard!.addKeys('UP,DOWN,LEFT,RIGHT,SHIFT') as Record<
-      string,
-      Phaser.Input.Keyboard.Key
-    >;
+    this.keys = this.input.keyboard!.addKeys('UP,DOWN,LEFT,RIGHT,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
     // 숫자키 1~4 = 즉시 소환, Q/W/E/R = 스킬 1~4 시전 — 둘 다 상시 동작한다(더 이상 모드 구분 없음).
     // 도네이션 중엔 이 씬이 pause라 QWER(RhythmLane 리듬 판정)와 동시 발화하지 않는다.
     // 숫자키·QWER 모두 summonRandom/castSkill을 직접 부르지 않고 이벤트로 emit한다 — React
     // SummonPanel 버튼 클릭과 같은 경로를 타야 그쪽의 클릭 피드백(팝 애니메이션)이 키 입력에도 걸린다.
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
       const digit = parseInt(e.key, 10);
-      if (digit >= 1 && digit <= this.available.length) return bus.emit('summon:request', { type: this.available[digit - 1] });
+      if (digit >= 1 && digit <= this.available.length)
+        return bus.emit('summon:request', { type: this.available[digit - 1] });
       const qwer = ['q', 'w', 'e', 'r'].indexOf(e.key.toLowerCase());
       if (qwer >= 0) bus.emit('skill:request', { index: qwer });
     });
@@ -281,7 +279,7 @@ export default class BattleScene extends Phaser.Scene {
   buildUI() {
     const add = this.add;
     // 아레나 배경 — 에피소드 시드로 생성한 MAP_W×17 타일맵을 scale 2로 깔면 ARENA(세로 544)에 맞는다.
-    // 쓸 타일셋(광산/사막)도 화별로 arenaMap이 정해서 같이 넘겨준다.
+    // 쓸 타일셋(사막/묘지/광산)도 화별로 arenaMap이 정해서 같이 넘겨준다.
     const { ground, props, objects, tiles: sheet } = buildArenaMap(gameState().episode);
     const map = this.make.tilemap({ data: ground, tileWidth: 16, tileHeight: 16 });
     // 텍스처가 없으면 null이 온다. 그대로 진행하면 putTilesAt이 터져 전투가 통째로 죽는다 —
@@ -293,7 +291,7 @@ export default class BattleScene extends Phaser.Scene {
     } else {
       console.warn(`[arena] 타일셋 텍스처(${sheet.key})가 없어 배경을 건너뛴다 — 부트 에셋 로드를 확인`);
     }
-    // 낱장 소품(사막). 타일맵 위·엔티티 아래에 깔린다. 원점이 밑변이라 y가 곧 발이 닿는 지점.
+    // 낱장 소품(사막·묘지). 타일맵 위·엔티티 아래에 깔린다. 원점이 밑변이라 y가 곧 발이 닿는 지점.
     // 로드 실패한 텍스처는 건너뛴다 — 없는 키로 그리면 초록 상자가 배경에 박힌다.
     for (const o of objects)
       if (this.textures.exists(o.key))
@@ -516,7 +514,14 @@ export default class BattleScene extends Phaser.Scene {
   // 그 경로를 안 타는 곳에서 안 지워지고 쌓이는 버그(#6)가 났었다.
   impactFx(x: number, y: number, r: number) {
     const c = this.add.circle(x, y, r * 0.5, 0xffffff, 0.95).setDepth(3);
-    this.tweens.add({ targets: c, radius: r, alpha: 0, duration: 140, ease: 'Cubic.Out', onComplete: () => c.destroy() });
+    this.tweens.add({
+      targets: c,
+      radius: r,
+      alpha: 0,
+      duration: 140,
+      ease: 'Cubic.Out',
+      onComplete: () => c.destroy(),
+    });
   }
 
   // 스킬 착탄 지점 연출(SkillContext.fxCircle — 낙뢰 등) — 칼 스파크(impactFx)와 같은 걸 쓰면
@@ -1118,11 +1123,7 @@ export default class BattleScene extends Phaser.Scene {
     this.reqT -= dt;
     if (this.reqT > 0) return;
     const boss = this.boss && !this.boss.dead ? this.boss : null;
-    const def = pickRequest(
-      { unlocked: this.available, boss: !!boss },
-      Math.random,
-      this.lastReq ?? undefined,
-    );
+    const def = pickRequest({ unlocked: this.available, boss: !!boss }, Math.random, this.lastReq ?? undefined);
     if (!def) return;
     // 목표치는 출제 시점의 용사 전투력으로 확정 — 용사가 셀수록 시청자 요구도 커진다
     this.req = startRequest(def, heroPower(gameState().hero), this.kills, boss?.hp ?? 0);
