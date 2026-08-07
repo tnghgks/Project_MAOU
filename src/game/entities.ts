@@ -63,6 +63,12 @@ export interface MonsterEntity {
   kbT?: number; // 공격 넉백 남은 시간(초) — 이 동안 stepMonster가 AI 대신 kbVx/kbVy로만 밀어낸다
   kbVx?: number; // 넉백 속도(px/s)
   kbVy?: number;
+  // ── 보스 전용 상태(stepBossGolem이 쓴다) — 일반 몬스터는 항상 undefined ──
+  bossPhase?: 'windup' | 'active' | 'recover' | 'cooldown';
+  bossPattern?: 'rock' | 'stomp' | 'charge'; // 지금(또는 방금) 진행 중인 패턴
+  bossT?: number; // 현재 phase 잔여 시간(초)
+  chargeTx?: number; // 돌진 목표 좌표(윈드업 종료 시점에 고정 — 추적하지 않는다)
+  chargeTy?: number;
 }
 
 export interface Arrow {

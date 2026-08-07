@@ -28,6 +28,10 @@ const LANDING_PX = FILLER * ITEM_H;
 
 const heroSrc = `${import.meta.env.BASE_URL}assets/hero.png`;
 
+// 나쁜 카드(Card.curse) 전용 룰렛 색 — 등급색(RARITY[].color)을 무시하고 항상 이 색으로 덮는다.
+// "좋은 카드가 아니다"가 등급보다 먼저 눈에 들어와야 한다.
+const CURSE_COLOR = '#8b1a1a';
+
 export default function DonationEvent() {
   const [stage, setStage] = useState<Stage>('idle');
   const [don, setDon] = useState<Donation | null>(null);
@@ -141,7 +145,11 @@ export default function DonationEvent() {
       <div className="donation-widget-head">
         <img className="donation-widget-hero" src={heroSrc} alt="" />
         <p className="roulette-head">
-          {stage === 'fail' ? `💦 리듬 실패...` : `🎰 ${don.donor}님의 ${don.amount.toLocaleString()}G 카드 룰렛!`}
+          {stage === 'fail'
+            ? `💦 리듬 실패...`
+            : stage === 'reveal' && won?.curse
+              ? `😈 함정 카드였다...!`
+              : `🎰 ${don.donor}님의 ${don.amount.toLocaleString()}G 카드 룰렛!`}
         </p>
       </div>
 
@@ -151,7 +159,7 @@ export default function DonationEvent() {
         <div className="roulette-vmask">
           <div className="roulette-vtrack" style={{ transform: `translateY(-${spun ? LANDING_PX : 0}px)` }}>
             {reel.map((c, i) => (
-              <div key={i} className="roulette-vitem">
+              <div key={i} className={c.curse ? 'roulette-vitem curse' : 'roulette-vitem'}>
                 {c.name}
               </div>
             ))}
@@ -161,11 +169,15 @@ export default function DonationEvent() {
 
       {stage === 'reveal' && won && (
         <div className="roulette-result">
-          <span className="roulette-stars">
-            {'★'.repeat(RARITY[won.rarity].stars)}
-            {'☆'.repeat(5 - RARITY[won.rarity].stars)}
+          <span className={won.curse ? 'roulette-stars curse' : 'roulette-stars'}>
+            {won.curse
+              ? '💀'.repeat(RARITY[won.rarity].stars) + '⚫'.repeat(5 - RARITY[won.rarity].stars)
+              : '★'.repeat(RARITY[won.rarity].stars) + '☆'.repeat(5 - RARITY[won.rarity].stars)}
           </span>
-          <div className="roulette-vmask reveal" style={{ '--rar': RARITY[won.rarity].color } as CSSProperties}>
+          <div
+            className={won.curse ? 'roulette-vmask reveal curse' : 'roulette-vmask reveal'}
+            style={{ '--rar': won.curse ? CURSE_COLOR : RARITY[won.rarity].color } as CSSProperties}
+          >
             <div className="roulette-vitem">{won.name}</div>
           </div>
           <span className="reveal-desc">{won.desc}</span>

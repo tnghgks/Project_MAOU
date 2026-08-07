@@ -2,6 +2,7 @@ import assert from 'node:assert';
 import {
   stepHero,
   stepMonster,
+  stepBossGolem,
   stepArrow,
   stepViewers,
   bumpCombo,
@@ -9,6 +10,10 @@ import {
   COMBO_WINDOW,
   DASH_CD,
   DASH_SPEED,
+  GOLEM_PATTERN_CD,
+  GOLEM_ROCK_WINDUP,
+  GOLEM_CHARGE_HIT_RADIUS,
+  GOLEM_CHARGE_MAX_T,
   type MonsterIntent,
 } from '../src/game/battleSim.ts';
 import { ATTACK_RELEASE_SEC } from '../src/game/anims.ts';
@@ -248,6 +253,120 @@ const still = { dx: 0, dy: 0, dash: false };
   if (bi.kind === 'melee') assert.strictEqual(bi.suicide, true);
 }
 
+// ── stepBossGolem: cooldown 소진 → 거리에 맞는 패턴을 골라 윈드업 시작 ──
+{
+  const hero = spawnHero(stats, HOME);
+  const far = mon('boss_golem', HOME.x + 400, HOME.y); // GOLEM_STOMP_RANGE 밖 → rock/charge만
+  far.bossPhase = 'cooldown';
+  far.bossT = 0.05;
+  const rnd0 = () => 0; // rnd < 0.5 분기 — far면 'rock'
+  const i1 = stepBossGolem(far, hero, 0.1, rnd0);
+  assert.strictEqual(i1.kind, 'bossTelegraph');
+  if (i1.kind === 'bossTelegraph') {
+    assert.strictEqual(i1.pattern, 'rock', '멀면 stomp는 후보에서 빠진다');
+    assert.strictEqual(i1.windup, GOLEM_ROCK_WINDUP);
+  }
+  assert.strictEqual(far.bossPhase, 'windup');
+
+  const near = mon('boss_golem', HOME.x + 50, HOME.y); // GOLEM_STOMP_RANGE 안
+  near.bossPhase = 'cooldown';
+  near.bossT = 0.05;
+  const i2 = stepBossGolem(near, hero, 0.1, rnd0);
+  if (i2.kind === 'bossTelegraph') assert.strictEqual(i2.pattern, 'stomp', '가까우면 stomp가 후보에 들어간다');
+}
+
+// ── stepBossGolem: 윈드업 종료 → rock은 발사, stomp는 판정, 둘 다 recover로 전환 ──
+{
+  const hero = spawnHero(stats, HOME);
+  const rock = mon('boss_golem', HOME.x + 300, HOME.y);
+  rock.bossPhase = 'windup';
+  rock.bossPattern = 'rock';
+  rock.bossT = 0.01;
+  const ri = stepBossGolem(rock, hero, 0.1);
+  assert.strictEqual(ri.kind, 'bossRock');
+  if (ri.kind === 'bossRock') {
+    assert.strictEqual(ri.tx, hero.x, '조준점은 지금 용사 위치');
+    assert.strictEqual(ri.ty, hero.y);
+  }
+  assert.strictEqual(rock.bossPhase, 'recover');
+
+  const stomp = mon('boss_golem', HOME.x + 50, HOME.y);
+  stomp.bossPhase = 'windup';
+  stomp.bossPattern = 'stomp';
+  stomp.bossT = 0.01;
+  const si = stepBossGolem(stomp, hero, 0.1);
+  assert.strictEqual(si.kind, 'bossStomp');
+  assert.strictEqual(stomp.bossPhase, 'recover');
+}
+
+// ── stepBossGolem: 돌진 목표는 윈드업 "시작" 시점에 고정되고 텔레그래프에 실려 나간다
+// (씬이 이 좌표로 윈드업 내내 조준선을 그려야 회피가 성립한다) ──
+{
+  const hero = spawnHero(stats, HOME);
+  const boss = mon('boss_golem', HOME.x + 200, HOME.y);
+  boss.bossPhase = 'cooldown';
+  boss.bossT = 0.05;
+  const rnd1 = () => 0.9; // rnd >= 0.5 → 'charge' (near/far 둘 다)
+  const tele = stepBossGolem(boss, hero, 0.1, rnd1);
+  assert.strictEqual(tele.kind, 'bossTelegraph');
+  if (tele.kind === 'bossTelegraph') {
+    assert.strictEqual(tele.pattern, 'charge');
+    assert.strictEqual(tele.chargeTx, hero.x, '텔레그래프에 목표 좌표가 실린다');
+    assert.strictEqual(tele.chargeTy, hero.y);
+  }
+  assert.strictEqual(boss.chargeTx, hero.x, '엔티티에도 즉시 고정된다');
+
+  hero.x = HOME.x + 900; // 윈드업 중 용사가 도망가도 목표는 안 바뀐다
+  boss.bossT = 0.01;
+  const launch = stepBossGolem(boss, hero, 0.1);
+  assert.strictEqual(launch.kind, 'bossChargeMove', '윈드업이 끝나는 프레임에 바로 돌진 시작');
+  assert.notStrictEqual(boss.chargeTx, hero.x, '이미 고정된 좌표라 도망친 새 위치로 안 바뀐다');
+  assert.strictEqual(boss.bossPhase, 'active');
+
+  let missed: MonsterIntent | null = null;
+  for (let t = 0; t < GOLEM_CHARGE_MAX_T + 1 && !missed; t += 0.05) {
+    const i = stepBossGolem(boss, hero, 0.05);
+    if (i.kind === 'idle' && boss.bossPhase === 'recover') missed = i;
+  }
+  assert.ok(missed, '고정된 목표에 도달하면 멈춘다(빗나간 돌진)');
+}
+
+// ── stepBossGolem: 돌진 중 용사가 고정된 목표 자리에 그대로 있으면 충돌로 끝난다 ──
+{
+  const hero = spawnHero(stats, HOME);
+  const boss = mon('boss_golem', HOME.x + 100, HOME.y);
+  boss.bossPhase = 'windup';
+  boss.bossPattern = 'charge';
+  boss.bossT = 0.01;
+  boss.chargeTx = hero.x; // 실제로는 cooldown→windup 전환 시 stepBossGolem이 미리 잡아둔다
+  boss.chargeTy = hero.y;
+  stepBossGolem(boss, hero, 0.1); // 윈드업 종료 — 돌진 시작
+  let hit: MonsterIntent | null = null;
+  for (let t = 0; t < 2 && !hit; t += 0.05) {
+    const i = stepBossGolem(boss, hero, 0.05);
+    if (i.kind === 'bossChargeHit') hit = i;
+  }
+  assert.ok(hit, '가만히 있으면 돌진에 맞는다');
+  assert.strictEqual(Math.hypot(hero.x - boss.x, hero.y - boss.y) <= GOLEM_CHARGE_HIT_RADIUS + 1, true);
+}
+
+// ── stepBossGolem: recover → cooldown 전환, cooldown 동안은 접근만 하고 패턴은 안 낸다 ──
+{
+  const hero = spawnHero(stats, HOME);
+  const boss = mon('boss_golem', HOME.x + 300, HOME.y);
+  boss.bossPhase = 'recover';
+  boss.bossT = 0.05;
+  const r = stepBossGolem(boss, hero, 0.1);
+  assert.strictEqual(r.kind, 'idle');
+  assert.strictEqual(boss.bossPhase, 'cooldown');
+  assert.strictEqual(boss.bossT, GOLEM_PATTERN_CD);
+
+  const before = boss.x;
+  const c = stepBossGolem(boss, hero, 0.1);
+  assert.strictEqual(c.kind, 'move', '쿨다운 중엔 패턴 없이 접근만');
+  assert.ok(boss.x !== before);
+}
+
 // ── stepArrow: 이동 → 명중 → 빗나감 ──
 {
   const hero = spawnHero(stats, HOME);
@@ -270,7 +389,7 @@ const viewerState = () => ({ viewers: 100, peakViewers: 100, drift: 0, combo: 0,
 {
   const vs = viewerState();
   const rnd = () => 0.5; // drift kick = 0
-  const step = stepViewers(vs, 1, 0, 1, Infinity, rnd); // hpRatio 1, near 0, 콤보 0 → D 0
+  const step = stepViewers(vs, 1, 1, Infinity, rnd); // hpRatio 1, 콤보 0 → D 0
   assert.strictEqual(step.D, 0);
   assert.deepStrictEqual(step.tier, hypeTier(0));
   assert.ok(vs.viewers < 100, '노잼 구간 감쇠');
@@ -281,7 +400,7 @@ const viewerState = () => ({ viewers: 100, peakViewers: 100, drift: 0, combo: 0,
 {
   const vs = { viewers: 4990, peakViewers: 4990, drift: 0, combo: 0, comboT: 0 };
   const rnd = () => 0.5; // drift kick = 0
-  for (let i = 0; i < 1000; i++) stepViewers(vs, 0, 10, 1, 5000, rnd); // 최고 흥분도(D=1) 유지, 캡 5000
+  for (let i = 0; i < 1000; i++) stepViewers(vs, 0, 1, 5000, rnd); // 빈사 유지 → 최고 흥분도(D=1), 캡 5000
   assert.ok(vs.viewers <= 5000, `캡을 넘으면 안 된다: ${vs.viewers}`);
   assert.ok(vs.viewers > 4990, '캡 아래에서는 계속 성장한다');
 }
@@ -294,13 +413,13 @@ const viewerState = () => ({ viewers: 100, peakViewers: 100, drift: 0, combo: 0,
   bumpCombo(vs);
   assert.strictEqual(vs.combo, 2, '창 안 연속 타격은 누적');
 
-  stepViewers(vs, 1, 0, COMBO_WINDOW / 2, Infinity, () => 0.5); // 창 절반 경과
+  stepViewers(vs, 1, COMBO_WINDOW / 2, Infinity, () => 0.5); // 창 절반 경과
   assert.strictEqual(vs.combo, 2, '창이 살아있으면 유지');
   bumpCombo(vs);
   assert.strictEqual(vs.combo, 3);
   assert.strictEqual(vs.comboT, COMBO_WINDOW, '타격할 때마다 창 갱신');
 
-  stepViewers(vs, 1, 0, COMBO_WINDOW, Infinity, () => 0.5); // 창 만료
+  stepViewers(vs, 1, COMBO_WINDOW, Infinity, () => 0.5); // 창 만료
   assert.strictEqual(vs.combo, 0, '끊기면 리셋');
   bumpCombo(vs);
   assert.strictEqual(vs.combo, 1, '리셋 후엔 1부터');

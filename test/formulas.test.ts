@@ -17,15 +17,15 @@ import {
   JACKPOT_MULT,
 } from '../src/formulas.ts';
 
-// 위험도 기본 두 항: 풀피+몹0 = 0, 중간값 = 0.5
-assert.strictEqual(danger(1, 0), 0);
-assert.ok(Math.abs(danger(0.5, 5) - 0.5) < 1e-9);
-// 빈사+몹10 = 기본 1 + 벼랑끝 보너스 (HP가 BRINK_HP 이하라 항상 붙는다)
-assert.ok(Math.abs(danger(0, 10) - (1 + BRINK_BONUS)) < 1e-9);
+// 위험도 = 순수 HP 소모(2026-08-07: 근접 몬스터 수는 더 이상 안 본다 — 쉬운 몹이 몰려도 안 오른다)
+assert.strictEqual(danger(1), 0);
+assert.ok(Math.abs(danger(0.5) - 0.5) < 1e-9);
+// 빈사 = 기본 1 + 벼랑끝 보너스 (HP가 BRINK_HP 이하라 항상 붙는다)
+assert.ok(Math.abs(danger(0) - (1 + BRINK_BONUS)) < 1e-9);
 
 // 벼랑끝: 경계 바로 위/아래에서 보너스가 켜진다
-assert.ok(Math.abs(danger(BRINK_HP, 0) - danger(BRINK_HP + 0.01, 0)) > BRINK_BONUS * 0.9);
-assert.ok(danger(BRINK_HP, 0) > danger(BRINK_HP + 0.01, 0), 'HP 30% 이하를 유지하면 더 재밌어야 한다');
+assert.ok(Math.abs(danger(BRINK_HP) - danger(BRINK_HP + 0.01)) > BRINK_BONUS * 0.9);
+assert.ok(danger(BRINK_HP) > danger(BRINK_HP + 0.01), 'HP 30% 이하를 유지하면 더 재밌어야 한다');
 
 // 구간 경계 (2026-07-30: 하락은 완만하게, 상승은 뚜렷하게)
 assert.strictEqual(hypeTier(0.1).rate, -0.003);

@@ -565,6 +565,9 @@ button {
   font-size: clamp(10px, 0.95vw, 14px);
   color: #8888aa;
 }
+.boss-lock-note {
+  color: #ff8844; /* 보스전 중 소환 차단 안내 — 다른 보스 경고 문구(BattleScene)와 같은 톤 */
+}
 
 .drag-bar {
   cursor: move;
@@ -852,17 +855,18 @@ button {
     0 1px 3px rgba(0, 0, 0, 0.9),
     0 0 6px rgba(0, 0, 0, 0.7);
 }
-/* 알약형 초록 배너 안에서 카드 이름이 위로 스쳐 지나가다 멈춘다(고전 세로 슬롯머신) —
-   .reveal에서는 등급 색(--rar)으로, 스핀 중엔 기본 초록으로 보인다. */
+/* 알약형 배너 안에서 카드 이름이 위로 스쳐 지나가다 멈춘다(고전 세로 슬롯머신) — 스핀 중엔
+   좋다/나쁘다 어느 쪽도 암시하지 않는 중립색(회청색)으로 두고, 당첨 여부가 확정되는 reveal에서만
+   등급색(--rar, 좋은 카드) 또는 CURSE_COLOR(나쁜 카드, DonationEvent.tsx)로 갈린다. */
 .roulette-vmask {
   position: relative;
   width: 100%;
   height: 44px;
   overflow: hidden;
   border-radius: 999px;
-  background: linear-gradient(180deg, #6fbf3c 0%, #3f8f1f 55%, #2c6b12 100%);
+  background: linear-gradient(180deg, #6b7684 0%, #444d59 55%, #2e343d 100%);
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.35),
+    inset 0 2px 0 rgba(255, 255, 255, 0.25),
     0 4px 10px rgba(0, 0, 0, 0.5);
 }
 .roulette-vmask.reveal {
@@ -872,6 +876,41 @@ button {
     inset 0 -14px 18px rgba(0, 0, 0, 0.35),
     0 4px 10px rgba(0, 0, 0, 0.5);
   animation: don-in 0.2s ease;
+}
+/* 나쁜 카드 공개 — 등급색 대신 CURSE_COLOR(--rar 오버라이드) + 흔들림으로 "이건 좋은 게 아니다"를 즉시 알린다 */
+.roulette-vmask.reveal.curse {
+  box-shadow:
+    inset 0 2px 0 rgba(255, 80, 80, 0.35),
+    inset 0 -14px 18px rgba(0, 0, 0, 0.55),
+    0 0 14px rgba(220, 30, 30, 0.6);
+  animation:
+    don-in 0.2s ease,
+    curse-shake 0.4s ease 0.2s;
+}
+@keyframes curse-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-4px);
+  }
+  40% {
+    transform: translateX(4px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+/* 스핀 중 필러로 스쳐가는 나쁜 카드도 색으로 미리 티가 나게 */
+.roulette-vitem.curse {
+  color: #ffb3b3;
+}
+.roulette-stars.curse {
+  color: #ff5555;
 }
 /* 리듬 완전 실패 — 룰렛 대신 뜨는 무채색 배너. reveal과 같은 알약 모양을 재사용해 위젯 높이가 안 튄다. */
 .roulette-vmask.fail {

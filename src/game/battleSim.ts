@@ -9,7 +9,7 @@ import { ATTACK_RELEASE_SEC } from './anims.ts'; // 값만 가져온다 — anim
 
 // ── AI 튜닝 상수 (로직 옆에 둔다) ──
 export const SUMMON_MIN_RADIUS = 150; // 용사 반경 이 안에는 소환 금지
-export const NEAR_RADIUS = 200; // 위험도·회복 판정용 "근접" 반경
+export const NEAR_RADIUS = 200; // 회복(REGEN_DELAY) 판정용 "근접" 반경 — 위험도(danger)는 더 이상 이걸 안 본다
 const REGEN_RATE = 0.05; // 근접 0마리일 때 초당 회복 비율
 const REGEN_DELAY = 1.5; // 근접 0마리가 이 시간(초) 이상 유지돼야 회복 시작 — 스치듯 벌린 거리로는 안 참다
 const REGEN_FLAT_INTERVAL = 5; // 응급 처치(regenFlat) 고정 회복 주기(초)
@@ -25,7 +25,7 @@ export const HIT_INVULN_DUR = 0.4;
 
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
 
-// 근접 몬스터 수 (위험도·회복 입력). update와 stepViewers/stepHero가 공유.
+// 근접 몬스터 수 (회복 입력). update와 stepHero가 공유.
 export function countNear(monsters: readonly MonsterEntity[], hero: HeroEntity): number {
   return monsters.filter((m) => !m.dead && dist(m, hero) < NEAR_RADIUS).length;
 }
@@ -149,29 +149,53 @@ export function stepHero(
 // facing은 모든 의도에 들어간다 — 씬이 공격·대기 모션도 방향을 골라 재생해야 하기 때문이다.
 // 원거리 공격은 두 박자다: draw(시위를 당기기 시작) → … → arrow(놓는 순간). 그 사이는 idle이라
 // 씬이 모션을 새로 걸지 않는다 — 이미 도는 공격 애니메이션을 끊지 않으려는 것.
+export type BossPattern = 'rock' | 'stomp' | 'charge';
 export type MonsterIntent =
   | { kind: 'move'; facing: Facing }
   | { kind: 'melee'; facing: Facing; dmg: number; suicide: boolean }
   | { kind: 'draw'; facing: Facing }
   | { kind: 'arrow'; facing: Facing; x: number; y: number; tx: number; ty: number; dmg: number }
-  | { kind: 'idle'; facing: Facing };
-export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): MonsterIntent {
-  const H = hero;
-  m.atkCd = Math.max(0, m.atkCd - dt);
-  // 공격 넉백 슬라이드 — 기절/사거리 판단보다 우선. 'move'로 반환해야 씬이 매 프레임 스프라이트
-  // 위치를 실제로 갱신한다('idle'은 위치를 안 건드려 넉백이 안 보이는 버그가 났었다).
+  | { kind: 'idle'; facing: Facing }
+  // ── 보스(사이클롭스/사르가스) 전용 — stepBossGolem만 반환한다 ──
+  // charge는 돌진 목표를 윈드업 "시작" 시점에 고정하고 여기 실어 보낸다 — 씬이 그 좌표로
+  // 조준선을 그려야 플레이어가 "어디까지/어느 쪽으로" 돌진하는지 미리 보고 피할 수 있다.
+  | {
+      kind: 'bossTelegraph';
+      facing: Facing;
+      pattern: BossPattern;
+      windup: number;
+      chargeTx?: number;
+      chargeTy?: number;
+    } // 패턴 결정 프레임(윈드업 시작, 1회)
+  | { kind: 'bossRock'; facing: Facing; x: number; y: number; tx: number; ty: number; dmg: number } // 돌 던지기 발사 프레임
+  | { kind: 'bossStomp'; facing: Facing; x: number; y: number; radius: number; dmg: number } // 스톰핑 판정 프레임
+  | { kind: 'bossChargeMove'; facing: Facing } // 돌진 이동 중(매 프레임)
+  | { kind: 'bossChargeHit'; facing: Facing; dmg: number }; // 돌진 중 용사와 충돌
+
+// 기절/공격 넉백 처리 — stepMonster·stepBossGolem이 공유한다. null이면 AI 계속 진행.
+// 넉백이 기절보다 먼저인 이유는 stepMonster 원본 순서 그대로: 넉백 슬라이드 중엔 경직 여부와
+// 무관하게 밀려나야 자연스럽다('idle' 반환 시 위치를 안 갱신해 넉백이 멈춰 보이는 버그가 났었다).
+function stepStunOrKb(m: MonsterEntity, hero: HeroEntity, dt: number): MonsterIntent | null {
   if (m.kbT && m.kbT > 0) {
     m.kbT = Math.max(0, m.kbT - dt);
     m.x += (m.kbVx ?? 0) * dt;
     m.y += (m.kbVy ?? 0) * dt;
-    return { kind: 'move', facing: facingOf(H.x - m.x, H.y - m.y) ?? 'south' };
+    return { kind: 'move', facing: facingOf(hero.x - m.x, hero.y - m.y) ?? 'south' };
   }
   // 기절/빙결(경직 포함) 중엔 AI 자체를 건너뛴다 — heavyStrike 경직·frostStrike 빙결이 여길 통해 먹힌다.
   // 당기던 중이었다면 windupT는 그대로 멈춰 있다가 풀린 뒤 이어진다.
   if (m.stunT && m.stunT > 0) {
     m.stunT -= dt;
-    return { kind: 'idle', facing: facingOf(H.x - m.x, H.y - m.y) ?? 'south' };
+    return { kind: 'idle', facing: facingOf(hero.x - m.x, hero.y - m.y) ?? 'south' };
   }
+  return null;
+}
+
+export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): MonsterIntent {
+  const H = hero;
+  m.atkCd = Math.max(0, m.atkCd - dt);
+  const stunOrKb = stepStunOrKb(m, H, dt);
+  if (stunOrKb) return stunOrKb;
 
   // 활을 당기는 중이면 다른 판단을 하지 않는다 — 제자리에 서서 조준하고, 놓는 프레임에 쏜다.
   // 그 사이 용사가 사거리 밖으로 빠져도 이미 시작한 사격은 끝까지 간다(도중에 취소하면
@@ -204,6 +228,122 @@ export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): Mon
     return { kind: 'melee', facing, dmg: m.def.dmg, suicide: !!m.def.suicide };
   }
   return { kind: 'idle', facing };
+}
+
+// ── 보스: 사이클롭스(사르가스, boss_golem) 전용 3패턴 AI — GDD 보스전 1탄.
+// stepMonster와 별개 함수인 이유: 일반 몬스터는 "쫓아와서 때리기" 한 가지뿐이라 windupT 하나로
+// 충분했지만, 보스는 윈드업 → 발동 → 무방비(recover) → 다음 패턴 대기(cooldown)까지 4단계 상태머신이
+// 필요하다. m.bossPhase/bossPattern/bossT(+ 돌진 목표 chargeTx/Ty)에 프레임마다 상태를 싣는다.
+// ponytail: 보스 밸런스 knob — 전부 여기 상수로
+// 2026-08-07: 보스전 중엔 도네이션·소환·미션을 전부 막아 순수 실력전으로 만들었다(BattleScene) —
+// 그만큼 난이도를 hp(monsters.ts)와 패턴 쉴 틈(GOLEM_PATTERN_CD)으로 올렸다. 개별 타격 피해량은
+// 안 건드렸다(방금 낮춘 값 그대로) — "한 대에 훅 간다"가 아니라 "쉴 틈이 없다"로 어려워야 한다.
+export const GOLEM_PATTERN_CD = 2.4; // 3.2 → 2.4: recover 종료 후 다음 패턴까지 대기(초) — 텀이 짧아졌다
+export const GOLEM_ROCK_WINDUP = 0.9; // "던진다" 텔레그래프 — 원거리라 여유 있게
+export const GOLEM_ROCK_DMG = 22;
+export const GOLEM_STOMP_WINDUP = 0.7;
+export const GOLEM_STOMP_DMG = 26;
+export const GOLEM_STOMP_RADIUS = 170; // 150 → 170: 덩치(scale 1.35)가 커진 만큼 판정 반경도 같이
+export const GOLEM_STOMP_RANGE = 220; // 이 거리 안이어야 스톰핑을 고른다 — 너무 멀면 애초에 안 닿는다
+// 2026-08-07 하향(피드백: "너무 빠르고 부딪히면 거의 죽는다·어디까지 따라오는지 모르겠다"):
+// 목표를 윈드업 "종료" 시점이 아니라 "시작" 시점에 고정하도록 바꿔서(아래 cooldown 분기) 실제
+// 회피 가능 시간(windup 전체)을 벌어주고, 씬이 그 구간에 조준선을 그릴 수 있게 했다 — 속도·피해도 같이 낮췄다.
+export const GOLEM_CHARGE_WINDUP = 0.55; // 셋 중 가장 짧지만, 조준선을 읽고 피할 시간은 준다
+export const GOLEM_CHARGE_SPEED = 260; // 420 → 260: 화살(300)보다도 느리게
+export const GOLEM_CHARGE_DMG = 24; // 34 → 24: 스톰핑(26)과 비슷한 수준으로 — 돌진만 유독 즉사급이던 것 완화
+export const GOLEM_CHARGE_MAX_T = 1.2; // 못 맞히고 이 시간 넘게 달리면 스스로 멈춘다(빗나간 돌진)
+export const GOLEM_CHARGE_HIT_RADIUS = 62; // 46 → 62: 덩치(scale 1.35)에 맞춰 몸통 판정도 같이 키웠다
+export const GOLEM_RECOVER_T = 0.8; // 패턴 종료 후 무방비 — 플레이어에게 반격 타이밍을 준다
+
+export function stepBossGolem(
+  m: MonsterEntity,
+  hero: HeroEntity,
+  dt: number,
+  rnd: () => number = Math.random,
+): MonsterIntent {
+  const H = hero;
+  m.atkCd = Math.max(0, m.atkCd - dt); // 보스는 안 쓰지만 다른 시스템(hitFx 등)이 필드 존재를 가정할 수 있어 맞춰둔다
+  const stunOrKb = stepStunOrKb(m, H, dt);
+  if (stunOrKb) return stunOrKb;
+  const lookHero = () => facingOf(H.x - m.x, H.y - m.y) ?? 'south';
+
+  if (m.bossPhase === 'windup') {
+    m.bossT = (m.bossT ?? 0) - dt;
+    if (m.bossT > 0) return { kind: 'idle', facing: lookHero() };
+    const pattern = m.bossPattern!;
+    if (pattern === 'charge') {
+      // 목표는 이미 윈드업 "시작" 시점(아래 cooldown 분기)에 chargeTx/Ty로 고정돼 있다 —
+      // 여기서 다시 잡지 않는다. 그래야 씬이 그 좌표로 윈드업 내내 조준선을 그릴 수 있다.
+      m.bossPhase = 'active';
+      m.bossT = GOLEM_CHARGE_MAX_T;
+      return { kind: 'bossChargeMove', facing: lookHero() };
+    }
+    m.bossPhase = 'recover';
+    m.bossT = GOLEM_RECOVER_T;
+    return pattern === 'rock'
+      ? { kind: 'bossRock', facing: lookHero(), x: m.x, y: m.y, tx: H.x, ty: H.y, dmg: GOLEM_ROCK_DMG }
+      : { kind: 'bossStomp', facing: lookHero(), x: m.x, y: m.y, radius: GOLEM_STOMP_RADIUS, dmg: GOLEM_STOMP_DMG };
+  }
+
+  if (m.bossPhase === 'active') {
+    m.bossT = (m.bossT ?? 0) - dt;
+    const tx = m.chargeTx ?? H.x;
+    const ty = m.chargeTy ?? H.y;
+    if (Math.hypot(H.x - m.x, H.y - m.y) <= GOLEM_CHARGE_HIT_RADIUS) {
+      m.bossPhase = 'recover';
+      m.bossT = GOLEM_RECOVER_T;
+      return { kind: 'bossChargeHit', facing: lookHero(), dmg: GOLEM_CHARGE_DMG };
+    }
+    const d = Math.hypot(tx - m.x, ty - m.y);
+    if (d < 4 || m.bossT <= 0) {
+      // 목표 지점에 도달(빗나감) 또는 최대 시간 초과 — 멈추고 무방비로
+      m.bossPhase = 'recover';
+      m.bossT = GOLEM_RECOVER_T;
+      return { kind: 'idle', facing: lookHero() };
+    }
+    const vx = ((tx - m.x) / d) * GOLEM_CHARGE_SPEED;
+    const vy = ((ty - m.y) / d) * GOLEM_CHARGE_SPEED;
+    m.x += vx * dt;
+    m.y += vy * dt;
+    return { kind: 'bossChargeMove', facing: facingOf(vx, vy) ?? lookHero() };
+  }
+
+  if (m.bossPhase === 'recover') {
+    m.bossT = (m.bossT ?? 0) - dt;
+    if (m.bossT > 0) return { kind: 'idle', facing: lookHero() };
+    m.bossPhase = 'cooldown';
+    m.bossT = GOLEM_PATTERN_CD;
+    return { kind: 'idle', facing: lookHero() };
+  }
+
+  // cooldown(+ 최초 미초기화 상태도 여기로 떨어진다) — 다음 패턴을 기다리며 슬금슬금 다가간다.
+  m.bossT = (m.bossT ?? 0) - dt;
+  const d = Math.hypot(H.x - m.x, H.y - m.y);
+  if (m.bossT > 0) {
+    if (d > GOLEM_STOMP_RADIUS * 0.5) {
+      const vx = ((H.x - m.x) / d) * m.def.speed;
+      const vy = ((H.y - m.y) / d) * m.def.speed;
+      m.x += vx * dt;
+      m.y += vy * dt;
+      return { kind: 'move', facing: facingOf(vx, vy) ?? 'south' };
+    }
+    return { kind: 'idle', facing: lookHero() };
+  }
+  // 거리에 맞는 패턴만 후보로 — 스톰핑은 닿는 거리에서만, 던지기는 멀 때만 의미가 있다. 돌진은 항상 가능.
+  const near = d <= GOLEM_STOMP_RANGE;
+  const pattern: BossPattern = near ? (rnd() < 0.5 ? 'stomp' : 'charge') : rnd() < 0.5 ? 'rock' : 'charge';
+  const windup =
+    pattern === 'rock' ? GOLEM_ROCK_WINDUP : pattern === 'stomp' ? GOLEM_STOMP_WINDUP : GOLEM_CHARGE_WINDUP;
+  m.bossPattern = pattern;
+  m.bossPhase = 'windup';
+  m.bossT = windup;
+  if (pattern === 'charge') {
+    // 목표를 지금(윈드업 시작) 고정 — 윈드업 내내 이 좌표로 조준선을 그려 회피 여지를 준다.
+    m.chargeTx = H.x;
+    m.chargeTy = H.y;
+    return { kind: 'bossTelegraph', facing: lookHero(), pattern, windup, chargeTx: H.x, chargeTy: H.y };
+  }
+  return { kind: 'bossTelegraph', facing: lookHero(), pattern, windup };
 }
 
 // ── 화살 ── ('travel'=이동 계속 · {hit}=용사 피격 후 소멸 · 'expire'=빗나가 소멸)
@@ -242,14 +382,13 @@ export function bumpCombo(vs: ViewerState) {
 export function stepViewers(
   vs: ViewerState,
   hpRatio: number,
-  nearCount: number,
   dt: number,
   cap: number = Infinity,
   rnd: () => number = Math.random,
 ): ViewerStep {
   vs.comboT = Math.max(0, vs.comboT - dt);
   if (vs.comboT <= 0) vs.combo = 0;
-  const D = danger(hpRatio, nearCount);
+  const D = danger(hpRatio);
   const tier = hypeTier(D);
   vs.drift = viewerDrift(vs.drift, dt, rnd);
   const rate = tier.rate + vs.drift;

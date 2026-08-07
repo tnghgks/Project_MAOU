@@ -2,12 +2,14 @@
 export const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
 // 위험도 D (GDD 3-2)
-// HP·근접 몬스터 수만으로 결정 — 둘 다 "지금 얼마나 몰렸는가"를 재는 항목이라야 한다.
-// 콤보는 컨트롤 실력 지표라 위험도(=긴장감) 축과 성격이 달라 뺐다 — COMBO_FULL은 아래 도네이션 보정으로 이동.
+// 2026-08-07 개편(피드백: "쉬운 몹이 많이 몰려도 위험도가 오르는 게 안 도움된다"): 예전엔 근접 몬스터
+// 수도 40% 가중치로 섞었는데, 몬스터가 강하든 약하든 그냥 "머릿수"만 셌다 — 슬라임 떼로 화면을
+// 채워도 실제로는 안 위험한데 위험도(=시청자 흥분도)만 올라갔다. 지금은 순수하게 "용사가 지금 얼마나
+// 체력을 깎였는가" 하나만 본다 — 쉬운 몹을 아무리 세워놔도 안 맞으면 위험도는 안 오른다.
 export const BRINK_HP = 0.15; // ponytail: "벼랑끝을 버티는 중"으로 인정하는 선
 export const BRINK_BONUS = 0.15; // 유지만 해도 한 티어 위로 밀어올린다
-export function danger(hpRatio: number, nearCount: number): number {
-  return (1 - hpRatio) * 0.6 + Math.min(nearCount / 10, 1) * 0.4 + (hpRatio <= BRINK_HP ? BRINK_BONUS : 0);
+export function danger(hpRatio: number): number {
+  return (1 - hpRatio) + (hpRatio <= BRINK_HP ? BRINK_BONUS : 0);
 }
 
 export const COMBO_FULL = 12; // 이 콤보부터 "FULL" — ComboMeter 표시 + 도네이션 확률 보정 기준

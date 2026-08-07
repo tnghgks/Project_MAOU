@@ -19,11 +19,18 @@ assert.strictEqual(drawCards(3).length, 3);
   assert.strictEqual(new Set(three.map((c) => c.id)).size, 3, '같은 등급 카드 3장의 id가 모두 달라야 한다');
 }
 
-// 이미 보유한 특성은 풀에서 빠진다 — uncommon 특성 6종을 미리 보유하면 warriorBlood만 남는다
+// 이미 보유한 특성은 풀에서 빠진다 — uncommon 특성 6종을 미리 보유하면 특성 중엔 warriorBlood만 남는다.
+// 풀엔 스탯/저주 카드도 섞여 있어(카드 풀 확장) 정확한 인덱스를 가정하지 않고, 촘촘한 rnd 샘플로
+// (1) 특성이 뽑히면 반드시 warriorBlood인지, (2) warriorBlood가 실제로 뽑히긴 하는지를 함께 검증한다.
 {
   const owned = TRAIT_IDS.filter((id) => id !== 'warriorBlood');
-  const c = drawCards(1, owned, () => 0.6, ['uncommon'])[0];
-  assert.strictEqual(c.trait, 'warriorBlood');
+  let sawWarriorBlood = false;
+  for (let i = 0; i < 50; i++) {
+    const c = drawCards(1, owned, () => i / 50, ['uncommon'])[0];
+    if (c.trait) assert.strictEqual(c.trait, 'warriorBlood');
+    if (c.trait === 'warriorBlood') sawWarriorBlood = true;
+  }
+  assert.ok(sawWarriorBlood, 'warriorBlood가 풀에서 실제로 뽑혀야 한다');
 }
 
 // 리액션 보상엔 노멀(common)이 없다. highTier(ALL PERFECT)면 상위 두 등급(epic/legend)만.

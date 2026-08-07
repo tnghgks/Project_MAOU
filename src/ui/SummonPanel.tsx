@@ -50,7 +50,9 @@ export default function SummonPanel() {
   const hero = useStore(gameStore, (s) => s.hero);
   const skills = useStore(gameStore, (s) => s.skills);
   const traits = useStore(gameStore, (s) => s.traits);
+  const bossUp = useStore(gameStore, (s) => s.bossUp); // 보스전 중엔 소환도 막는다(BattleScene.bossActive와 같은 규칙)
   const isFinal = episode >= FINAL_EP; // 최종화: 도네이션 금지와 같은 규칙(GDD 7장) — 소환도 막는다
+  const summonBlocked = isFinal || bossUp;
 
   // 스킬/대시 쿨타임은 BattleScene 전용 실시간 값이라 store엔 없다 — hud:tick으로만 받는다.
   // tick.skillCd는 BattleScene의 같은 객체를 매번 그대로 넘겨준다 — 그대로 setState하면 참조가
@@ -89,7 +91,8 @@ export default function SummonPanel() {
 
   return (
     <div className="summon-panel" style={{ top: `${PANEL_TOP_PCT}%`, height: `${100 - PANEL_TOP_PCT}%` }}>
-      {!isFinal && (
+      {bossUp && !isFinal && <p className="owned boss-lock-note">⚔ 보스전 중 — 소환이 막혀 있어요, 지금 있는 전력으로 싸워야 해요</p>}
+      {!summonBlocked && (
         <div className="tile-row">
           {available.map((t, i) => {
             const def = MONSTERS[t];

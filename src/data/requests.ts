@@ -46,6 +46,28 @@ export const REQUESTS: RequestDef[] = [
   { text: '노 데미지 20초 가보자',              dur: 28, need: 20,  now: (c) => c.noHitT,       noScale: true },
   { text: '{n}킬 연속으로 끊지 말고',           dur: 25, need: 4,   now: (c) => c.combo,        max: 12 },
   { text: '잡몹 말고 보스만 노려! 30% 깎아라',  dur: 25, need: 0.3, now: (c) => c.bossDmgRatio, noScale: true, needsBoss: true },
+
+  // 소환 연타 — "숫자키 몇 번 더" 식으로 짧은 시간에 몰아 누르게 만드는 게 목적. 리듬게임처럼
+  // 소환 버튼을 연타하는 감각을 주려고 기존 단일 종류 요청보다 dur을 촘촘히 잡는다.
+  { text: '슬라임 {n}마리 순삭 도전! 빠르게!',   dur: 14, need: 12, now: (c) => c.count('slime'),  needs: ['slime'] },
+  { text: '궁수부대 {n}마리 더 뽑아봐',         dur: 20, need: 6,  now: (c) => c.count('archer'), needs: ['archer'] },
+  { text: '사이클롭스 {n}마리로 밀어붙여',       dur: 26, need: 3,  now: (c) => c.count('golem'),  needs: ['golem'] },
+  { text: '폭탄 박쥐 {n}마리 연쇄 폭발 가보자',  dur: 16, need: 5,  now: (c) => c.count('bat'),    needs: ['bat'] },
+  { text: '정예 기사 {n}명은 세워야지',         dur: 24, need: 2,  now: (c) => c.count('knight'), needs: ['knight'] },
+  // 조합형 — 서로 다른 소환 버튼을 번갈아 누르게 만든다
+  { text: '슬라임+궁수 합쳐서 {n}마리 채워봐',   dur: 20, need: 12, now: (c) => c.count('slime') + c.count('archer'), needs: ['slime', 'archer'] },
+  { text: '박쥐랑 기사 동시에 최소 {n}마리씩',   dur: 26, need: 1,  now: (c) => Math.min(c.count('bat'), c.count('knight')), needs: ['bat', 'knight'], max: 4 },
+  { text: '다섯 종류 다 최소 {n}마리씩 세워봐',  dur: 35, need: 1,  now: (c) => Math.min(c.count('slime'), c.count('archer'), c.count('golem'), c.count('bat'), c.count('knight')), needs: ['slime', 'archer', 'golem', 'bat', 'knight'], max: 3 },
+  // 총원 상급 — 기존 "한 화면에 10마리"보다 위 단계
+  { text: '화면 미어터지게 {n}마리 채워봐',      dur: 30, need: 20, now: (c) => c.total, max: 45 },
+  { text: '필드 꽉 채워봐 {n}마리!',            dur: 32, need: 35, now: (c) => c.total, max: 45 },
+  // 처치 상급 · 콤보 상급
+  { text: '{n}마리 순삭 각 보여줘',             dur: 30, need: 20, now: (c) => c.killsSince },
+  { text: '{n}초 안에 8마리는 잡아야지',        dur: 12, need: 8,  now: (c) => c.killsSince },
+  { text: '{n}콤보까지 끊지 말고 가보자',       dur: 25, need: 8,  now: (c) => c.combo, max: 12 },
+  // 생존/보스 상급
+  { text: '노 데미지 35초 가보자, 진짜로',      dur: 40, need: 35, now: (c) => c.noHitT, noScale: true },
+  { text: '보스만 노려! 50% 깎아라',            dur: 30, need: 0.5, now: (c) => c.bossDmgRatio, noScale: true, needsBoss: true },
 ];
 
 export interface ActiveRequest {

@@ -18,7 +18,6 @@ import {
   COMBO_DONATION_CUT,
   type HypeTier,
   type SkillOutcome,
-  type SkillRarity,
   type ViewerAlert,
 } from '../formulas.ts';
 import { dirOf, playAnim, playOnce, makeActor, type Dir } from '../game/anims.ts';
@@ -31,6 +30,7 @@ import { spawnHero, type HeroEntity, type MonsterEntity, type Arrow, type SkillC
 import {
   stepHero,
   stepMonster,
+  stepBossGolem,
   stepArrow,
   stepViewers,
   bumpCombo,
@@ -38,8 +38,11 @@ import {
   facingOf,
   SUMMON_MIN_RADIUS,
   HIT_INVULN_DUR,
+  GOLEM_PATTERN_CD,
+  GOLEM_STOMP_RADIUS,
   type HeroInput,
   type Facing,
+  type BossPattern,
 } from '../game/battleSim.ts';
 import {
   hasTrait,
@@ -83,7 +86,8 @@ import { MONSTERS, type MonsterId, type MonsterDef } from '../data/monsters.ts';
 import { syncRoster } from '../data/nicknames.ts';
 import { upgradeCostRange } from '../data/upgrades.ts';
 import { RARITY, type Card, type StatMod } from '../data/cards.ts';
-import { SKILLS, pickSkillReward, type Skill, type SkillId } from '../data/skills.ts';
+import { SUMMON_CURSES } from '../data/cardCurses.ts';
+import { SKILLS, type Skill, type SkillId } from '../data/skills.ts';
 import { CHAT_POOLS, pickChatMood, pickDonationMessage } from '../data/chat.ts';
 import {
   pickRequest,
@@ -103,7 +107,6 @@ import { bossCut } from '../data/cutscenes.ts';
 import type { RunOutcome } from '../game/store.ts';
 
 const MAX_ALIVE = 60; // 동시 생존 상한 — 넘으면 소환 스킵 (프레임 보호)
-const RARITY_LABEL: Record<SkillRarity, string> = { common: 'Common', uncommon: 'Uncommon', epic: '에픽' }; // GDD 3-4 표기 그대로
 
 const HP_BAR_W = 48; // ponytail: 체력바 크기 knob
 const HP_BAR_H = 8;
@@ -111,6 +114,7 @@ const KNOCKBACK_RADIUS = 120; // ponytail: 방패 밀치기 발동 반경(px) �
 const KNOCKBACK_DIST = 60; // 밀려나는 거리(px)
 const HIT_KNOCKBACK_DIST = 22; // ponytail: 공격 적중마다 밀려나는 기본 거리(px) — monsters.ts의 kb 배율이 곱해진다
 const HIT_KNOCKBACK_DUR = 0.15; // 넉백이 슬라이드로 보이는 시간(초) — 이 안에 위 거리만큼 이동
+const CHARGE_HERO_KB_DIST = 70; // ponytail: 사이클롭스 돌진 충돌 시 용사가 밀려나는 거리(px)
 // 용사 원본은 92×92 캔버스에 인물 ~20×46px.
 // 1 = 리샘플 없음 = pixelArt 필터에서 가장 깨끗하다. ponytail: 화면상 크기 knob, 줄이면 축소 시 픽셀이 떤다.
 const HERO_SCALE = 1;
@@ -314,9 +318,16 @@ export default class BattleScene extends Phaser.Scene {
     // 전투 영역 chrome — 상단바(InfoLayer)·하단 소환/용사 패널(SummonPanel)·리듬레인(Rhythm) 전부 React.
   }
 
+  // 보스전 중엔 도네이션·소환·시청자 요청을 전부 막는다(2026-08-07, 피드백: "보스전엔 다른 거 다
+  // 막고 보스에만 집중하고 싶다") — 보스가 죽거나(endRun 'clear') 용사가 죽는 것 말고는 보스전을
+  // 벗어날 방법이 없어서, "잠깐 막았다가 나중에 푼다" 같은 재개 로직이 필요 없다.
+  bossActive(): boolean {
+    return !!this.boss && !this.boss.dead;
+  }
+
   // ── 소환: 용사 반경(SUMMON_MIN_RADIUS) 밖 랜덤 지점 ──
   summonRandom(t: MonsterId) {
-    if (this.over || this.monsters.length >= MAX_ALIVE) return;
+    if (this.over || this.bossActive() || this.monsters.length >= MAX_ALIVE) return;
     for (let i = 0; i < 10; i++) {
       // ponytail: 아레나가 넓어 몇 번 안에 성공, 실패 시 이번 입력 무시
       const x = Phaser.Math.Between(arenaBounds.minX, arenaBounds.maxX);
@@ -343,10 +354,22 @@ export default class BattleScene extends Phaser.Scene {
     const t = bossOf(gameState().episode);
     const x = this.hero.x < CX ? arenaBounds.maxX - 40 : arenaBounds.minX + 40;
     this.boss = this.doSummon(t, x, (ARENA.y + SUMMON_Y) / 2);
+    // 사이클롭스(boss_golem)는 stepBossGolem 전용 상태머신을 쓴다 — 등장 직후 바로 패턴이 나가면
+    // 컷씬이 끝나자마자 맞을 수 있어 짧은 유예(cooldown)를 깔고 시작한다.
+    if (t === 'boss_golem') {
+      this.boss.bossPhase = 'cooldown';
+      this.boss.bossT = GOLEM_PATTERN_CD * 0.5;
+    }
     gameState().setBossUp(true); // BGM 전환(useBgm) — 아래 playCuts와 같은 렌더에 묶여 컷씬 뒤 보스 곡으로 이어진다
+    // 진행 중이던 시청자 요청이 있었다면 그 자리에서 정리 — bossActive() 가드가 걸린 뒤로는
+    // updateRequest가 더 이상 안 돌아서(런이 끝날 때까지 보스전만 이어진다) 방치하면 HUD에 낡은
+    // 요청이 그대로 박제된다.
+    this.req = null;
+    this.reqPct = 0;
     this.cameras.main.flash(600, 255, 80, 80);
     this.floatText(this.boss.x, this.boss.y - 60, `☠ ${MONSTERS[t].name} 등장!`, '#ff4444');
     this.pushChat('시스템', `☠ ${MONSTERS[t].name} 등장! 용사가 쓰러뜨리면 방송 성공`, '#ff4444');
+    this.pushChat('시스템', '⚔ 보스전 — 도네이션·시청자 요청·소환이 중단됩니다. 지금 있는 것만으로 싸워야 해요', '#ff8844');
     // 보스 등장 컷씬 — 도네이션과 같은 방식으로 전투를 멈추고 React에 넘긴다
     this.scene.pause();
     bus.emit('battle:pause', null); // InfoLayer/ComboMeter 등 React UI도 같이 멈춰야 한다
@@ -387,9 +410,17 @@ export default class BattleScene extends Phaser.Scene {
         this.cameras.main.flash(400, 255, 120, 220);
         this.floatText(this.hero.x, this.hero.y - 40, `${t.icon} ${t.name} 각성!`, '#ff66cc');
         this.pushChat('시스템', `🎁 특성 획득 — ${t.icon} ${t.name}: ${t.desc}`, '#ff66cc');
+      } else if (card.summonCurse) {
+        // 나쁜 카드: 스탯은 안 건드리고 즉시 몬스터를 기습 소환한다 — MAX_ALIVE 꽉 찼으면
+        // summonRandom이 그냥 무시하니 별도 방어 불필요.
+        const s = SUMMON_CURSES[card.summonCurse];
+        for (let i = 0; i < s.count; i++) this.summonRandom(Phaser.Utils.Array.GetRandom(s.pool));
+        this.cameras.main.shake(300, 0.008);
+        this.floatText(this.hero.x, this.hero.y - 40, `${s.icon} ${s.name}!`, '#ff5555');
+        this.pushChat('시스템', `💀 ${s.name} — ${s.desc}`, '#ff5555');
       } else {
         gameState().grantCard(card);
-        this.applyLiveCard(card, `🎁 ${RARITY[card.rarity].label} 카드!`);
+        this.applyLiveCard(card, card.curse ? `💀 저주받은 카드...` : `🎁 ${RARITY[card.rarity].label} 카드!`);
       }
       this.onCardGranted(card);
     }
@@ -437,8 +468,11 @@ export default class BattleScene extends Phaser.Scene {
     for (const stat of new Set(mods.map((m) => m.stat))) H[stat] = applied[stat];
   }
 
-  // ── 리듬 보상: 시청자 변화율 + 스킬 등급 획득 (+ ALL PERFECT 추가 후원) — GDD 3-4, 2026-07-28 개편.
-  // 예전엔 보유 스킬 중 하나가 배율로 발동했지만, 이제 리듬 결과 자체가 신규 스킬 지급을 겸한다.
+  // ── 리듬 보상: 시청자 변화율 (+ ALL PERFECT 추가 후원) — GDD 3-4, 2026-07-28 개편.
+  // 2026-08-07: 스킬은 무조건 상점(UpgradeView.learn, SKILL_COST)에서만 산다 — 예전엔 이 리듬 결과가
+  // 신규 스킬을 공짜로 지급하기도 했는데, 전투 중 아무 예고 없이 스킬이 생기는 게 "갑자기 활성화된다"는
+  // 피드백을 받아 뺐다. res.rarity는 skillResult가 여전히 채워 주지만(formulas.test.ts가 그 등급 산정
+  // 로직을 검증) 이 씬에선 더 이상 쓰지 않는다.
   resolveRhythmResult(res: SkillOutcome) {
     if (res.penalty) {
       this.viewers = Math.max(MIN_VIEWERS, this.viewers * res.viewerMult);
@@ -447,12 +481,6 @@ export default class BattleScene extends Phaser.Scene {
     }
     this.viewers *= res.viewerMult;
     const parts = [`시청자 +${Math.round((res.viewerMult - 1) * 100)}%`];
-
-    const gained = res.rarity ? pickSkillReward(gameState().skills, res.rarity) : null;
-    if (gained) {
-      gameState().learnSkill(gained, 0);
-      parts.push(`${RARITY_LABEL[res.rarity!]} 스킬 [${SKILLS[gained].name}] 획득`);
-    }
 
     if (res.bonusDonation) {
       const { min, max } = upgradeCostRange(gameState().upgradeLevels);
@@ -473,7 +501,8 @@ export default class BattleScene extends Phaser.Scene {
     }
   }
 
-  // ── 도네 카드 반영: store는 이미 갱신됨(grantCard) — 씬 로컬 hero에 mods가 건드린 필드만 동기화 + 연출 ──
+  // ── 도네 카드 반영: store는 이미 갱신됨(grantCard) — 씬 로컬 hero에 mods가 건드린 필드만 동기화 + 연출.
+  // curse(저하형 카드)는 색만 cyan→red, 화살표만 ▲→▼로 바꿔 "나쁜 카드"임을 전투 화면에서도 구분한다 ──
   applyLiveCard(card: Card, via: string) {
     const H = this.hero;
     const stats = gameState().hero;
@@ -481,18 +510,20 @@ export default class BattleScene extends Phaser.Scene {
       if (stat === 'maxHp') {
         const inc = stats.maxHp - H.maxHp;
         H.maxHp = stats.maxHp;
-        H.hp = Math.min(H.maxHp, H.hp + inc); // 최대치 증가분만큼 즉시 회복
+        H.hp = Math.min(H.maxHp, H.hp + inc); // 최대치 증가분만큼 즉시 회복(감소분이면 즉시 손실)
       } else {
         H[stat] = stats[stat];
       }
     }
-    // 임팩트: 확산 링 + 상승 숫자
-    const ring = this.add.circle(H.x, H.y, 20, 0x44ddff, 0).setStrokeStyle(3, 0x44ddff, 1).setDepth(9);
+    // 임팩트: 확산 링 + 상승/하강 숫자
+    const color = card.curse ? 0xff4444 : 0x44ddff;
+    const hex = card.curse ? '#ff5555' : '#44ddff';
+    const ring = this.add.circle(H.x, H.y, 20, color, 0).setStrokeStyle(3, color, 1).setDepth(9);
     this.tweens.add({ targets: ring, radius: 60, alpha: 0, duration: 450, onComplete: () => ring.destroy() });
-    this.heroSpr.setTint(0x88ffff);
+    this.heroSpr.setTint(card.curse ? 0xff9999 : 0x88ffff);
     this.time.delayedCall(200, () => this.heroSpr.clearTint());
-    this.floatText(H.x, H.y - 40, `▲ ${card.name}`, '#44ddff');
-    this.pushChat('시스템', `${via} ${card.name} — ${card.desc}`, '#44ddff');
+    this.floatText(H.x, H.y - 40, `${card.curse ? '▼' : '▲'} ${card.name}`, hex);
+    this.pushChat('시스템', `${via} ${card.name} — ${card.desc}`, hex);
   }
 
   // 스킬이 쓰는 좁은 표면. 씬 헬퍼를 SkillContext로 감싸 skills.ts가 BattleScene에 의존하지 않게 한다.
@@ -712,17 +743,18 @@ export default class BattleScene extends Phaser.Scene {
       this.spawnBoss();
     }
 
-    const near = countNear(this.monsters, H);
+    const near = countNear(this.monsters, H); // updateHero(회복 판정)가 여전히 쓴다 — danger()는 이제 HP만 본다
     // this는 { viewers, peakViewers, drift } 필드를 가져 ViewerState로 그대로 넘긴다.
-    const step = stepViewers(this, H.hp / H.maxHp, near, dt, viewerCap(gameState().episode));
+    const step = stepViewers(this, H.hp / H.maxHp, dt, viewerCap(gameState().episode));
     this.D = step.D;
     this.tier = step.tier;
     this.updateRequest(dt); // 위기 판정 전 — 요청 보상이 그 프레임의 시청자 수에 바로 반영된다
     this.updateCritical(dt);
     if (this.over) return;
 
-    if (!this.isFinal) {
-      // 최종화는 도네이션 금지 (GDD 7장, 2026-07-28 정정)
+    if (!this.isFinal && !this.bossActive()) {
+      // 최종화는 도네이션 금지 (GDD 7장, 2026-07-28 정정) — 보스전도 같은 이유(2026-08-07): 보스전엔
+      // 순수 실력전이어야 하니 중간에 카드/버프가 끼어들면 안 된다.
       this.donateT -= dt;
       if (this.donateT <= 0) {
         this.fireDonation();
@@ -1056,10 +1088,12 @@ export default class BattleScene extends Phaser.Scene {
         if (m.dotT <= 0) m.dotDps = 0;
         if (m.dead) continue; // 도트로 죽었으면 이번 프레임 AI는 스킵
       }
-      const intent = stepMonster(m, H, dt); // 결정은 순수, 씬은 스프라이트/피격만 적용
+      // 사이클롭스(boss_golem)만 전용 3패턴 AI — 나머지는 그대로 stepMonster
+      const intent = m.type === 'boss_golem' ? stepBossGolem(m, H, dt) : stepMonster(m, H, dt);
       const dir = this.faceMonster(m, intent.facing);
       switch (intent.kind) {
-        case 'move': {
+        case 'move':
+        case 'bossChargeMove': {
           m.spr.setPosition(m.x, m.y);
           playAnim(m.spr, m.char, 'walk', dir); // char 없으면(=대체 상자) no-op
           break;
@@ -1091,8 +1125,87 @@ export default class BattleScene extends Phaser.Scene {
         case 'idle':
           playAnim(m.spr, m.char, 'idle', dir);
           break;
+        // ── 여기부터 사이클롭스 전용 3패턴 연출/판정 ──
+        // 패턴 결정 프레임(윈드업 시작) — 실제 공격 판정은 없고, 앞으로 windup초 동안 뭐가
+        // 나올지 미리 보여주는 경고 연출만 건다. 그동안(윈드업 중)엔 매 프레임 'idle'만 온다.
+        case 'bossTelegraph':
+          playAnim(m.spr, m.char, 'idle', dir);
+          this.bossTelegraphFx(m, intent.pattern, intent.windup, intent.chargeTx, intent.chargeTy);
+          break;
+        case 'bossRock': {
+          playOnce(m.spr, m.char, 'attack', dir);
+          const spr = this.add.image(intent.x, intent.y, 'arrow').setDepth(2).setScale(1.4).setTint(0x8b6b4a);
+          spr.setRotation(Math.atan2(intent.ty - intent.y, intent.tx - intent.x) + Math.PI / 2);
+          this.arrows.push({ x: intent.x, y: intent.y, tx: intent.tx, ty: intent.ty, spr, dmg: intent.dmg });
+          this.floatText(m.x, m.y - m.def.size, '🪨 투척!', '#cc9966');
+          break;
+        }
+        case 'bossStomp': {
+          playOnce(m.spr, m.char, 'attack', dir);
+          this.impactFx(intent.x, intent.y, intent.radius);
+          this.cameras.main.shake(220, 0.012);
+          if (Phaser.Math.Distance.Between(intent.x, intent.y, H.x, H.y) <= intent.radius) this.hurtHero(intent.dmg);
+          this.floatText(m.x, m.y - m.def.size, '💥 스톰핑!', '#ff8844');
+          break;
+        }
+        case 'bossChargeHit': {
+          playOnce(m.spr, m.char, 'attack', dir);
+          this.cameras.main.shake(260, 0.016);
+          if (this.hurtHero(intent.dmg)) this.chargeKnockHero(m);
+          this.floatText(H.x, H.y - 50, '💢 충돌!', '#ff5555');
+          break;
+        }
       }
     }
+  }
+
+  // 윈드업 시작 프레임에 한 번만 호출 — 이후 windup초 동안은 매 프레임 'idle'만 오므로
+  // 여기서 만든 트윈이 스스로 재생되며 "곧 온다"를 알린다. 패턴별로 다른 예고를 준다.
+  bossTelegraphFx(m: MonsterEntity, pattern: BossPattern, windup: number, chargeTx?: number, chargeTy?: number) {
+    const ms = windup * 1000;
+    m.spr.setTint(0xff5555);
+    this.time.delayedCall(ms, () => {
+      if (!m.dead) m.spr.clearTint();
+    });
+    if (pattern === 'stomp') {
+      const ring = this.add.circle(m.x, m.y, 8, 0xff3333, 0.22).setStrokeStyle(3, 0xff3333, 0.8).setDepth(1);
+      this.tweens.add({
+        targets: ring,
+        radius: GOLEM_STOMP_RADIUS,
+        alpha: 0.04,
+        duration: ms,
+        onComplete: () => ring.destroy(),
+      });
+      // cyclops 아틀라스엔 점프/스톰핑 전용 프레임이 없다(walk·attack뿐) — 그림 대신 스프라이트를
+      // 코드로 들었다 내려서 "뛰어오른다"를 만든다. 위로 ms/2, 착지까지 ms/2 — 딱 발동 프레임(bossStomp)에 착지.
+      this.tweens.add({ targets: m.spr, y: m.spr.y - m.def.size * 0.6, duration: ms / 2, yoyo: true, ease: 'Sine.easeInOut' });
+    } else if (pattern === 'charge') {
+      this.tweens.add({ targets: m.spr, scaleX: m.spr.scaleX * 1.12, scaleY: m.spr.scaleY * 1.12, duration: ms / 2, yoyo: true });
+      // 돌진 조준선 — 어디로 얼마나 오는지 미리 보여준다(피드백: "어디까지 따라오는지 모르겠다").
+      // 윈드업 내내 서서히 밝아지다 발사 직전 사라지고 실제 돌진이 그 자리를 대신한다.
+      if (chargeTx != null && chargeTy != null) {
+        const line = this.add.graphics().setDepth(1).setAlpha(0.15);
+        line.lineStyle(3, 0xff3333, 1);
+        line.lineBetween(m.x, m.y, chargeTx, chargeTy);
+        this.tweens.add({
+          targets: line,
+          alpha: 0.8,
+          duration: ms,
+          onComplete: () => line.destroy(),
+        });
+      }
+    }
+    const icon = pattern === 'rock' ? '🪨' : pattern === 'stomp' ? '💥' : '⚡';
+    this.floatText(m.x, m.y - m.def.size - 20, icon, '#ff6666');
+  }
+
+  // 돌진 충돌 시 용사를 보스 반대 방향으로 밀어낸다 — knockbackProc(방패 밀치기)과 같은 즉시 이동 패턴,
+  // 대상만 몬스터가 아니라 용사다. 아레나 경계는 넘지 않는다.
+  chargeKnockHero(boss: MonsterEntity) {
+    const H = this.hero;
+    const d = Phaser.Math.Distance.Between(boss.x, boss.y, H.x, H.y) || 1;
+    H.x = clamp(H.x + ((H.x - boss.x) / d) * CHARGE_HERO_KB_DIST, arenaBounds.minX, arenaBounds.maxX);
+    H.y = clamp(H.y + ((H.y - boss.y) / d) * CHARGE_HERO_KB_DIST, arenaBounds.minY, arenaBounds.maxY);
   }
 
   updateArrows(dt: number) {
@@ -1122,7 +1235,10 @@ export default class BattleScene extends Phaser.Scene {
 
   // ── 시청자 요청: 채팅으로 요구가 뜨고 제한시간 안에 조건을 채우면 시청자가 몰린다 ──
   // 판정은 requests.stepRequest(순수). 씬은 출제 타이밍과 연출만 소유.
+  // 보스전 중엔 아예 안 돈다(spawnBoss가 이미 진행 중이던 요청도 정리했다) — needsBoss 요청("보스만
+  // 노려!")은 이 가드 때문에 더 이상 출제되지 않는다. 필요하면 requests.ts에서 걷어내도 된다.
   updateRequest(dt: number) {
+    if (this.bossActive()) return;
     if (this.req) {
       const c = this.reqCtx(this.req);
       this.reqPct = reqProgress(this.req, c);

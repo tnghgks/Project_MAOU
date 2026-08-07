@@ -1,5 +1,6 @@
 import { TRAITS, TRAIT_IDS, type TraitId } from './traits.ts';
-import { STAT_CARDS, STAT_CARD_IDS, type StatCardId } from './cardStats.ts';
+import { STAT_CARDS, STAT_CARD_IDS, type StatCardId, type StatCardDef } from './cardStats.ts';
+import { SUMMON_CURSES, SUMMON_CURSE_IDS, type SummonCurseId } from './cardCurses.ts';
 import type { HeroStats } from '../game/store.ts';
 
 // 도네이션 보상 카드. 카드마다 등급이 고정(rarity)이며 — 강화 5종처럼 등급 배율을 곱하는 게 아니라
@@ -30,22 +31,27 @@ export interface StatMod {
   value: number;
 }
 
-// trait이 있으면 특성 카드(mods는 항상 빈 배열) — 없으면 스탯 카드. 뽑기·연출·확정 경로가 전부
-// 같고 분기는 endDonation 한 줄이면 끝나므로 별도 카드 타입을 만들지 않는다.
+// trait이 있으면 특성 카드(mods는 항상 빈 배열) — summonCurse가 있으면 "나쁜" 즉시발동 카드(마찬가지로
+// mods 빈 배열) — 둘 다 없으면 스탯 카드(음수 mods인 curse 스탯 카드 포함, cardStats.ts 참고). 뽑기·연출·
+// 확정 경로가 전부 같고 분기는 endDonation 한 줄이면 끝나므로 별도 카드 타입을 만들지 않는다.
+// curse: 룰렛(DonationEvent)·전투 연출(BattleScene) 양쪽이 "나쁜 카드"를 색/이펙트로 구분하는 데 쓰는
+// 표시용 플래그 — summonCurse 카드는 항상 true, 저하형 스탯 카드는 STAT_CARDS[id].curse를 그대로 옮긴다.
 export interface Card {
-  id: StatCardId | TraitId;
+  id: StatCardId | TraitId | SummonCurseId;
   rarity: Rarity;
   name: string;
   desc: string;
   mods: StatMod[];
   trait?: TraitId;
+  summonCurse?: SummonCurseId;
+  curse?: boolean;
 }
 
 const pick = <T>(arr: readonly T[], rnd: () => number) => arr[Math.floor(rnd() * arr.length)];
 
 export function statCard(id: StatCardId): Card {
-  const c = STAT_CARDS[id];
-  return { id, rarity: c.rarity, name: `${c.icon} ${c.name}`, desc: c.desc, mods: c.mods };
+  const c: StatCardDef = STAT_CARDS[id];
+  return { id, rarity: c.rarity, name: `${c.icon} ${c.name}`, desc: c.desc, mods: c.mods, curse: c.curse };
 }
 
 export function traitCard(id: TraitId): Card {
@@ -53,8 +59,15 @@ export function traitCard(id: TraitId): Card {
   return { id, rarity: t.rarity, name: `${t.icon} ${t.name}`, desc: t.desc, mods: [], trait: id };
 }
 
-const isStatCard = (id: StatCardId | TraitId): id is StatCardId => id in STAT_CARDS;
-const idToCard = (id: StatCardId | TraitId): Card => (isStatCard(id) ? statCard(id) : traitCard(id));
+export function summonCurseCard(id: SummonCurseId): Card {
+  const s = SUMMON_CURSES[id];
+  return { id, rarity: s.rarity, name: `${s.icon} ${s.name}`, desc: s.desc, mods: [], summonCurse: id, curse: true };
+}
+
+const isStatCard = (id: StatCardId | TraitId | SummonCurseId): id is StatCardId => id in STAT_CARDS;
+const isSummonCurse = (id: StatCardId | TraitId | SummonCurseId): id is SummonCurseId => id in SUMMON_CURSES;
+const idToCard = (id: StatCardId | TraitId | SummonCurseId): Card =>
+  isStatCard(id) ? statCard(id) : isSummonCurse(id) ? summonCurseCard(id) : traitCard(id);
 
 // 가중 추첨. pool을 좁히면 그 안에서만 뽑는다 (리액션 보상은 노멀급을 빼는 식).
 export function rollRarity(rnd: () => number = Math.random, pool: Rarity[] = ALL): Rarity {
@@ -68,10 +81,15 @@ export function rollRarity(rnd: () => number = Math.random, pool: Rarity[] = ALL
 
 // 등급별 카드 풀 — 특성은 이미 보유한 건 제외(중복 획득 방지). legend는 스탯 카드가 없어(0장)
 // 특성 2종만 보유해버리면 그 등급이 통째로 빈다 — drawCards가 그런 등급은 애초에 안 굴린다.
-function bucketsFor(ownedTraits: readonly TraitId[]): Record<Rarity, (StatCardId | TraitId)[]> {
-  const b: Record<Rarity, (StatCardId | TraitId)[]> = { common: [], uncommon: [], magic: [], epic: [], legend: [] };
+// 소환 저주(SUMMON_CURSE_IDS)는 특성처럼 중복 제외를 할 이유가 없다(반복 당첨돼도 그때그때 소환일 뿐
+// 영구 효과가 아니라서) — 항상 통에 남아있는다.
+function bucketsFor(ownedTraits: readonly TraitId[]): Record<Rarity, (StatCardId | TraitId | SummonCurseId)[]> {
+  const b: Record<Rarity, (StatCardId | TraitId | SummonCurseId)[]> = {
+    common: [], uncommon: [], magic: [], epic: [], legend: [],
+  };
   for (const id of STAT_CARD_IDS) b[STAT_CARDS[id].rarity].push(id);
   for (const id of TRAIT_IDS) if (!ownedTraits.includes(id)) b[TRAITS[id].rarity].push(id);
+  for (const id of SUMMON_CURSE_IDS) b[SUMMON_CURSES[id].rarity].push(id);
   return b;
 }
 
@@ -101,7 +119,7 @@ export function drawCards(
   const buckets = bucketsFor(ownedTraits);
   const rarityPool = pool.filter((r) => buckets[r].length > 0);
   if (!rarityPool.length) return []; // 이론상 도달 안 함(공용 카드 10종은 항상 common에 있다)
-  const used: Partial<Record<Rarity, Set<StatCardId | TraitId>>> = {};
+  const used: Partial<Record<Rarity, Set<StatCardId | TraitId | SummonCurseId>>> = {};
   return Array.from({ length: n }, () => {
     const r = rollRarity(rnd, rarityPool);
     const set = used[r] ?? (used[r] = new Set());
