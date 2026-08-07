@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { loadGame, gameState } from '../game/store.ts';
 import { MONSTERS, type MonsterDef } from '../data/monsters.ts';
+import { SHOP_ASSETS } from '../data/merchant.ts';
 import { registerAnims, registerSheetAnims } from '../game/anims.ts';
 import { CASTLE_ATLAS, DESERT_OBJECTS, GRAVEYARD_OBJECTS } from '../game/arenaMap.ts';
 
@@ -14,6 +15,7 @@ export const HERO_CHAR: HeroTier = HERO_TIERS[1]; // 지금 쓰는 등급
 
 // 로드할 아틀라스 = 용사 전 등급 + MONSTERS 테이블의 char 값. 목록을 따로 유지하지 않는다 —
 // 몬스터에 아트를 붙이는 건 monsters.ts에 char 한 줄이고, 로드·등록은 여기서 따라온다.
+// 상인은 여기 없다: 방향·액션이 없는 낱장 그림이라 SHOP_ASSETS로 따로 받는다.
 // 등급은 안 쓰는 것까지 미리 받는다 (한 장에 100KB 남짓이고, 런 도중 교체가 로드를 기다리면 안 된다).
 const MONSTER_DEFS = Object.values(MONSTERS) as MonsterDef[];
 export const CHARACTERS = [
@@ -68,6 +70,8 @@ export default class BootScene extends Phaser.Scene {
     for (const { key } of GRAVEYARD_OBJECTS) this.load.image(key, `assets/graveyard/${key}.png`);
     // 마왕성 소품은 처음부터 아틀라스 한 장으로 왔다 — 낱장이 아니라 프레임 이름으로 꺼내 쓴다.
     this.load.atlas(CASTLE_ATLAS, `assets/castle/${CASTLE_ATLAS}.png`, `assets/castle/${CASTLE_ATLAS}.json`);
+    // 던전 상점(육성 화면) 무대 — 배경 한 장 + 상인 한 장. 타일맵도 아틀라스도 아니다.
+    for (const [key, path] of Object.entries(SHOP_ASSETS)) this.load.image(key, path);
     // 참격 이펙트. 640×576 = 64×64 프레임 10열 × 9행(= 색상 9종). 6행이 흰색 → 50~59.
     this.load.spritesheet(FX_BASH, 'assets/impact/skill/bash.png', { frameWidth: 64, frameHeight: 64 });
   }

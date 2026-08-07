@@ -70,6 +70,7 @@ export interface GameState {
   applyStatMods: (mods: readonly StatMod[]) => void;
   grantCard: (card: Card) => void;
   grantTrait: (id: TraitId) => void;
+  buyCard: (card: Card, cost: number) => boolean;
   learnSkill: (id: SkillId, cost: number) => boolean;
   recordRun: (run: RunSummary) => void;
 }
@@ -199,6 +200,17 @@ export const gameStore = createStore<GameState>()((set, get) => ({
   grantTrait: (id) => {
     const traits = get().traits;
     if (!traits.includes(id)) set({ traits: [...traits, id] });
+  },
+
+  // 고블린 상인에게서 카드 구매. 특성/스탯 분기는 도네이션 확정(BattleScene.endDonation)과 같은 규칙 —
+  // 골드 검사와 지급이 한 덩어리여야 해서 UI가 아니라 여기서 처리한다.
+  // 특성은 런 한정이라 저장하지 않는다(resetRun에서 어차피 날아간다).
+  buyCard: (card, cost) => {
+    if (get().gold < cost) return false;
+    set({ gold: get().gold - cost });
+    if (card.trait) get().grantTrait(card.trait);
+    else get().grantCard(card);
+    return true;
   },
 
   learnSkill: (id, cost) => {

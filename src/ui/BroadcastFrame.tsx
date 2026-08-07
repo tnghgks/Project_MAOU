@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useStore } from 'zustand';
 import { gameStore, gameState } from '../game/store.ts';
 import ChatPanel from './ChatPanel.tsx';
@@ -13,6 +13,10 @@ export default function BroadcastFrame({ children }: { children: ReactNode }) {
   const [following, setFollowing] = useState(false);
   const [showChat, setShowChat] = useState(true); // 채팅은 화면 위 오버레이 — 숨겨도 내역은 ChatPanel 모듈이 보관
   const live = phase === 'broadcast';
+
+  // 던전 상점(육성)에선 채팅이 좌판을 덮으므로 기본으로 접고, 페이즈가 바뀌면 다시 편다.
+  // 페이즈 전환 때만 초기화하므로 상점 안에서 직접 켜 둔 건 그대로 유지된다.
+  useEffect(() => setShowChat(phase !== 'upgrade'), [phase]);
 
   return (
     <div className={live ? 'site hero-mode' : 'site'}>
