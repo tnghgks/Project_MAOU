@@ -3,6 +3,7 @@ import type { DonationTier, SkillOutcome, ViewerAlert } from '../formulas.ts';
 import type { Card } from '../data/cards.ts';
 import type { MonsterId } from '../data/monsters.ts';
 import type { SkillId } from '../data/skills.ts';
+import type { ShopLayout } from '../data/merchant.ts';
 
 // 순간적으로 터지는 사건 버스 (지속값은 store). 이벤트 계약은 BusEvents가 강제.
 //
@@ -55,6 +56,10 @@ export interface BusEvents {
   'pause:toggle': null; // React(ESC/일시정지 버튼) → BattleScene: scene.pause()/resume() 토글 요청
   'summon:request': { type: MonsterId }; // React(SummonPanel 버튼) → BattleScene.summonRandom
   'skill:request': { index: number }; // React(SummonPanel 버튼) 또는 QWER 키 → BattleScene.castSkill
+  // 개발 리모콘(ui/DevPanel.tsx) 전용. 프로덕션 빌드에선 패널이 통째로 빠져 아무도 emit하지 않는다 —
+  // 받는 쪽은 그대로 둬도 죽은 코드일 뿐이라 import.meta.env.DEV 가드를 씬에만 건다.
+  'dev:shop-layout': ShopLayout; // 상인 위치·크기·어둠을 게임 돌린 채로 맞춘다
+  'dev:reroll-stock': null; // 상인 재고를 다시 굴린다 (등급 조합 확인용)
 }
 
 // ponytail: Phaser EventEmitter는 제네릭이 없어 as로 타입만 씌움 — 런타임은 그대로
