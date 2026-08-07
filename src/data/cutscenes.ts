@@ -20,7 +20,7 @@ export const CUTSCENES: Record<string, Cutscene> = {
 
   'stage-1': { title: '1화 — 첫 방송', lines: ['구독자 0명.', '그리고 성문 앞에 도착한 용사 한 명.'], src: `${baseURL}/cutscenes/stage-1.mp4` },
   'stage-2': { title: '2화 — 입소문', lines: ['클립이 터졌다.', '용사도 강해졌다. 시청자는 더 강한 걸 원한다.']},
-  'stage-3': { title: '최종화 — 마왕 vs 용사', lines: ['오늘 방송, 둘 중 하나는 끝난다.', '마왕이 직접 링에 오른다.']},
+  'stage-3': { title: '최종화 — 마왕 vs 용사', lines: ['오늘 방송, 둘 중 하나는 끝난다.', '마왕이 직접 링에 오른다.'], src:`${baseURL}/cutscenes/stage-3.mp4`,},
 
   'boss-1': {
     title: '보스 등장 — 골렘',
@@ -28,12 +28,7 @@ export const CUTSCENES: Record<string, Cutscene> = {
     tone: 'boss',
     src: `${baseURL}/cutscenes/stage-1_boss.mp4`,
   },
-  'boss-2': { title: '보스 등장 — 흑기사', lines: ['"마왕님, 시청자들이 피를 원합니다."'], tone: 'boss' },
-  'boss-3': {
-    title: '보스 등장 — 마왕',
-    lines: ['왕좌에서 일어난다.', '"직접 나서지, 이번 화는 특별편이니까."'],
-    tone: 'boss',
-  },
+  'boss-2': { title: '보스 등장 — 흑기사', lines: ['"마왕님, 시청자들이 피를 원합니다."'], tone: 'boss', src: `${baseURL}/cutscenes/stage-2_boss.mp4`, },
 
   'ending-bad': {
     title: 'BAD ENDING',

@@ -707,7 +707,9 @@ export default class BattleScene extends Phaser.Scene {
 
     if (this.boss) {
       if (this.boss.dead) return this.endRun('clear');
-    } else if (this.stageGold >= this.target) {
+    } else if (this.isFinal || this.stageGold >= this.target) {
+      // 최종화는 골드 모으기 단계 없이 입장 즉시 마왕전 (create()가 아니라 첫 update에서 — spawnBoss가
+      // scene.pause()를 걸어서 create가 끝난 뒤여야 한다)
       this.spawnBoss();
     }
 
