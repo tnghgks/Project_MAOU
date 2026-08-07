@@ -32,12 +32,16 @@ export default function App() {
     };
   }, []);
 
-  // React가 씬 디렉터: broadcast일 때만 Broadcast 씬을 돌린다
+  // React가 씬 디렉터: 페이즈마다 캔버스 씬이 하나씩 돌고 나머지는 멈춘다.
+  // broadcast = 전투 아레나 · upgrade = 던전 상점(고블린 상인). 그 외 페이즈는 캔버스가 빈다.
   useEffect(() => {
     const game = gameRef.current;
     if (!game) return;
-    if (phase === 'broadcast') game.scene.start('Battle');
-    else if (game.scene.isActive('Battle')) game.scene.stop('Battle');
+    const want = phase === 'broadcast' ? 'Battle' : phase === 'upgrade' ? 'Shop' : null;
+    for (const key of ['Battle', 'Shop']) {
+      if (key === want) game.scene.start(key);
+      else if (game.scene.isActive(key)) game.scene.stop(key);
+    }
   }, [phase]);
 
   // 캔버스와 오버레이는 플레이어 영역(.screen) 안 — 채팅/사이드바는 BroadcastFrame가 소유.
