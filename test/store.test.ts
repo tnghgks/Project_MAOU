@@ -18,13 +18,64 @@ const { gameStore, gameState, saveGame, loadGame, heroPower, BASE_HERO, RANGE_CA
 const { UPGRADES } = await import('../src/data/upgrades.ts');
 
 // save → 오염 → load 라운드트립: 해금·기록만 복원
-gameStore.setState({ skills: ['낙뢰', '화염폭발'], records: { bestViewers: 5000, bestGold: 12000 } });
+gameStore.setState({
+  skills: ['낙뢰', '화염폭발'],
+  records: {
+    bestViewers: 5000,
+    bestGold: 12000,
+    bestEpisode: 2,
+    learnedSkills: ['화염폭발'],
+    seenBosses: ['boss_golem'],
+  },
+});
 saveGame();
-gameStore.setState({ skills: ['낙뢰'], records: { bestViewers: 0, bestGold: 0 } });
+gameStore.setState({
+  skills: ['낙뢰'],
+  records: { bestViewers: 0, bestGold: 0, bestEpisode: 1, learnedSkills: [], seenBosses: [] },
+});
 loadGame();
 assert.deepStrictEqual(gameState().skills, ['낙뢰', '화염폭발']);
 assert.strictEqual(gameState().records.bestViewers, 5000);
 assert.strictEqual(gameState().records.bestGold, 12000);
+assert.strictEqual(gameState().records.bestEpisode, 2, '도감 해금 기준(도달 화)도 세이브에 남는다');
+assert.deepStrictEqual(gameState().records.learnedSkills, ['화염폭발']);
+assert.deepStrictEqual(gameState().records.seenBosses, ['boss_golem']);
+
+// 보스 도감: 등장을 본 것만 열린다. 같은 보스를 다시 만나도 중복으로 안 쌓인다.
+{
+  gameState().recordBossSeen('boss_knight');
+  gameState().recordBossSeen('boss_knight');
+  assert.deepStrictEqual(gameState().records.seenBosses, ['boss_golem', 'boss_knight']);
+}
+
+// 도감 필드가 없던 시절의 세이브도 읽힌다 — 누락 필드는 기본값으로 채워야 도감 화면이 안 깨진다
+{
+  store['maou.save'] = JSON.stringify({ skills: ['낙뢰'], records: { bestViewers: 77, bestGold: 88 } });
+  loadGame();
+  assert.strictEqual(gameState().records.bestViewers, 77);
+  assert.strictEqual(gameState().records.bestEpisode, 1, '구버전 세이브의 누락 필드는 기본값');
+  assert.deepStrictEqual(gameState().records.learnedSkills, []);
+  assert.deepStrictEqual(gameState().records.seenBosses, []);
+  gameStore.setState({
+    records: { bestViewers: 5000, bestGold: 12000, bestEpisode: 2, learnedSkills: [], seenBosses: [] },
+  });
+  saveGame();
+}
+
+// 설정: 음량은 0~1로 잘리고 곧바로 세이브에 남는다
+{
+  gameState().setBgmVol(2); // 범위 밖은 상한으로
+  gameState().setSfxVol(-1); // 범위 밖은 하한으로
+  gameState().toggleScreenShake();
+  assert.strictEqual(gameState().bgmVol, 1);
+  assert.strictEqual(gameState().sfxVol, 0);
+  assert.strictEqual(gameState().screenShake, false);
+  const saved = JSON.parse(store['maou.save']);
+  assert.strictEqual(saved.sfxVol, 0);
+  assert.strictEqual(saved.screenShake, false);
+  gameState().setSfxVol(1); // 뒤 검사에 영향 없게 되돌린다
+  gameState().toggleScreenShake();
+}
 
 // resetRun: 스탯/골드/진행도/스킬/시청자 초기화, 기록 유지 + 세이브에도 반영
 gameStore.setState({ gold: 9999, episode: 4, hero: { ...gameState().hero, maxHp: 500 }, viewers: 3000 });
@@ -96,11 +147,22 @@ assert.strictEqual(gameState().upgradeLevels.hp, 1);
   assert.ok(min2 > min, '레벨이 오르면 하한 기준 가격도 같이 오른다');
 }
 
-// learnSkill: 골드 차감 + 추가
+// learnSkill: 골드 차감 + 추가. 도감 기록(learnedSkills)에도 남아야 런이 끝나도 해금이 유지된다
 gameStore.setState({ gold: 500, skills: ['낙뢰'] });
 assert.strictEqual(gameState().learnSkill('시간정지', 500), true);
 assert.deepStrictEqual(gameState().skills, ['낙뢰', '시간정지']);
 assert.strictEqual(gameState().gold, 0);
+assert.ok(gameState().records.learnedSkills.includes('시간정지'), '배운 스킬은 도감에 기록된다');
+gameState().resetRun();
+assert.deepStrictEqual(gameState().skills, ['낙뢰'], '보유 스킬은 런과 함께 초기화');
+assert.ok(gameState().records.learnedSkills.includes('시간정지'), '도감 기록은 리셋에도 남는다');
+
+// clearSave: 도감·기록까지 전부 지운다 (옵션 → 데이터 초기화)
+gameState().clearSave();
+assert.strictEqual(gameState().records.bestViewers, 0);
+assert.strictEqual(gameState().records.bestEpisode, 1);
+assert.deepStrictEqual(gameState().records.learnedSkills, []);
+assert.strictEqual(JSON.parse(store['maou.save']).records.bestGold, 0, 'localStorage에서도 지워진다');
 
 // ── 전투력: 요청 난이도가 이 하나만 보므로 기준점과 단조성이 맞아야 한다 ──
 assert.strictEqual(heroPower(BASE_HERO), 1, '시작 스탯이 1.00 기준');

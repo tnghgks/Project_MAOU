@@ -329,6 +329,7 @@ export default class BattleScene extends Phaser.Scene {
       this.boss.bossT = GOLEM_PATTERN_CD * 0.5;
     }
     gameState().setBossUp(true); // BGM 전환(useBgm) — 아래 playCuts와 같은 렌더에 묶여 컷씬 뒤 보스 곡으로 이어진다
+    gameState().recordBossSeen(t); // 해금 도감 — 등장을 본 순간이 기준이다 (잡았는지는 안 따진다)
     // 진행 중이던 시청자 요청이 있었다면 그 자리에서 정리 — bossActive() 가드가 걸린 뒤로는
     // updateRequest가 더 이상 안 돌아서(런이 끝날 때까지 보스전만 이어진다) 방치하면 HUD에 낡은
     // 요청이 그대로 박제된다.
@@ -383,7 +384,7 @@ export default class BattleScene extends Phaser.Scene {
         // summonRandom이 그냥 무시하니 별도 방어 불필요.
         const s = SUMMON_CURSES[card.summonCurse];
         for (let i = 0; i < s.count; i++) this.summonRandom(Phaser.Utils.Array.GetRandom(s.pool));
-        this.cameras.main.shake(300, 0.008);
+        this.shakeCam(300, 0.008);
         this.floatText(this.hero.x, this.hero.y - 40, `${s.icon} ${s.name}!`, '#ff5555');
         this.pushChat('시스템', `💀 ${s.name} — ${s.desc}`, '#ff5555');
       } else {
@@ -680,6 +681,12 @@ export default class BattleScene extends Phaser.Scene {
     return this.audience.length ? Phaser.Utils.Array.GetRandom(this.audience) : null;
   }
 
+  // 카메라 흔들림의 유일한 출입구. 옵션(설정 → 화면 흔들림)을 끈 플레이어에겐 아무 일도 없어야 하는데,
+  // 호출부가 다섯 군데라 각자 검사하면 새 연출을 넣을 때마다 빠뜨린다.
+  shakeCam(duration: number, intensity: number) {
+    if (gameState().screenShake) this.cameras.main.shake(duration, intensity);
+  }
+
   floatText(x: number, y: number, msg: string, color: string) {
     const t = this.add.text(x, y, msg, { fontSize: '16px', fontStyle: 'bold', color }).setOrigin(0.5).setDepth(9);
     this.tweens.add({ targets: t, y: y - 30, alpha: 0, duration: 900, onComplete: () => t.destroy() });
@@ -800,7 +807,7 @@ export default class BattleScene extends Phaser.Scene {
     if (next === 'warn') {
       this.pushChat('시스템', '시청자가 빠지고 있다...', '#ff9933');
     } else if (next === 'critical') {
-      this.cameras.main.shake(SHAKE_HOLD, 0.006);
+      this.shakeCam(SHAKE_HOLD, 0.006);
     }
   }
 
@@ -1113,14 +1120,14 @@ export default class BattleScene extends Phaser.Scene {
         case 'bossStomp': {
           playOnce(m.spr, m.char, 'attack', dir);
           this.impactFx(intent.x, intent.y, intent.radius);
-          this.cameras.main.shake(220, 0.012);
+          this.shakeCam(220, 0.012);
           if (Phaser.Math.Distance.Between(intent.x, intent.y, H.x, H.y) <= intent.radius) this.hurtHero(intent.dmg);
           this.floatText(m.x, m.y - m.def.size, '💥 스톰핑!', '#ff8844');
           break;
         }
         case 'bossChargeHit': {
           playOnce(m.spr, m.char, 'attack', dir);
-          this.cameras.main.shake(260, 0.016);
+          this.shakeCam(260, 0.016);
           if (this.hurtHero(intent.dmg)) this.chargeKnockHero(m);
           this.floatText(H.x, H.y - 50, '💢 충돌!', '#ff5555');
           break;
@@ -1270,7 +1277,7 @@ export default class BattleScene extends Phaser.Scene {
       const who = this.randomViewer();
       if (who) this.pushChat(who, '...', '#666666');
       this.pushChat('시스템', '용사가 죽었다. 방송 종료', '#ff4444');
-      this.cameras.main.shake(500, 0.01);
+      this.shakeCam(500, 0.01);
     } else if (outcome === 'abandoned') {
       this.pushChat('시스템', '아무도 보지 않는다. 채널 폐지', '#ff4444');
     } else {

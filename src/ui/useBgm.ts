@@ -1,7 +1,16 @@
 import { useEffect } from 'react';
 import { useStore } from 'zustand';
 import { gameStore, type GameState } from '../game/store.ts';
-import { playBgm, stopBgm, pauseBgm, duckBgm, stageBgm, type BgmTrack } from '../game/sfx.ts';
+import {
+  playBgm,
+  stopBgm,
+  pauseBgm,
+  duckBgm,
+  stageBgm,
+  setBgmVolume,
+  setSfxVolume,
+  type BgmTrack,
+} from '../game/sfx.ts';
 import { useBusEvent } from './useBusEvent.ts';
 
 // 상황 → 트랙. 여기 없는 페이즈(result·upgrade·ending)는 무음.
@@ -18,6 +27,13 @@ export function useBgm(): void {
   const track = useStore(gameStore, trackOf);
   const inCutscene = useStore(gameStore, (s) => s.cuts.length > 0);
   const bgmOn = useStore(gameStore, (s) => s.bgmOn);
+  const bgmVol = useStore(gameStore, (s) => s.bgmVol);
+  const sfxVol = useStore(gameStore, (s) => s.sfxVol);
+
+  // 음량 설정(옵션 화면) → 재생기. sfx.ts는 배율만 들고 있고 값의 주인은 스토어라
+  // 세이브 복원·설정 변경 어느 쪽이든 이 한 곳을 거쳐 반영된다.
+  useEffect(() => setBgmVolume(bgmVol), [bgmVol]);
+  useEffect(() => setSfxVolume(sfxVol), [sfxVol]);
 
   useEffect(() => {
     if (!track) stopBgm();

@@ -11,7 +11,7 @@ import DonationEvent from './ui/DonationEvent.tsx';
 import PauseOverlay from './ui/PauseOverlay.tsx';
 import ComboMeter from './ui/ComboMeter.tsx';
 import MenuOverlay from './ui/MenuOverlay.tsx';
-import TitleView from './ui/TitleView.tsx';
+import TitleView from './ui/title/TitleView.tsx';
 import CutsceneView from './ui/CutsceneView.tsx';
 import DevPanel from './ui/DevPanel.tsx';
 import { useBgm } from './ui/useBgm.ts';
