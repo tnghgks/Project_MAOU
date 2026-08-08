@@ -1,0 +1,405 @@
+/* 타이틀 전용 픽셀 UI. 전역 styles.css의 .title-screen / .title-logo / .title-menu 위에 얹힌다.
+   원칙 세 가지 —
+     1) 블러 없는 그림자만 쓴다. 흐릿한 glow 하나면 16-bit 룩이 통째로 무너진다.
+     2) 테두리는 이미지가 아니라 겹친 box-shadow. 어느 해상도에서도 계단이 그대로 산다.
+     3) 움직임은 steps()로만. 부드러운 ease는 도트와 안 어울린다. */
+
+.title-screen {
+  --px-ink: #0a0a14; /* 가장 어두운 외곽선 */
+  --px-hi: #4a4a78; /* 베벨 하이라이트 */
+  --px-face: #16122a; /* 창 바탕 */
+  --px-gold: #ffcf3a;
+  --px-warn: #ff8a5c;
+  image-rendering: pixelated;
+  gap: 0;
+  padding: clamp(10px, 2.4vh, 28px) 3%;
+  justify-content: center;
+}
+
+/* 주사선 — 브라운관 흉내. 배경 도트를 죽이지 않을 만큼만 얇고 옅게. */
+.px-scanlines {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.26) 0 2px, rgba(0, 0, 0, 0) 2px 4px);
+}
+.title-screen > *:not(.px-scanlines) {
+  position: relative;
+  z-index: 2;
+}
+
+/* ── 로고: 하드 아웃라인 + 아래로 쌓은 두께. 블러 대신 오프셋만 쓴다 ── */
+.title-screen .title-logo {
+  font-size: clamp(34px, 5.6vw, 78px);
+  letter-spacing: 6px;
+  color: #ff4466;
+  text-shadow:
+    3px 0 0 #2a0410,
+    -3px 0 0 #2a0410,
+    0 -3px 0 #2a0410,
+    0 3px 0 #7a0c26,
+    0 6px 0 #48061a,
+    0 9px 0 #2a0410;
+  animation: px-bob 1.4s steps(1, end) infinite alternate;
+}
+@keyframes px-bob {
+  to {
+    transform: translateY(-3px);
+  }
+}
+
+/* 로고 아래 장식 구분선 — 가운데가 밝은 도트 띠 */
+.px-rule {
+  width: min(320px, 60%);
+  height: 6px;
+  margin: 18px 0 10px;
+  background:
+    repeating-linear-gradient(to right, #ffcf3a 0 3px, transparent 3px 9px) center / 100% 3px no-repeat,
+    linear-gradient(to right, transparent, #6a3ba8 30%, #6a3ba8 70%, transparent) center / 100% 6px no-repeat;
+}
+
+/* ── 메뉴: 커서(▶)가 붙은 항목이 곧 포커스 ── */
+.title-menu {
+  gap: 4px;
+  margin: 6px 0 12px;
+}
+.px-item {
+  display: grid;
+  grid-template-columns: 26px auto;
+  align-items: center;
+  min-width: clamp(220px, 26vw, 300px);
+  padding: 9px 20px;
+  font-size: clamp(15px, 1.7vw, 25px);
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #c9c2da;
+  background: transparent;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.9);
+}
+.px-item .px-cursor {
+  visibility: hidden;
+  color: var(--px-gold);
+  text-shadow: 0 2px 0 #000;
+}
+.px-item .px-label {
+  text-align: left;
+}
+.px-item.on {
+  color: #fff;
+  background: rgba(16, 12, 34, 0.78);
+  box-shadow:
+    0 0 0 3px var(--px-ink),
+    0 0 0 6px var(--px-hi);
+}
+.px-item.on .px-cursor {
+  visibility: visible;
+  animation: px-blink 0.72s steps(1, end) infinite;
+}
+@keyframes px-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.title-screen .records {
+  margin-top: 10px;
+  color: #b3a7d6;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.9);
+}
+.px-hint {
+  margin-top: 6px;
+  font-size: clamp(9px, 0.85vw, 13px);
+  letter-spacing: 1px;
+  color: #7a749c;
+}
+
+/* ── 창틀: 3겹 테두리. 패널 3종이 공유한다 ── */
+.px-window {
+  width: min(700px, 92%);
+  max-height: min(58vh, 480px);
+  display: flex;
+  flex-direction: column;
+  margin: 12px 0 4px;
+  background: var(--px-face);
+  box-shadow:
+    0 0 0 3px var(--px-ink),
+    0 0 0 6px var(--px-hi),
+    0 0 0 9px var(--px-ink);
+  text-align: left;
+}
+.px-window-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  background: #2b2450;
+  color: var(--px-gold);
+  letter-spacing: 2px;
+  font-size: clamp(12px, 1.2vw, 17px);
+  font-weight: 700;
+  box-shadow: inset 0 -3px 0 var(--px-ink);
+}
+.px-window-close {
+  padding: 2px 9px;
+  color: #ffd9d0;
+  background: #6a2438;
+  border: none;
+  cursor: pointer;
+  box-shadow:
+    inset 2px 2px 0 #a84a60,
+    inset -2px -2px 0 #2a0a14;
+}
+.px-window-close:hover {
+  background: #8c3048;
+}
+.px-window-body {
+  display: grid;
+  gap: 16px;
+  padding: 14px;
+  overflow-y: auto;
+  font-size: clamp(11px, 1.05vw, 15px);
+  line-height: 1.7;
+}
+/* 스크롤바까지 도트로 — 여기만 둥글면 창 전체가 웹페이지처럼 보인다 */
+.px-window-body::-webkit-scrollbar {
+  width: 10px;
+}
+.px-window-body::-webkit-scrollbar-track {
+  background: #0d0b1a;
+}
+.px-window-body::-webkit-scrollbar-thumb {
+  background: #46407a;
+  box-shadow:
+    inset 2px 2px 0 #6a63ad,
+    inset -2px -2px 0 #1a1730;
+}
+
+.px-section {
+  display: grid;
+  gap: 8px;
+}
+.px-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: clamp(12px, 1.15vw, 16px);
+  color: var(--px-gold);
+  letter-spacing: 2px;
+  padding-bottom: 4px;
+  box-shadow: inset 0 -3px 0 #2b2450;
+}
+.px-count {
+  color: #8f88bb;
+  font-weight: 400;
+}
+.px-lead {
+  color: #cdc6e4;
+}
+.px-lead b {
+  color: var(--px-gold);
+}
+
+/* ── 옵션 행 ── */
+.px-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 3px 0 0 var(--px-hi);
+}
+.px-row-label {
+  color: #d6d0e8;
+}
+.px-row-label small {
+  display: block;
+  color: #857ead;
+  font-size: 0.82em;
+}
+.px-row-label.danger {
+  color: var(--px-warn);
+}
+
+.px-bar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.px-cell,
+.px-bar-mute,
+.px-toggle,
+.px-btn {
+  border: none;
+  cursor: pointer;
+  color: #cfc7e4;
+  background: #241f3c;
+  box-shadow:
+    inset 2px 2px 0 #3b3466,
+    inset -2px -2px 0 var(--px-ink);
+}
+.px-cell {
+  width: 18px;
+  height: 20px;
+}
+.px-cell.on {
+  background: var(--px-gold);
+  box-shadow:
+    inset 2px 2px 0 #ffe98a,
+    inset -2px -2px 0 #b06a10;
+}
+.px-bar-mute {
+  width: 22px;
+  height: 20px;
+  margin-right: 5px;
+  font-size: 11px;
+  line-height: 1;
+}
+.px-toggle,
+.px-btn {
+  min-width: 62px;
+  padding: 5px 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.px-toggle.on {
+  color: #16240f;
+  background: #7bd44a;
+  box-shadow:
+    inset 2px 2px 0 #b6f08a,
+    inset -2px -2px 0 #2f6a18;
+}
+.px-btn.danger {
+  color: #2a0a10;
+  background: #ff6a4a;
+  box-shadow:
+    inset 2px 2px 0 #ffb09a,
+    inset -2px -2px 0 #8c2418;
+}
+.px-confirm {
+  display: flex;
+  gap: 6px;
+}
+
+/* ── 해금 도감 카드 ── */
+.px-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+}
+.px-card {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 8px 6px;
+  text-align: center;
+  background: #191533;
+  box-shadow:
+    inset 2px 2px 0 #34305c,
+    inset -2px -2px 0 var(--px-ink);
+}
+.px-card b {
+  color: #fff;
+  font-size: 0.95em;
+}
+.px-card small {
+  color: #857ead;
+  font-size: 0.78em;
+  line-height: 1.4;
+}
+.px-card.locked b {
+  color: #5f5987;
+  letter-spacing: 2px;
+}
+.px-thumb {
+  position: relative;
+  display: block;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  background: #0d0b1a;
+  box-shadow: inset 0 0 0 2px var(--px-ink);
+}
+.px-thumb-in {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+.px-thumb-glyph {
+  display: block;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 72px;
+  color: #3f3a63;
+}
+
+/* ── 제작진 · 라이선스 ── */
+.px-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+}
+.px-staff {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 3px 0 0 var(--px-gold);
+}
+.px-staff-role {
+  min-width: 96px;
+  color: #9a93c4;
+  font-size: 0.9em;
+}
+.px-staff b {
+  color: #fff;
+  font-size: 1.05em;
+  letter-spacing: 1px;
+}
+.px-credit {
+  display: grid;
+  gap: 1px;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 3px 0 0 var(--px-hi);
+}
+.px-credit b {
+  color: #eae5f7;
+}
+.px-credit small {
+  color: #857ead;
+  font-size: 0.82em;
+}
+.px-credit.pending {
+  box-shadow: inset 3px 0 0 var(--px-warn);
+}
+.px-credit.pending small {
+  color: var(--px-warn);
+}
+.px-window-body a {
+  color: #7fd4ff;
+}
+.px-note {
+  color: #857ead;
+  font-size: 0.86em;
+}
+.px-note.warn {
+  color: var(--px-warn);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-screen .title-logo,
+  .px-item.on .px-cursor {
+    animation: none;
+  }
+}

@@ -318,11 +318,6 @@ button {
   font-size: clamp(11px, 1.1vw, 17px);
   color: #aaa;
 }
-.howto {
-  font-size: clamp(10px, 0.95vw, 15px);
-  color: #ddd;
-  line-height: 1.8;
-}
 .records {
   font-size: clamp(10px, 0.9vw, 14px);
   color: #8888aa;
@@ -399,40 +394,13 @@ button {
   background-repeat: no-repeat;
   image-rendering: pixelated;
 }
-.title-screen .title-logo {
-  text-shadow:
-    0 0 18px rgba(255, 68, 102, 0.45),
-    0 3px 0 #2a0410;
-}
-.title-screen .subtitle {
-  color: #cfc7d8;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
-}
-/* 배경 위에 뜨는 패널이라 바탕을 깔아야 읽힌다 */
-.title-screen .howto {
-  padding: 12px 20px;
-  background: rgba(10, 10, 22, 0.82);
-  box-shadow: var(--bevel);
-}
+/* 로고 글자 연출과 메뉴 항목(.px-item)은 title/title.css가 소유한다 — 여긴 배치만 남긴다 */
 .title-menu {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
   margin: 10px 0;
-}
-.title-menu .cta {
-  min-width: 240px;
-}
-.cta.ghost {
-  color: var(--text);
-  background: var(--panel);
-  box-shadow: var(--bevel);
-  font-size: clamp(12px, 1.1vw, 17px);
-  padding: 7px 20px;
-}
-.cta.ghost:hover {
-  background: #262640;
 }
 
 /* ── 컷씬: 최상단 전체화면. 클릭/스페이스/버튼으로 스킵 ── */

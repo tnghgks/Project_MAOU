@@ -28,12 +28,28 @@ const DONATION_SFX: Record<DonationTier, SfxKey> = {
 
 const cache = new Map<SfxKey, HTMLAudioElement>();
 
+// 옵션 화면의 음량 설정(0~1). 파일별 기본 볼륨에 곱하는 배율이라 1이 "지금까지와 같음"이다.
+// 설정의 주인은 스토어고 여기엔 미러링만 둔다 — 동기화는 useBgm 한 곳이 맡는다.
+let masterSfx = 1;
+let masterBgm = 1;
+const clampVol = (v: number) => Math.min(1, Math.max(0, v));
+
+export function setSfxVolume(v: number): void {
+  masterSfx = clampVol(v);
+  for (const [key, el] of cache) el.volume = VOLUME[key] * masterSfx; // 이미 만들어둔 인스턴스에도 즉시 반영
+}
+
+export function setBgmVolume(v: number): void {
+  masterBgm = clampVol(v);
+  applyBgmVolume();
+}
+
 function audio(key: SfxKey): HTMLAudioElement {
   const cached = cache.get(key);
   if (cached) return cached;
   const el = new Audio(`${import.meta.env.BASE_URL}${SRC[key]}`);
   el.preload = 'auto';
-  el.volume = VOLUME[key];
+  el.volume = VOLUME[key] * masterSfx;
   cache.set(key, el);
   return el;
 }
@@ -84,7 +100,7 @@ let ducked = false;
 // 볼륨은 항상 여기로 모아 계산한다. 더킹 중에 컷씬이 끝나 playBgm이 다시 불려도
 // 원래 볼륨으로 튀지 않게 하려면 "지금 더킹인가"가 유일한 기준이어야 한다.
 function applyBgmVolume(): void {
-  if (bgm) bgm.volume = ducked ? BGM_DUCK_VOLUME : BGM_VOLUME;
+  if (bgm) bgm.volume = (ducked ? BGM_DUCK_VOLUME : BGM_VOLUME) * masterBgm;
 }
 
 // 재생 겸 트랙 전환. 같은 트랙이면 되감지 않고 이어서 튼다 — 컷씬 복귀가 이 경로를 탄다.

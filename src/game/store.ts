@@ -39,6 +39,13 @@ export interface RunSummary {
 export interface Records {
   bestViewers: number;
   bestGold: number;
+  /** 도달한 최고 화. 타이틀 해금 도감이 몬스터/보스 공개 기준으로 쓴다 (런이 끝나도 남는다). */
+  bestEpisode: number;
+  /** 한 번이라도 배운 스킬. skills는 런 한정이라 리셋되지만 도감 기록은 남아야 한다. */
+  learnedSkills: SkillId[];
+  /** 실제로 등장을 본 보스. 화수로는 못 푼다 — 보스는 목표 골드를 채워야 나오므로
+   *  "그 화에 도달"과 "그 보스를 봤다"가 다르다. 안 그러면 도감이 1화 보스를 미리 까발린다. */
+  seenBosses: MonsterId[];
 }
 
 export interface GameState {
@@ -55,11 +62,20 @@ export interface GameState {
   lastRun: RunSummary;
   cuts: string[]; // 재생 대기 중인 컷씬 id 큐 (CutsceneView가 소비)
   bossUp: boolean; // 보스 등장 여부 — BGM 전환용. 실체(BattleScene.boss)는 씬이 갖고 있고 여기엔 사실만 미러링한다
-  bgmOn: boolean; // BGM On/Off 설정 (런이 아니라 설정 — resetRun에 안 걸리고 세이브에 남는다)
+  // ── 설정 (런이 아니라 설정 — resetRun에 안 걸리고 세이브에 남는다) ──
+  bgmOn: boolean; // BGM On/Off (상단바 스피커 버튼 = 음소거 토글)
+  bgmVol: number; // BGM 음량 배율 0~1. 0이면 무음 — bgmOn과 별개(음소거/음량 분리)
+  sfxVol: number; // 효과음 음량 배율 0~1. 파일별 기본 볼륨(sfx.ts VOLUME)에 곱해진다
+  screenShake: boolean; // 화면 흔들림 연출. 끄면 BattleScene의 카메라 shake가 전부 무시된다
 
   setPhase: (phase: Phase) => void;
   setBossUp: (up: boolean) => void;
+  recordBossSeen: (id: MonsterId) => void;
   toggleBgm: () => void;
+  setBgmVol: (v: number) => void;
+  setSfxVol: (v: number) => void;
+  toggleScreenShake: () => void;
+  clearSave: () => void;
   playCuts: (ids: string | string[], after?: () => void) => void;
   advanceCut: () => void;
   setViewers: (viewers: number) => void;
@@ -114,6 +130,14 @@ export function heroPower(h: HeroStats): number {
     Math.pow(h.speed / BASE_HERO.speed, 0.1);
   return Math.round(p * 100) / 100;
 }
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+// 도감·기록의 초기 상태. 세이브 초기화(clearSave)와 구버전 세이브 병합(loadGame)이 같은 값을 본다.
+const FRESH_RECORDS: Records = { bestViewers: 0, bestGold: 0, bestEpisode: 1, learnedSkills: [], seenBosses: [] };
+
+// 설정 기본값. 음량은 배율이라 1이 "파일별 기본 볼륨 그대로"다.
+const DEFAULT_SETTINGS = { bgmOn: true, bgmVol: 1, sfxVol: 1, screenShake: true };
+
 const freshRun = () => ({
   gold: 0,
   episode: 1,
@@ -132,16 +156,43 @@ export const gameStore = createStore<GameState>()((set, get) => ({
   phase: 'boot',
   ...freshRun(),
   unlockedMonsters: ['slime', 'archer', 'golem'],
-  records: { bestViewers: 0, bestGold: 0 },
+  records: { ...FRESH_RECORDS },
   lastRun: { outcome: 'clear', peakViewers: 0, totalDonated: 0, kills: 0 },
   cuts: [],
-  bgmOn: true,
+  ...DEFAULT_SETTINGS,
 
   setPhase: (phase) => set({ phase }),
   setBossUp: (bossUp) => set({ bossUp }),
+
+  // 보스 등장 = 도감 해금. 잡았는지와 무관하다 — 등장 컷씬을 본 순간 이미 정체가 드러났다.
+  recordBossSeen: (id) => {
+    const r = get().records;
+    if (r.seenBosses.includes(id)) return;
+    set({ records: { ...r, seenBosses: [...r.seenBosses, id] } });
+    saveGame();
+  },
   toggleBgm: () => {
     set({ bgmOn: !get().bgmOn });
     saveGame(); // 소리 설정은 새로고침해도 유지되는 게 맞다
+  },
+  setBgmVol: (v) => {
+    set({ bgmVol: clamp01(v) });
+    saveGame();
+  },
+  setSfxVol: (v) => {
+    set({ sfxVol: clamp01(v) });
+    saveGame();
+  },
+  toggleScreenShake: () => {
+    set({ screenShake: !get().screenShake });
+    saveGame();
+  },
+
+  // 세이브 초기화 — 해금 도감·최고기록까지 전부 지운다. 설정(음량 등)은 지금 화면에 떠 있는 값이
+  // 곧 사실이므로 유지하고 그대로 다시 저장한다.
+  clearSave: () => {
+    set({ records: { ...FRESH_RECORDS }, unlockedMonsters: ['slime', 'archer', 'golem'], ...freshRun() });
+    saveGame();
   },
 
   // 컷씬 재생 요청. after는 큐가 끝났을 때(스킵으로 끝나도) 정확히 한 번 실행된다.
@@ -215,7 +266,13 @@ export const gameStore = createStore<GameState>()((set, get) => ({
 
   learnSkill: (id, cost) => {
     if (get().gold < cost) return false;
-    set({ gold: get().gold - cost, skills: [...get().skills, id] });
+    const r = get().records;
+    set({
+      gold: get().gold - cost,
+      skills: [...get().skills, id],
+      // 보유 스킬은 런이 끝나면 날아가지만 "배운 적 있다"는 사실은 도감에 남는다
+      records: r.learnedSkills.includes(id) ? r : { ...r, learnedSkills: [...r.learnedSkills, id] },
+    });
     saveGame(); // 스킬 영구 해금
     return true;
   },
@@ -226,8 +283,11 @@ export const gameStore = createStore<GameState>()((set, get) => ({
     set({
       lastRun: { outcome, peakViewers: Math.floor(peakViewers), totalDonated, kills },
       records: {
+        ...r,
         bestViewers: Math.max(r.bestViewers, Math.floor(peakViewers)),
         bestGold: Math.max(r.bestGold, Math.floor(get().gold)),
+        // 도달한 화 = 도감 해금 기준. 방송이 어떻게 끝났든 그 화까지 갔다는 건 사실이다.
+        bestEpisode: Math.max(r.bestEpisode, get().episode),
       },
     });
     saveGame();
@@ -236,13 +296,13 @@ export const gameStore = createStore<GameState>()((set, get) => ({
 
 export const gameState = gameStore.getState; // Phaser 직통 접근
 
-// localStorage: 해금 목록 + 최고기록 + 소리 설정 (GDD 8장)
+// localStorage: 해금 목록 + 최고기록 + 설정 (GDD 8장)
 export function saveGame() {
   const ls = globalThis.localStorage;
   if (!ls) return;
-  const { skills, unlockedMonsters, records, bgmOn } = gameStore.getState();
+  const { skills, unlockedMonsters, records, bgmOn, bgmVol, sfxVol, screenShake } = gameStore.getState();
   try {
-    ls.setItem(SAVE_KEY, JSON.stringify({ skills, unlockedMonsters, records, bgmOn }));
+    ls.setItem(SAVE_KEY, JSON.stringify({ skills, unlockedMonsters, records, bgmOn, bgmVol, sfxVol, screenShake }));
   } catch {
     /* 프라이빗 모드 등 */
   }
@@ -258,8 +318,12 @@ export function loadGame() {
     const patch: Partial<GameState> = {};
     if (Array.isArray(d.skills)) patch.skills = d.skills;
     if (Array.isArray(d.unlockedMonsters)) patch.unlockedMonsters = d.unlockedMonsters;
-    if (d.records) patch.records = d.records;
+    // 도감 필드(bestEpisode·learnedSkills)가 없던 시절의 세이브도 읽힌다 — 기본값 위에 덮어쓴다
+    if (d.records) patch.records = { ...FRESH_RECORDS, ...d.records };
     if (typeof d.bgmOn === 'boolean') patch.bgmOn = d.bgmOn;
+    if (typeof d.bgmVol === 'number') patch.bgmVol = clamp01(d.bgmVol);
+    if (typeof d.sfxVol === 'number') patch.sfxVol = clamp01(d.sfxVol);
+    if (typeof d.screenShake === 'boolean') patch.screenShake = d.screenShake;
     gameStore.setState(patch);
   } catch {
     /* 손상된 세이브 무시 */
