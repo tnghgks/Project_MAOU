@@ -1,7 +1,7 @@
 import { clamp, danger, hypeTier, viewerDrift, MIN_VIEWERS, type HypeTier } from '../formulas.ts';
 import type { HeroEntity, MonsterEntity, Arrow } from './entities.ts';
 import { hasTrait, INFINITE_DANCE_RATE, INFINITE_DANCE_MAX, INFINITE_DANCE_RESET_IDLE, type TraitId } from '../data/traits.ts';
-import { ATTACK_RELEASE_SEC } from './anims.ts'; // 값만 가져온다 — anims의 Phaser는 type import라 런타임에 없다
+import { ATTACK_RELEASE_SEC, SARGAS_THROW_RELEASE_SEC, SARGAS_STOMP_LAND_SEC } from './anims.ts'; // 값만 가져온다 — anims의 Phaser는 type import라 런타임에 없다
 
 // "엔티티용 formulas.ts" — 전투 시뮬 결정 로직을 Phaser 없이 모은다.
 // 헬퍼는 plain 시뮬 필드(x/y/hp/타이머)만 변이하고, Phaser가 필요한 것(스프라이트/FX/사망·골드)은
@@ -239,9 +239,12 @@ export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): Mon
 // 그만큼 난이도를 hp(monsters.ts)와 패턴 쉴 틈(GOLEM_PATTERN_CD)으로 올렸다. 개별 타격 피해량은
 // 안 건드렸다(방금 낮춘 값 그대로) — "한 대에 훅 간다"가 아니라 "쉴 틈이 없다"로 어려워야 한다.
 export const GOLEM_PATTERN_CD = 2.4; // 3.2 → 2.4: recover 종료 후 다음 패턴까지 대기(초) — 텀이 짧아졌다
-export const GOLEM_ROCK_WINDUP = 0.9; // "던진다" 텔레그래프 — 원거리라 여유 있게
+// 던지기·스톰핑 윈드업은 아트가 정한다 — 사르가스엔 그 패턴 전용 모션이 있고(돌을 줍고 들어 올리는
+// throwing · 뛰어올라 내려찍는 attack) 윈드업이 곧 그 모션이 도는 시간이다. 텔레그래프 길이를 여기서
+// 따로 정하면 돌을 아직 줍는 중인데 돌이 날아가는 식으로 그림과 판정이 어긋난다. 조절은 anims.ts에서.
+export const GOLEM_ROCK_WINDUP = SARGAS_THROW_RELEASE_SEC; // "던진다" 텔레그래프 — 원거리라 여유 있게
 export const GOLEM_ROCK_DMG = 22;
-export const GOLEM_STOMP_WINDUP = 0.7;
+export const GOLEM_STOMP_WINDUP = SARGAS_STOMP_LAND_SEC;
 export const GOLEM_STOMP_DMG = 26;
 export const GOLEM_STOMP_RADIUS = 170; // 150 → 170: 덩치(scale 1.35)가 커진 만큼 판정 반경도 같이
 export const GOLEM_STOMP_RANGE = 220; // 이 거리 안이어야 스톰핑을 고른다 — 너무 멀면 애초에 안 닿는다
