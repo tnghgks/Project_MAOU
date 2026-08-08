@@ -67,8 +67,15 @@ export interface GameState {
   bgmVol: number; // BGM 음량 배율 0~1. 0이면 무음 — bgmOn과 별개(음소거/음량 분리)
   sfxVol: number; // 효과음 음량 배율 0~1. 파일별 기본 볼륨(sfx.ts VOLUME)에 곱해진다
   screenShake: boolean; // 화면 흔들림 연출. 끄면 BattleScene의 카메라 shake가 전부 무시된다
+  // ── 개발 리모콘(ui/DevPanel.tsx) 전용 ──
+  // true면 다음 방송이 보스 등장 게이지가 다 찬 상태로 시작한다 — BattleScene.create가 읽고 끈다.
+  // 버스 이벤트가 아니라 상태인 이유: 페이즈를 방송으로 넘긴 뒤에야 씬이 시작돼서, 클릭 시점에
+  // 쏜 이벤트는 받을 씬이 아직 없다. 세이브 대상이 아니고(saveGame은 화이트리스트),
+  // freshRun에도 없어 resetRun이 지우지 않는다 — 쓰는 쪽에서 한 번 소비하고 끈다.
+  devBossJump: boolean;
 
   setPhase: (phase: Phase) => void;
+  setDevBossJump: (v: boolean) => void;
   setBossUp: (up: boolean) => void;
   recordBossSeen: (id: MonsterId) => void;
   toggleBgm: () => void;
@@ -160,8 +167,10 @@ export const gameStore = createStore<GameState>()((set, get) => ({
   lastRun: { outcome: 'clear', peakViewers: 0, totalDonated: 0, kills: 0 },
   cuts: [],
   ...DEFAULT_SETTINGS,
+  devBossJump: false,
 
   setPhase: (phase) => set({ phase }),
+  setDevBossJump: (devBossJump) => set({ devBossJump }),
   setBossUp: (bossUp) => set({ bossUp }),
 
   // 보스 등장 = 도감 해금. 잡았는지와 무관하다 — 등장 컷씬을 본 순간 이미 정체가 드러났다.

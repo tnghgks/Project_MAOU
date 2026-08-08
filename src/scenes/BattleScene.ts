@@ -191,6 +191,13 @@ export default class BattleScene extends Phaser.Scene {
     this.kills = 0;
     this.killGold = 0;
     this.target = targetGold(S.episode);
+    // 개발 리모콘의 보스 버튼으로 들어온 방송 — 등장 게이지를 채운 채로 시작한다. 첫 update()가
+    // 평소 경로 그대로 spawnBoss()로 넘어가므로 보스전 전용 진입 경로를 따로 만들지 않아도 된다
+    // (killGold는 게이지·HUD용 집계일 뿐이라 실제 보유 골드나 정산에는 영향이 없다).
+    if (import.meta.env.DEV && S.devBossJump) {
+      this.killGold = this.target;
+      S.setDevBossJump(false);
+    }
     this.boss = null;
     S.setBossUp(false); // 지난 화 보스 BGM이 새 방송까지 따라오지 않게
     this.critical = false;
