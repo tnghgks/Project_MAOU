@@ -49,6 +49,7 @@ export default function SummonPanel() {
   const upgradeLevels = useStore(gameStore, (s) => s.upgradeLevels);
   const hero = useStore(gameStore, (s) => s.hero);
   const skills = useStore(gameStore, (s) => s.skills);
+  const skillUses = useStore(gameStore, (s) => s.skillUses); // 스킬 사용 횟수
   const traits = useStore(gameStore, (s) => s.traits);
   const bossUp = useStore(gameStore, (s) => s.bossUp); // 보스전 중엔 소환도 막는다(BattleScene.bossActive와 같은 규칙)
   const isFinal = episode >= FINAL_EP; // 최종화: 도네이션 금지와 같은 규칙(GDD 7장) — 소환도 막는다
@@ -91,26 +92,24 @@ export default function SummonPanel() {
 
   return (
     <div className="summon-panel" style={{ top: `${PANEL_TOP_PCT}%`, height: `${100 - PANEL_TOP_PCT}%` }}>
-      {bossUp && !isFinal && <p className="owned boss-lock-note">⚔ 보스전 중 — 소환이 막혀 있어요, 지금 있는 전력으로 싸워야 해요</p>}
-      {!summonBlocked && (
-        <div className="tile-row">
-          {available.map((t, i) => {
-            const def = MONSTERS[t];
-            return (
-              <button
-                key={`${t}-${summonPop[t] ?? 0}`}
-                type="button"
-                className="tile summon-tile"
-                onClick={() => bus.emit('summon:request', { type: t })}
-              >
-                <span className="tile-key">{i + 1}</span>
-                <span className="tile-icon">{MONSTER_ICON[t] ?? '❔'}</span>
-                <span className="tile-name">{def.name}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <div className="tile-row">
+        {available.map((t, i) => {
+          const def = MONSTERS[t];
+          return (
+            <button
+              key={`${t}-${summonPop[t] ?? 0}`}
+              type="button"
+              className="tile summon-tile"
+              disabled={summonBlocked}
+              onClick={() => bus.emit('summon:request', { type: t })}
+            >
+              <span className="tile-key">{i + 1}</span>
+              <span className="tile-icon">{MONSTER_ICON[t] ?? '❔'}</span>
+              <span className="tile-name">{def.name}</span>
+            </button>
+          );
+        })}
+      </div>
 
       <div className="tile-row">
         <div key={`dash-${dashPop}`} className="tile skill-tile">
@@ -125,15 +124,21 @@ export default function SummonPanel() {
           const idx = skills.indexOf(id);
           const owned = idx >= 0;
           const left = owned ? (skillCd[id] ?? 0) : 0;
+          const uses = owned ? (skillUses[id] ?? 0) : 0;
+          const maxUses = SKILLS[id].maxUses;
+          const remaining = maxUses - uses;
+          const depleted = owned && remaining <= 0; // 사용 횟수 소진
           const inner = (
             <>
               <span className="tile-key">{owned ? (SKILL_KEYS[idx] ?? '') : ''}</span>
-              <span className="tile-icon" style={{ opacity: !owned ? 0.35 : left > 0 ? 0.4 : 1 }}>
+              <span className="tile-icon" style={{ opacity: !owned ? 0.35 : depleted || left > 0 ? 0.4 : 1 }}>
                 {SKILL_ICON[id]}
               </span>
               <span className="tile-name">
                 {SKILLS[id].name}
                 {owned && left > 0 ? ` ${left.toFixed(1)}s` : ''}
+                {owned && !depleted ? ` (${remaining}/${maxUses})` : ''}
+                {depleted ? ' (소진)' : ''}
               </span>
             </>
           );

@@ -3,7 +3,7 @@ import { UPGRADES, upgradeCost, type UpgradeKey } from '../data/upgrades.ts';
 import { stageViewerFloor } from '../data/progression.ts';
 import type { Card } from '../data/cards.ts';
 import { resolveMods } from '../data/cardStats.ts';
-import type { SkillId } from '../data/skills.ts';
+import { SKILLS, type SkillId } from '../data/skills.ts';
 import type { TraitId } from '../data/traits.ts';
 import type { MonsterId } from '../data/monsters.ts';
 import type { StatMod } from '../data/cards.ts';
@@ -55,6 +55,7 @@ export interface GameState {
   hero: HeroStats;
   upgradeLevels: Record<UpgradeKey, number>;
   skills: SkillId[]; // 해금으로 누적 (영구)
+  skillUses: Partial<Record<SkillId, number>>; // 현재 스테이지에서 각 스킬의 사용 횟수 (스테이지마다 리셋)
   traits: TraitId[]; // 도네 카드로만 획득, 런 한정 (세이브에 안 남는다)
   unlockedMonsters: MonsterId[];
   records: Records;
@@ -95,6 +96,8 @@ export interface GameState {
   grantTrait: (id: TraitId) => void;
   buyCard: (card: Card, cost: number) => boolean;
   learnSkill: (id: SkillId, cost: number) => boolean;
+  useSkill: (id: SkillId) => boolean;
+  resetSkillUses: () => void;
   recordRun: (run: RunSummary) => void;
 }
 
@@ -151,6 +154,7 @@ const freshRun = () => ({
   hero: { ...BASE_HERO },
   upgradeLevels: { hp: 0, atk: 0, atkSpd: 0, speed: 0, range: 0 },
   skills: ['낙뢰'] as SkillId[], // 스킬은 런 한정 — 사망/타이틀 복귀 시 세이브에서도 지워진다
+  skillUses: {} as Partial<Record<SkillId, number>>, // 스테이지마다 리셋
   traits: [] as TraitId[],
   viewers: 0,
   bossUp: false,
@@ -285,6 +289,18 @@ export const gameStore = createStore<GameState>()((set, get) => ({
     saveGame(); // 스킬 영구 해금
     return true;
   },
+
+  // 스킬 사용 시도. 횟수 제한을 확인하고 사용 가능하면 카운터를 증가시킨다.
+  useSkill: (id) => {
+    const uses = get().skillUses[id] ?? 0;
+    const maxUses = SKILLS[id]?.maxUses ?? Infinity;
+    if (uses >= maxUses) return false;
+    set({ skillUses: { ...get().skillUses, [id]: uses + 1 } });
+    return true;
+  },
+
+  // 스테이지 시작 시 스킬 사용 횟수 초기화 (BattleScene.create에서 호출)
+  resetSkillUses: () => set({ skillUses: {} }),
 
   // 방송 종료 정산 (기존 endRun의 records/save 흡수)
   recordRun: ({ outcome, peakViewers, totalDonated, kills }) => {

@@ -220,6 +220,7 @@ export default class BattleScene extends Phaser.Scene {
 
     this.available = (Object.keys(MONSTERS) as MonsterId[]).filter((k) => MONSTERS[k].unlock <= S.episode);
     this.skillCd = {};
+    S.resetSkillUses(); // 스테이지 시작 시 스킬 사용 횟수 초기화
 
     this.buildUI();
     // 최종화: 도네이션 금지(GDD 7장) — 소환 버튼도 숨긴다(React SummonPanel이 isFinal을 직접 계산해 처리).
@@ -259,6 +260,8 @@ export default class BattleScene extends Phaser.Scene {
     // React SummonPanel 버튼 클릭 → 즉시 1마리 소환. 최종화 여부는 React가 직접 판단해 버튼을 안 그린다.
     busBind(this, 'summon:request', ({ type }) => this.summonRandom(type));
     busBind(this, 'skill:request', ({ index }) => this.castSkill(index));
+    // 개발 모드 전용: 보스 강제 소환
+    busBind(this, 'dev:spawn-boss', () => this.spawnBoss());
 
     // 용사 이동/대시는 폴링 (매 프레임 눌림 상태를 읽어야 한다). 방향키만 — WASD를 겹쳐 쓰면
     // W가 스킬(Q/W/E/R)과 부딪힌다.
@@ -283,10 +286,16 @@ export default class BattleScene extends Phaser.Scene {
     if (!this.isFinal) this.summonRandom(this.available[0]); // 시작하자마자 한 마리는 있어야 방송이 굴러간다
   }
 
-  // 스킬 시전 (QWER키). 도네 리듬 경로(resolveRhythmResult)와 달리 배율 없이 쿨타임으로 제한한다.
+  // 스킬 시전 (QWER키). 쿨타임 + 스테이지당 사용 횟수 제한을 함께 검사한다.
   castSkill(i: number) {
-    const id = gameState().skills[i];
+    const S = gameState();
+    const id = S.skills[i];
     if (!id || (this.skillCd[id] ?? 0) > 0) return;
+    // 스테이지당 사용 횟수 제한 검사 — useSkill이 false 반환 시 횟수 소진
+    if (!S.useSkill(id)) {
+      this.floatText(this.hero.x, this.hero.y - 40, '❌ 사용 횟수 소진', '#ff6666');
+      return;
+    }
     this.skillCd[id] = SKILLS[id].cd;
     SKILLS[id].effect(this.skillContext(), 1);
     if (!(SKILLS[id] as Skill).noScreenFlash) this.cameras.main.flash(150, 255, 255, 200);
@@ -1136,9 +1145,135 @@ export default class BattleScene extends Phaser.Scene {
         // 던지기 발동 = throwing 마지막 프레임(돌을 머리 위로 든 자세). 모션은 이미 그 자세라 그대로 두고
         // 돌만 띄운다 — 여기서 다시 재생하면 이미 던진 돌을 다시 줍는 그림이 된다.
         case 'bossRock': {
-          const spr = this.add.image(intent.x, intent.y, 'arrow').setDepth(2).setScale(1.4).setTint(0x8b6b4a);
-          spr.setRotation(Math.atan2(intent.ty - intent.y, intent.tx - intent.x) + Math.PI / 2);
-          this.arrows.push({ x: intent.x, y: intent.y, tx: intent.tx, ty: intent.ty, spr, dmg: intent.dmg });
+          // 사실적인 바위 모양 생성
+          const rock = this.add.graphics();
+          rock.setPosition(intent.x, intent.y);
+          rock.setDepth(2);
+
+          // 더 불규칙한 다각형으로 바위 모양 (포인트 증가)
+          const points = [
+            { x: -22, y: -8 },
+            { x: -18, y: -18 },
+            { x: -8, y: -26 },
+            { x: 2, y: -28 },
+            { x: 12, y: -24 },
+            { x: 20, y: -16 },
+            { x: 26, y: -4 },
+            { x: 24, y: 8 },
+            { x: 18, y: 18 },
+            { x: 8, y: 26 },
+            { x: -2, y: 28 },
+            { x: -12, y: 24 },
+            { x: -20, y: 16 },
+            { x: -26, y: 6 },
+          ];
+
+          // 그림자 레이어 (더 진하고 블러 효과처럼)
+          rock.fillStyle(0x1a1510, 0.4);
+          rock.beginPath();
+          rock.moveTo(points[0].x + 5, points[0].y + 5);
+          for (let i = 1; i < points.length; i++) {
+            rock.lineTo(points[i].x + 5, points[i].y + 5);
+          }
+          rock.closePath();
+          rock.fillPath();
+
+          // 베이스 그림자
+          rock.fillStyle(0x2a2520, 0.5);
+          rock.beginPath();
+          rock.moveTo(points[0].x + 3, points[0].y + 3);
+          for (let i = 1; i < points.length; i++) {
+            rock.lineTo(points[i].x + 3, points[i].y + 3);
+          }
+          rock.closePath();
+          rock.fillPath();
+
+          // 메인 바위 (회갈색)
+          rock.fillStyle(0x6b5d54, 1);
+          rock.beginPath();
+          rock.moveTo(points[0].x, points[0].y);
+          for (let i = 1; i < points.length; i++) {
+            rock.lineTo(points[i].x, points[i].y);
+          }
+          rock.closePath();
+          rock.fillPath();
+
+          // 테두리 (윤곽 강조)
+          rock.lineStyle(1.5, 0x4a3d35, 0.9);
+          rock.beginPath();
+          rock.moveTo(points[0].x, points[0].y);
+          for (let i = 1; i < points.length; i++) {
+            rock.lineTo(points[i].x, points[i].y);
+          }
+          rock.closePath();
+          rock.strokePath();
+
+          // 어두운 음영 구역 (오른쪽 아래 - 큰 영역)
+          rock.fillStyle(0x3a3330, 0.7);
+          rock.fillCircle(12, 10, 14);
+          rock.fillCircle(6, 18, 10);
+          rock.fillCircle(-4, 14, 8);
+
+          // 중간 톤 영역
+          rock.fillStyle(0x5a4d44, 0.5);
+          rock.fillCircle(-6, 0, 12);
+          rock.fillCircle(8, -6, 10);
+
+          // 밝은 하이라이트 (위쪽 왼쪽 - 광원)
+          rock.fillStyle(0xaa9a8a, 0.6);
+          rock.fillCircle(-12, -12, 10);
+          rock.fillCircle(-4, -16, 7);
+          rock.fillCircle(4, -14, 5);
+
+          // 더 밝은 하이라이트 포인트
+          rock.fillStyle(0xc0b0a0, 0.5);
+          rock.fillCircle(-10, -14, 4);
+          rock.fillCircle(2, -16, 3);
+
+          // 갈라진 선들 (바위 균열 - 더 많이)
+          rock.lineStyle(2, 0x2a2520, 0.8);
+          rock.beginPath();
+          rock.moveTo(-12, -18);
+          rock.lineTo(-8, -4);
+          rock.lineTo(-4, 12);
+          rock.strokePath();
+
+          rock.lineStyle(1.5, 0x2a2520, 0.7);
+          rock.beginPath();
+          rock.moveTo(6, -16);
+          rock.lineTo(10, -2);
+          rock.lineTo(8, 14);
+          rock.strokePath();
+
+          // 작은 균열들
+          rock.lineStyle(1, 0x3a3330, 0.6);
+          rock.beginPath();
+          rock.moveTo(-16, 2);
+          rock.lineTo(-8, 8);
+          rock.strokePath();
+
+          rock.beginPath();
+          rock.moveTo(14, 4);
+          rock.lineTo(8, 10);
+          rock.strokePath();
+
+          // 작은 돌조각/디테일 (표면 텍스처)
+          rock.fillStyle(0x4a3d35, 0.7);
+          rock.fillCircle(-14, -6, 2);
+          rock.fillCircle(12, -8, 2);
+          rock.fillCircle(-6, 16, 2);
+          rock.fillCircle(14, 12, 2);
+          rock.fillCircle(0, -4, 2);
+
+          // 회전 효과 (날아가면서 회전)
+          this.tweens.add({
+            targets: rock,
+            angle: 360,
+            duration: 800,
+            repeat: -1,
+          });
+
+          this.arrows.push({ x: intent.x, y: intent.y, tx: intent.tx, ty: intent.ty, spr: rock as any, dmg: intent.dmg });
           this.floatText(m.x, m.y - m.def.size, '🪨 투척!', '#cc9966');
           break;
         }

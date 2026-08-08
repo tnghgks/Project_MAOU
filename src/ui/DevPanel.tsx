@@ -134,6 +134,18 @@ export default function DevPanel() {
             <button onClick={() => donate('big', true)}>대박(리듬)</button>
           </div>
 
+          <p className="dev-panel-label">보스</p>
+          <div className="dev-panel-row">
+            <button
+              onClick={() => {
+                if (gameState().phase !== 'broadcast') goPhase('broadcast');
+                bus.emit('dev:spawn-boss', null);
+              }}
+            >
+              보스 소환
+            </button>
+          </div>
+
           <p className="dev-panel-label">상점 배치</p>
           <div className="dev-panel-row">
             <button onClick={() => bus.emit('dev:reroll-stock', null)}>재고 리롤</button>

@@ -40,9 +40,10 @@ export const MONSTERS = {
   // 2026-08-07: 3패턴 보스전 도입(battleSim.stepBossGolem)에 맞춰 hp 상향 + 덩치 키움(scale 1→1.35).
   // 보스전 중엔 도네이션·소환·미션이 전부 막혀 순수 실력전이라 hp 하나로 난이도를 올려도 된다 —
   // 개별 패턴 피해량은 그대로(사거리/속도 완화는 유지, GOLEM_* 참고).
-  boss_golem:  { name: '사르가스', hp: 1000, dmg: 12, atkCd: 1.6, speed: 30, range: 40, gold: 300,  size: 124, unlock: 99, char: 'sargas', scale: 1.35, kb: 0 },
-  boss_knight: { name: '베르하르트',   hp: 1400, dmg: 18, atkCd: 1.5, speed: 34, range: 44, gold: 800,  size: 64, unlock: 99, char: 'verhart', scale: 1, kb: 0 },
-  boss_maou:   { name: '그림하르트',         hp: 2600, dmg: 24, atkCd: 1.4, speed: 38, range: 46, gold: 2000, size: 64, unlock: 99, char: 'grimhardt', scale: 1.2, kb: 0 },
+  // 2026-08-07 밸런스 하향: hp 감소 (1000→750, 1400→1000, 2600→1800) - 너무 어려워서 조정
+  boss_golem:  { name: '사르가스', hp: 750, dmg: 12, atkCd: 1.6, speed: 30, range: 40, gold: 300,  size: 124, unlock: 99, char: 'sargas', scale: 1.35, kb: 0 },
+  boss_knight: { name: '베르하르트',   hp: 1000, dmg: 18, atkCd: 1.5, speed: 34, range: 44, gold: 800,  size: 64, unlock: 99, char: 'verhart', scale: 1, kb: 0 },
+  boss_maou:   { name: '그림하르트',         hp: 1800, dmg: 24, atkCd: 1.4, speed: 38, range: 46, gold: 2000, size: 64, unlock: 99, char: 'grimhardt', scale: 1.2, kb: 0 },
 } satisfies Record<string, MonsterDef>;
 
 export type MonsterId = keyof typeof MONSTERS;

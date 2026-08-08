@@ -251,12 +251,12 @@ export const GOLEM_STOMP_RANGE = 220; // 이 거리 안이어야 스톰핑을 �
 // 2026-08-07 하향(피드백: "너무 빠르고 부딪히면 거의 죽는다·어디까지 따라오는지 모르겠다"):
 // 목표를 윈드업 "종료" 시점이 아니라 "시작" 시점에 고정하도록 바꿔서(아래 cooldown 분기) 실제
 // 회피 가능 시간(windup 전체)을 벌어주고, 씬이 그 구간에 조준선을 그릴 수 있게 했다 — 속도·피해도 같이 낮췄다.
-export const GOLEM_CHARGE_WINDUP = 0.55; // 셋 중 가장 짧지만, 조준선을 읽고 피할 시간은 준다
+export const GOLEM_CHARGE_WINDUP = 0.9; // 0.55 → 0.9: 돌 던지기와 통일, 회피 시간 증가
 export const GOLEM_CHARGE_SPEED = 260; // 420 → 260: 화살(300)보다도 느리게
 export const GOLEM_CHARGE_DMG = 24; // 34 → 24: 스톰핑(26)과 비슷한 수준으로 — 돌진만 유독 즉사급이던 것 완화
 export const GOLEM_CHARGE_MAX_T = 1.2; // 못 맞히고 이 시간 넘게 달리면 스스로 멈춘다(빗나간 돌진)
 export const GOLEM_CHARGE_HIT_RADIUS = 62; // 46 → 62: 덩치(scale 1.35)에 맞춰 몸통 판정도 같이 키웠다
-export const GOLEM_RECOVER_T = 0.8; // 패턴 종료 후 무방비 — 플레이어에게 반격 타이밍을 준다
+export const GOLEM_RECOVER_T = 1.2; // 0.8 → 1.2: 패턴 종료 후 무방비 — 플레이어에게 반격 타이밍을 더 준다
 
 export function stepBossGolem(
   m: MonsterEntity,

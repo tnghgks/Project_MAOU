@@ -9,6 +9,7 @@ import { clamp, type SkillRarity } from '../formulas.ts';
 export interface Skill {
   name: string;
   cd: number; // 용사 모드 재사용 대기시간(초). ponytail: 밸런스 knob
+  maxUses: number; // 스테이지당 최대 사용 횟수 — 쿨다운과 별개로 무한 사용을 막는다
   rarity: SkillRarity; // 리듬 보상으로 획득할 때 표시되는 등급 (GDD 3-4)
   effect(ctx: SkillContext, mult: number): void;
   /** true면 castSkill이 화면 전체를 덮는 카메라 flash를 건너뛴다 — 자체 fxCircle 연출(화염폭발 등)이
@@ -26,6 +27,7 @@ export const SKILLS = {
   화염폭발: {
     name: '화염 폭발', // 용사 중심 광역
     cd: 6,
+    maxUses: 4, // 스테이지당 4회
     rarity: 'common',
     noScreenFlash: true, // 흰 화면 플래시가 fxCircle의 화염 색을 덮어써서 오히려 안 보였다
     effect(ctx, mult) {
@@ -36,6 +38,7 @@ export const SKILLS = {
   낙뢰: {
     name: '낙뢰', // 5개 지점 강타. 시작 스킬.
     cd: 8,
+    maxUses: 3, // 스테이지당 3회
     rarity: 'common',
     effect(ctx, mult) {
       // 예전엔 아레나 전역(최대 2560px 폭)에서 완전 무작위로 떨어져 대부분 빈 공간에 꽂혔다 —
@@ -59,6 +62,7 @@ export const SKILLS = {
   회복의성가: {
     name: '회복의 성가',
     cd: 20, // 위험도(=시청자)를 직접 깎는 스킬이라 가장 길다
+    maxUses: 1, // 스테이지당 1회 — 강력한 회복이라 제한적으로
     rarity: 'epic',
     effect(ctx) {
       ctx.heal(0.3); // ponytail: 위험도 급락 주의 (GDD 4장)
@@ -67,6 +71,7 @@ export const SKILLS = {
   시간정지: {
     name: '시간 정지',
     cd: 15,
+    maxUses: 2, // 스테이지당 2회
     rarity: 'uncommon',
     effect(ctx) {
       ctx.freeze(3000); // 3초간 몬스터 정지
