@@ -31,6 +31,7 @@ import {
   stepHero,
   stepMonster,
   stepBossGolem,
+  stepBossKnight,
   stepArrow,
   stepViewers,
   bumpCombo,
@@ -40,6 +41,11 @@ import {
   HIT_INVULN_DUR,
   GOLEM_PATTERN_CD,
   GOLEM_STOMP_RADIUS,
+  KNIGHT_PATTERN_CD,
+  KNIGHT_SWORDBEAM_SPEED,
+  KNIGHT_SPACESLASH_THRESHOLD,
+  KNIGHT_SPACESLASH_WINDUP,
+  KNIGHT_SPACESLASH_RANGE,
   type HeroInput,
   type Facing,
   type BossPattern,
@@ -118,9 +124,15 @@ const CHARGE_HERO_KB_DIST = 70; // ponytail: 사이클롭스 돌진 충돌 시 �
 // 보스 패턴 → 윈드업 동안 돌릴 모션. 사르가스 아틀라스는 패턴별로 전용 액션을 들고 있다
 // (throwing = 돌을 줍고 머리 위로 들기 · attack = 뛰어올라 내려찍기). 재생 속도는 anims.ts가
 // 윈드업 길이에 맞춰 놨으므로 시작만 걸어두면 발동 시각에 딱 그 프레임이 나온다.
-// charge만 비어 있다: 윈드업 동안은 제자리라 rush(질주)를 걸면 발이 미끄러진다 — 예고는
-// 조준선이 맡고, 실제 rush는 돌진이 시작되는 bossChargeMove부터 돈다.
-const BOSS_WINDUP_ANIM: Partial<Record<BossPattern, string>> = { rock: 'throwing', stomp: 'attack' };
+// charge/knightCharge는 비어 있다: 윈드업 동안은 제자리라 rush(질주)를 걸면 발이 미끄러진다 — 예고는
+// 조준선이 맡고, 실제 rush는 돌진이 시작되는 bossChargeMove/bossKnightChargeMove부터 돈다.
+const BOSS_WINDUP_ANIM: Partial<Record<BossPattern, string>> = {
+  rock: 'throwing',
+  stomp: 'attack',
+  // 베르하르트 검기: attack 애니메이션(윈드업 0.7초에 맞춰 느리게 재생, 마지막 프레임에서 발사)
+  swordbeam: 'attack',
+  // 공간 가르기는 윈드업 때 idle만 (실제 발동 시 attack 재생)
+};
 // 용사 원본은 92×92 캔버스에 인물 ~20×46px.
 // 1 = 리샘플 없음 = pixelArt 필터에서 가장 깨끗하다. ponytail: 화면상 크기 knob, 줄이면 축소 시 픽셀이 떤다.
 const HERO_SCALE = 1;
@@ -262,6 +274,8 @@ export default class BattleScene extends Phaser.Scene {
     busBind(this, 'skill:request', ({ index }) => this.castSkill(index));
     // 개발 모드 전용: 보스 강제 소환
     busBind(this, 'dev:spawn-boss', () => this.spawnBoss());
+    // 개발 모드 전용: 보스 패턴 강제 실행
+    busBind(this, 'dev:boss-pattern', ({ pattern }) => this.forceBossPattern(pattern));
 
     // 용사 이동/대시는 폴링 (매 프레임 눌림 상태를 읽어야 한다). 방향키만 — WASD를 겹쳐 쓰면
     // W가 스킬(Q/W/E/R)과 부딪힌다.
@@ -344,11 +358,14 @@ export default class BattleScene extends Phaser.Scene {
     const t = bossOf(gameState().episode);
     const x = this.hero.x < CX ? arenaBounds.maxX - 40 : arenaBounds.minX + 40;
     this.boss = this.doSummon(t, x, (ARENA.y + SUMMON_Y) / 2);
-    // 사이클롭스(boss_golem)는 stepBossGolem 전용 상태머신을 쓴다 — 등장 직후 바로 패턴이 나가면
-    // 컷씬이 끝나자마자 맞을 수 있어 짧은 유예(cooldown)를 깔고 시작한다.
+    // 보스 전용 상태머신 초기화 — 등장 직후 바로 패턴이 나가면 컷씬 끝나자마자 맞을 수 있어
+    // 짧은 유예(cooldown)를 깔고 시작한다.
     if (t === 'boss_golem') {
       this.boss.bossPhase = 'cooldown';
       this.boss.bossT = GOLEM_PATTERN_CD * 0.5;
+    } else if (t === 'boss_knight') {
+      this.boss.bossPhase = 'cooldown';
+      this.boss.bossT = KNIGHT_PATTERN_CD * 0.5;
     }
     gameState().setBossUp(true); // BGM 전환(useBgm) — 아래 playCuts와 같은 렌더에 묶여 컷씬 뒤 보스 곡으로 이어진다
     gameState().recordBossSeen(t); // 해금 도감 — 등장을 본 순간이 기준이다 (잡았는지는 안 따진다)
@@ -368,6 +385,44 @@ export default class BattleScene extends Phaser.Scene {
       this.scene.resume();
       bus.emit('battle:resume', null);
     });
+  }
+
+  // 개발 모드 전용: 보스 패턴 강제 실행
+  forceBossPattern(pattern: BossPattern) {
+    // 보스가 없으면 먼저 소환 (컷씬 없이)
+    if (!this.boss) {
+      const t = bossOf(gameState().episode);
+      const x = this.hero.x < CX ? arenaBounds.maxX - 40 : arenaBounds.minX + 40;
+      this.boss = this.doSummon(t, x, (ARENA.y + SUMMON_Y) / 2);
+      gameState().setBossUp(true);
+      this.floatText(this.boss.x, this.boss.y - 60, `☠ ${MONSTERS[t].name} (DEV)`, '#ff4444');
+    }
+
+    const boss = this.boss;
+    // 베르하르트 보스만 지원
+    if (boss.type !== 'boss_knight') {
+      console.warn('[DEV] 현재 보스는 베르하르트가 아닙니다:', boss.type);
+      return;
+    }
+
+    // 패턴 강제 설정 및 즉시 실행
+    boss.bossPattern = pattern;
+    boss.bossPhase = 'windup';
+
+    // 윈드업 시간 설정
+    if (pattern === 'swordbeam') {
+      boss.bossT = KNIGHT_SWORDBEAM_WINDUP;
+    } else if (pattern === 'knightCharge') {
+      boss.bossT = KNIGHT_CHARGE_WINDUP;
+      // 돌진 목표 설정
+      boss.chargeTx = this.hero.x;
+      boss.chargeTy = this.hero.y;
+    } else if (pattern === 'spaceSlash') {
+      boss.bossT = KNIGHT_SPACESLASH_WINDUP;
+      boss.spaceSlashDamageTaken = 0;
+    }
+
+    this.floatText(boss.x, boss.y - 40, `[DEV] ${pattern}`, '#ffaa44');
   }
 
   // ── 도네이션: 대박(리듬 미니게임)만 전투를 멈추고 React(DonationEvent)에 넘긴다.
@@ -673,6 +728,10 @@ export default class BattleScene extends Phaser.Scene {
   // 데미지 숫자도 프레임마다 스팸이 된다(아래 damageText도 같이 건너뛴다).
   damageMonster(m: MonsterEntity, dmg: number, silent = false) {
     m.hp -= dmg;
+    // 베르하르트 공간 가르기 패턴 중이면 데미지 추적
+    if (m.bossPattern === 'spaceSlash' && m.bossPhase === 'windup') {
+      m.spaceSlashDamageTaken = (m.spaceSlashDamageTaken ?? 0) + dmg;
+    }
     if (!silent) this.damageText(m.x, m.y - 20, dmg);
     m.spr.setAlpha(0.5);
     this.time.delayedCall(80, () => {
@@ -1087,8 +1146,13 @@ export default class BattleScene extends Phaser.Scene {
         if (m.dotT <= 0) m.dotDps = 0;
         if (m.dead) continue; // 도트로 죽었으면 이번 프레임 AI는 스킵
       }
-      // 사이클롭스(boss_golem)만 전용 3패턴 AI — 나머지는 그대로 stepMonster
-      const intent = m.type === 'boss_golem' ? stepBossGolem(m, H, dt) : stepMonster(m, H, dt);
+      // 보스들은 전용 AI 사용
+      const intent =
+        m.type === 'boss_golem'
+          ? stepBossGolem(m, H, dt)
+          : m.type === 'boss_knight'
+            ? stepBossKnight(m, H, dt)
+            : stepMonster(m, H, dt);
       const dir = this.faceMonster(m, intent.facing);
       switch (intent.kind) {
         case 'move': {
@@ -1293,6 +1357,160 @@ export default class BattleScene extends Phaser.Scene {
           this.floatText(H.x, H.y - 50, '💢 충돌!', '#ff5555');
           break;
         }
+        // ── 베르하르트(기사) 전용 패턴 ──
+        // 검기 발산: 3개의 부채꼴 검기 발사
+        // (attack 애니메이션은 bossTelegraph에서 이미 재생 중 — 윈드업 시간에 맞춰 느리게 돌아가다가 지금 마지막 프레임)
+        case 'bossSwordbeam': {
+          for (const beam of intent.beams) {
+            const angle = Math.atan2(beam.ty - intent.y, beam.tx - intent.x);
+
+            // 부채꼴 모양의 검기 생성
+            const spr = this.add.graphics();
+            spr.setPosition(intent.x, intent.y);
+            spr.setDepth(2);
+
+            // 부채꼴 그리기 (30도 각도)
+            const fanAngle = Math.PI / 6; // 30도
+            const radius = 50;
+
+            spr.fillStyle(0xffffff, 0.8);
+            spr.beginPath();
+            spr.moveTo(0, 0);
+            spr.arc(0, 0, radius, -fanAngle / 2, fanAngle / 2, false);
+            spr.closePath();
+            spr.fillPath();
+
+            // 외곽선
+            spr.lineStyle(2, 0xffffff, 1);
+            spr.strokePath();
+
+            // 방향 설정
+            spr.setRotation(angle);
+
+            // arrows 배열에 추가 (speed 지정, 비행 중 충돌 체크)
+            this.arrows.push({
+              x: intent.x,
+              y: intent.y,
+              tx: beam.tx,
+              ty: beam.ty,
+              spr: spr as any,
+              dmg: intent.dmg,
+              speed: KNIGHT_SWORDBEAM_SPEED,
+              checkMidair: true, // 비행 중에도 용사와 충돌 체크
+            });
+          }
+          this.floatText(m.x, m.y - m.def.size, '⚔️ 검기!', '#ffffff');
+          break;
+        }
+        // 공간 가르기 시작 (윈드업 — 기를 모으는 단계, 칼 휘두르기는 발동 시)
+        case 'bossSpaceSlashCharge': {
+          this.floatText(m.x, m.y - m.def.size, `🌀 공간 가르기! (${intent.threshold} 데미지 필요)`, '#ffaa44');
+          // 보스 주변에 보라색 오라 표시
+          const aura = this.add.circle(m.x, m.y, 60, 0x8844ff, 0.3).setDepth(1);
+          this.tweens.add({
+            targets: aura,
+            scale: 1.2,
+            alpha: 0.1,
+            duration: 500,
+            yoyo: true,
+            repeat: -1,
+          });
+          // 윈드업이 끝나면 제거
+          this.time.delayedCall(KNIGHT_SPACESLASH_WINDUP * 1000, () => aura.destroy());
+          break;
+        }
+        // 공간 가르기 저지 실패: 화면을 가르는 흰색 선
+        case 'bossSpaceSlashFail': {
+          // 칼 휘두르기 애니메이션 (공간을 가르는 순간)
+          playOnce(m.spr, m.char, 'attack', dir);
+          this.shakeCam(500, 0.04);
+
+          // 화면 중앙에서 회전시킬 선 (scaleX로 늘어나는 효과)
+          const angle = -18 + (Math.random() * 10 - 5); // -23도 ~ -13도 랜덤
+          const centerX = CANVAS.W / 2;
+          const centerY = CANVAS.H * 0.42; // 화면 42% 높이
+
+          // 발광 효과를 위한 레이어들 (뒤에서 앞으로) - HTML 예시처럼 글로잉
+          // 1. 가장 큰 발광 (매우 희미, 60px blur 효과)
+          const glow4 = this.add
+            .rectangle(centerX, centerY, CANVAS.W * 1.2, 60, 0xffffff, 0.15)
+            .setDepth(10)
+            .setRotation((angle * Math.PI) / 180)
+            .setScale(0, 1)
+            .setOrigin(0.5, 0.5);
+
+          // 2. 중간 발광 (20px blur 효과)
+          const glow3 = this.add
+            .rectangle(centerX, centerY, CANVAS.W * 1.2, 20, 0xffffff, 0.3)
+            .setDepth(10)
+            .setRotation((angle * Math.PI) / 180)
+            .setScale(0, 1)
+            .setOrigin(0.5, 0.5);
+
+          // 3. 밝은 발광
+          const glow2 = this.add
+            .rectangle(centerX, centerY, CANVAS.W * 1.2, 10, 0xffffff, 0.6)
+            .setDepth(10)
+            .setRotation((angle * Math.PI) / 180)
+            .setScale(0, 1)
+            .setOrigin(0.5, 0.5);
+
+          // 4. 메인 선 (밝은 흰색)
+          const slash = this.add
+            .rectangle(centerX, centerY, CANVAS.W * 1.2, 5, 0xffffff, 1)
+            .setDepth(10)
+            .setRotation((angle * Math.PI) / 180)
+            .setScale(0, 1)
+            .setOrigin(0.5, 0.5);
+
+          // scaleX: 0 → 1 로 쫙 그어지는 애니메이션
+          const slashDuration = 480;
+          [glow4, glow3, glow2, slash].forEach((line) => {
+            this.tweens.add({
+              targets: line,
+              scaleX: 1,
+              duration: slashDuration * 0.3, // 30%까지 나타남
+              ease: 'Cubic.easeOut',
+            });
+          });
+
+          // 선이 나타난 후 페이드아웃
+          this.tweens.add({
+            targets: [glow4, glow3, glow2, slash],
+            alpha: 0,
+            duration: slashDuration * 0.45,
+            delay: slashDuration * 0.55,
+            onComplete: () => {
+              glow4.destroy();
+              glow3.destroy();
+              glow2.destroy();
+              slash.destroy();
+            },
+          });
+
+          // 화면 전체 강한 플래시
+          this.time.delayedCall(260, () => {
+            this.cameras.main.flash(200, 255, 255, 255);
+          });
+
+          // 피해 판정
+          if (Phaser.Math.Distance.Between(intent.x, intent.y, H.x, H.y) <= intent.radius) this.hurtHero(intent.dmg);
+          this.floatText(m.x, m.y - m.def.size, '⚡ 공간 베기!', '#ffffff');
+          break;
+        }
+        // 베르하르트 돌진 이동
+        case 'bossKnightChargeMove': {
+          m.spr.setPosition(m.x, m.y);
+          playAnim(m.spr, m.char, 'rush', dir);
+          break;
+        }
+        // 베르하르트 돌진 충돌
+        case 'bossKnightChargeHit': {
+          this.shakeCam(280, 0.018);
+          if (this.hurtHero(intent.dmg)) this.chargeKnockHero(m);
+          this.floatText(H.x, H.y - 50, '💢 충돌!', '#ff6666');
+          break;
+        }
       }
     }
   }
@@ -1318,21 +1536,26 @@ export default class BattleScene extends Phaser.Scene {
       // 들었다 내렸지만, 이제 그러면 그림의 점프와 트윈이 겹쳐 두 번 뛴다. 링 예고만 남긴다.
     } else if (pattern === 'charge') {
       this.tweens.add({ targets: m.spr, scaleX: m.spr.scaleX * 1.12, scaleY: m.spr.scaleY * 1.12, duration: ms / 2, yoyo: true });
-      // 돌진 조준선 — 어디로 얼마나 오는지 미리 보여준다(피드백: "어디까지 따라오는지 모르겠다").
-      // 윈드업 내내 서서히 밝아지다 발사 직전 사라지고 실제 돌진이 그 자리를 대신한다.
-      if (chargeTx != null && chargeTy != null) {
-        const line = this.add.graphics().setDepth(1).setAlpha(0.15);
-        line.lineStyle(3, 0xff3333, 1);
-        line.lineBetween(m.x, m.y, chargeTx, chargeTy);
-        this.tweens.add({
-          targets: line,
-          alpha: 0.8,
-          duration: ms,
-          onComplete: () => line.destroy(),
-        });
-      }
+    } else if (pattern === 'spaceSlash') {
+      // 공간 가르기: 커지는 보라색 원
+      const ring = this.add.circle(m.x, m.y, 20, 0x8844ff, 0.3).setStrokeStyle(4, 0x8844ff, 0.9).setDepth(1);
+      this.tweens.add({
+        targets: ring,
+        radius: 100,
+        alpha: 0.1,
+        duration: ms,
+        onComplete: () => ring.destroy(),
+      });
+    } else if (pattern === 'knightCharge') {
+      // 베르하르트 돌진: 크기 확대 효과만
+      this.tweens.add({ targets: m.spr, scaleX: m.spr.scaleX * 1.1, scaleY: m.spr.scaleY * 1.1, duration: ms / 2, yoyo: true });
     }
-    const icon = pattern === 'rock' ? '🪨' : pattern === 'stomp' ? '💥' : '⚡';
+    const icon =
+      pattern === 'rock' ? '🪨' :
+      pattern === 'stomp' ? '💥' :
+      pattern === 'swordbeam' ? '⚔️' :
+      pattern === 'spaceSlash' ? '🌀' :
+      '⚡';
     this.floatText(m.x, m.y - m.def.size - 20, icon, '#ff6666');
   }
 

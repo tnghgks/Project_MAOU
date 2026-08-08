@@ -7,6 +7,7 @@ import { pickDonationMessage } from '../data/chat.ts';
 import { SHOP_LAYOUT, type ShopLayout } from '../data/merchant.ts';
 import { FINAL_EP, bossOf } from '../data/progression.ts';
 import { MONSTERS } from '../data/monsters.ts';
+import { SKILLS, type SkillId } from '../data/skills.ts';
 
 // 개발 모드 전용 디버그 리모콘. 프로덕션 빌드에는 포함되지 않는다 (App.tsx에서 import.meta.env.DEV로 게이팅).
 // 목적 하나: 방송을 처음부터 돌리지 않고도 바꾼 화면을 그 자리에서 확인한다.
@@ -24,6 +25,15 @@ const GOLD_STEPS = [1000, 10000];
 
 // 화별 보스. 목록을 따로 들지 않는다 — 화가 늘면 progression.EPISODES 한 줄로 여기 버튼도 따라온다.
 const BOSS_EPS = Array.from({ length: FINAL_EP }, (_, i) => i + 1).map((ep) => ({ ep, boss: bossOf(ep) }));
+
+// 모든 스킬 목록
+const ALL_SKILL_IDS = Object.keys(SKILLS) as SkillId[];
+const SKILL_ICONS: Record<SkillId, string> = {
+  화염폭발: '🔥',
+  낙뢰: '⚡',
+  회복의성가: '💚',
+  시간정지: '⏳',
+};
 
 // 상점 배치 슬라이더. min/max는 "여기서 벗어나면 화면 밖"인 범위로만 잡는다.
 const SLIDERS: { key: keyof ShopLayout; label: string; min: number; max: number; step: number }[] = [
@@ -80,6 +90,22 @@ export default function DevPanel() {
     const next = { ...layout, [key]: value };
     setLayout(next);
     bus.emit('dev:shop-layout', next);
+  };
+
+  // 스킬 발동 — 방송 중이 아니면 방송으로 전환하고, 해당 스킬을 임시로 추가한 뒤 발동
+  const castSkill = (skillId: SkillId) => {
+    if (gameState().phase !== 'broadcast') goPhase('broadcast');
+    const state = gameState();
+    const currentSkills = state.skills;
+    // 스킬이 없으면 임시로 추가
+    if (!currentSkills.includes(skillId)) {
+      state.addSkill(skillId);
+    }
+    // 스킬 인덱스 찾아서 발동
+    const idx = state.skills.indexOf(skillId);
+    if (idx >= 0) {
+      bus.emit('skill:request', { index: idx });
+    }
   };
 
   return (
@@ -144,6 +170,43 @@ export default function DevPanel() {
             >
               보스 소환
             </button>
+          </div>
+
+          <p className="dev-panel-label">보스 패턴 (베르하르트)</p>
+          <div className="dev-panel-row">
+            <button
+              onClick={() => {
+                if (gameState().phase !== 'broadcast') goPhase('broadcast');
+                bus.emit('dev:boss-pattern', { pattern: 'swordbeam' });
+              }}
+            >
+              ⚔️ 검기 날리기
+            </button>
+            <button
+              onClick={() => {
+                if (gameState().phase !== 'broadcast') goPhase('broadcast');
+                bus.emit('dev:boss-pattern', { pattern: 'knightCharge' });
+              }}
+            >
+              🌀 칼날 회전 돌진
+            </button>
+            <button
+              onClick={() => {
+                if (gameState().phase !== 'broadcast') goPhase('broadcast');
+                bus.emit('dev:boss-pattern', { pattern: 'spaceSlash' });
+              }}
+            >
+              ⚡ 공간 가르기
+            </button>
+          </div>
+
+          <p className="dev-panel-label">스킬 발동</p>
+          <div className="dev-panel-row">
+            {ALL_SKILL_IDS.map((skillId) => (
+              <button key={skillId} onClick={() => castSkill(skillId)}>
+                {SKILL_ICONS[skillId]} {SKILLS[skillId].name}
+              </button>
+            ))}
           </div>
 
           <p className="dev-panel-label">상점 배치</p>

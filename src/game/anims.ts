@@ -38,6 +38,8 @@ const SARGAS_STOMP_LAND_FRAME = 6; // 착지 = 지면 충격 (attack 9프레임 
 const RATE_OVERRIDE: Record<string, number> = {
   'sargas-throwing': SARGAS_THROW_HOLD_FRAME / SARGAS_THROW_RELEASE_SEC,
   'sargas-attack': SARGAS_STOMP_LAND_FRAME / SARGAS_STOMP_LAND_SEC,
+  // 베르하르트 검기 발사: attack 애니메이션(9프레임)을 윈드업 시간(0.7초)에 맞춤
+  'verhart-attack': 9 / 0.7, // 마지막 프레임에서 검기 발사
 };
 
 // 서쪽 = 동쪽 프레임 + flipX. `[방향, 반전여부]`.
