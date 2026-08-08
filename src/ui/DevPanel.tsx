@@ -95,14 +95,13 @@ export default function DevPanel() {
   // 스킬 발동 — 방송 중이 아니면 방송으로 전환하고, 해당 스킬을 임시로 추가한 뒤 발동
   const castSkill = (skillId: SkillId) => {
     if (gameState().phase !== 'broadcast') goPhase('broadcast');
-    const state = gameState();
-    const currentSkills = state.skills;
+    const currentSkills = gameState().skills;
     // 스킬이 없으면 임시로 추가
     if (!currentSkills.includes(skillId)) {
-      state.addSkill(skillId);
+      gameStore.setState({ skills: [...currentSkills, skillId] });
     }
     // 스킬 인덱스 찾아서 발동
-    const idx = state.skills.indexOf(skillId);
+    const idx = gameState().skills.indexOf(skillId);
     if (idx >= 0) {
       bus.emit('skill:request', { index: idx });
     }
