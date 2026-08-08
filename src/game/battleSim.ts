@@ -149,7 +149,11 @@ export function stepHero(
 // facing은 모든 의도에 들어간다 — 씬이 공격·대기 모션도 방향을 골라 재생해야 하기 때문이다.
 // 원거리 공격은 두 박자다: draw(시위를 당기기 시작) → … → arrow(놓는 순간). 그 사이는 idle이라
 // 씬이 모션을 새로 걸지 않는다 — 이미 도는 공격 애니메이션을 끊지 않으려는 것.
-export type BossPattern = 'rock' | 'stomp' | 'charge';
+export type BossPattern =
+  // 사르가스 (boss_golem)
+  | 'rock' | 'stomp' | 'charge'
+  // 베르하르트 (boss_knight)
+  | 'swordbeam' | 'spaceSlash' | 'knightCharge';
 export type MonsterIntent =
   | { kind: 'move'; facing: Facing }
   | { kind: 'melee'; facing: Facing; dmg: number; suicide: boolean }
@@ -170,7 +174,13 @@ export type MonsterIntent =
   | { kind: 'bossRock'; facing: Facing; x: number; y: number; tx: number; ty: number; dmg: number } // 돌 던지기 발사 프레임
   | { kind: 'bossStomp'; facing: Facing; x: number; y: number; radius: number; dmg: number } // 스톰핑 판정 프레임
   | { kind: 'bossChargeMove'; facing: Facing } // 돌진 이동 중(매 프레임)
-  | { kind: 'bossChargeHit'; facing: Facing; dmg: number }; // 돌진 중 용사와 충돌
+  | { kind: 'bossChargeHit'; facing: Facing; dmg: number } // 돌진 중 용사와 충돌
+  // ── 베르하르트(기사) 전용 ──
+  | { kind: 'bossSwordbeam'; facing: Facing; x: number; y: number; beams: Array<{ tx: number; ty: number }>; dmg: number } // 검기 3개 발사
+  | { kind: 'bossSpaceSlashCharge'; facing: Facing; x: number; y: number; threshold: number } // 공간 가르기 시작 (threshold: 저지에 필요한 데미지)
+  | { kind: 'bossSpaceSlashFail'; facing: Facing; x: number; y: number; radius: number; dmg: number } // 공간 가르기 저지 실패 → 광역 공격
+  | { kind: 'bossKnightChargeMove'; facing: Facing } // 베르하르트 돌진 이동 중
+  | { kind: 'bossKnightChargeHit'; facing: Facing; dmg: number }; // 베르하르트 돌진 충돌
 
 // 기절/공격 넉백 처리 — stepMonster·stepBossGolem이 공유한다. null이면 AI 계속 진행.
 // 넉백이 기절보다 먼저인 이유는 stepMonster 원본 순서 그대로: 넉백 슬라이드 중엔 경직 여부와
@@ -257,6 +267,29 @@ export const GOLEM_CHARGE_DMG = 24; // 34 → 24: 스톰핑(26)과 비슷한 수
 export const GOLEM_CHARGE_MAX_T = 1.2; // 못 맞히고 이 시간 넘게 달리면 스스로 멈춘다(빗나간 돌진)
 export const GOLEM_CHARGE_HIT_RADIUS = 62; // 46 → 62: 덩치(scale 1.35)에 맞춰 몸통 판정도 같이 키웠다
 export const GOLEM_RECOVER_T = 1.2; // 0.8 → 1.2: 패턴 종료 후 무방비 — 플레이어에게 반격 타이밍을 더 준다
+
+// ── 베르하르트(2탄 보스, boss_knight) 패턴 상수 ──
+export const KNIGHT_PATTERN_CD = 2.0; // 패턴 간 대기 시간
+export const KNIGHT_RECOVER_T = 1.0; // 패턴 종료 후 무방비 시간
+
+// 검기 발산: 3개의 검기를 날린다 (가장 빈번한 패턴)
+export const KNIGHT_SWORDBEAM_WINDUP = 0.7; // 검기 발사 전 윈드업
+export const KNIGHT_SWORDBEAM_DMG = 20; // 검기 1개당 피해
+export const KNIGHT_SWORDBEAM_SPEED = 320; // 검기 속도
+
+// 공간 가르기: 일정 데미지를 넣지 않으면 광역 공격
+export const KNIGHT_SPACESLASH_WINDUP = 3.5; // 공간 가르기 준비 시간 (2.5 → 3.5: 저지할 시간 증가)
+export const KNIGHT_SPACESLASH_THRESHOLD = 200; // 이 데미지 이상 넣어야 저지 가능 (120 → 200: 더 많은 피해 필요)
+export const KNIGHT_SPACESLASH_DMG = 50; // 저지 실패 시 광역 피해
+export const KNIGHT_SPACESLASH_RADIUS = 250; // 광역 범위
+export const KNIGHT_SPACESLASH_RANGE = 250; // 공간 가르기 발동 최대 거리 (대시 3번 정도 거리)
+
+// 돌진: 사르가스와 유사하지만 칼을 휘두르면서
+export const KNIGHT_CHARGE_WINDUP = 0.8;
+export const KNIGHT_CHARGE_SPEED = 280; // 사르가스보다 약간 빠름
+export const KNIGHT_CHARGE_DMG = 28;
+export const KNIGHT_CHARGE_MAX_T = 1.3;
+export const KNIGHT_CHARGE_HIT_RADIUS = 56;
 
 export function stepBossGolem(
   m: MonsterEntity,
@@ -349,15 +382,185 @@ export function stepBossGolem(
   return { kind: 'bossTelegraph', facing: lookHero(), pattern, windup };
 }
 
+// ── 베르하르트(2탄 보스, boss_knight) AI ──
+export function stepBossKnight(
+  m: MonsterEntity,
+  hero: HeroEntity,
+  dt: number,
+  rnd: () => number = Math.random,
+): MonsterIntent {
+  const H = hero;
+  m.atkCd = Math.max(0, m.atkCd - dt);
+  const stunOrKb = stepStunOrKb(m, H, dt);
+  if (stunOrKb) return stunOrKb;
+  const lookHero = () => facingOf(H.x - m.x, H.y - m.y) ?? 'south';
+
+  // windup: 패턴 예고 단계
+  if (m.bossPhase === 'windup') {
+    m.bossT = (m.bossT ?? 0) - dt;
+    if (m.bossT > 0) return { kind: 'idle', facing: lookHero() };
+
+    const pattern = m.bossPattern!;
+    if (pattern === 'knightCharge') {
+      m.bossPhase = 'active';
+      m.bossT = KNIGHT_CHARGE_MAX_T;
+      return { kind: 'bossKnightChargeMove', facing: lookHero() };
+    }
+    if (pattern === 'spaceSlash') {
+      // 공간 가르기 저지 여부 확인
+      const damageTaken = m.spaceSlashDamageTaken ?? 0;
+      if (damageTaken >= KNIGHT_SPACESLASH_THRESHOLD) {
+        // 저지 성공 - 그냥 무방비로
+        m.bossPhase = 'recover';
+        m.bossT = KNIGHT_RECOVER_T;
+        m.spaceSlashDamageTaken = 0;
+        return { kind: 'idle', facing: lookHero() };
+      }
+      // 저지 실패 - 광역 공격
+      m.bossPhase = 'recover';
+      m.bossT = KNIGHT_RECOVER_T;
+      m.spaceSlashDamageTaken = 0;
+      return {
+        kind: 'bossSpaceSlashFail',
+        facing: lookHero(),
+        x: m.x,
+        y: m.y,
+        radius: KNIGHT_SPACESLASH_RADIUS,
+        dmg: KNIGHT_SPACESLASH_DMG,
+      };
+    }
+    // swordbeam: 검기 3개 발사
+    m.bossPhase = 'recover';
+    m.bossT = KNIGHT_RECOVER_T;
+    // 용사 방향 + 좌우 30도씩 3개 발사
+    const angle = Math.atan2(H.y - m.y, H.x - m.x);
+    const spread = Math.PI / 6; // 30도
+    const beams = [
+      { tx: m.x + Math.cos(angle) * 600, ty: m.y + Math.sin(angle) * 600 },
+      { tx: m.x + Math.cos(angle - spread) * 600, ty: m.y + Math.sin(angle - spread) * 600 },
+      { tx: m.x + Math.cos(angle + spread) * 600, ty: m.y + Math.sin(angle + spread) * 600 },
+    ];
+    return { kind: 'bossSwordbeam', facing: lookHero(), x: m.x, y: m.y, beams, dmg: KNIGHT_SWORDBEAM_DMG };
+  }
+
+  // active: 돌진 중
+  if (m.bossPhase === 'active') {
+    m.bossT = (m.bossT ?? 0) - dt;
+    const tx = m.chargeTx ?? H.x;
+    const ty = m.chargeTy ?? H.y;
+    // 용사와 충돌 체크
+    if (Math.hypot(H.x - m.x, H.y - m.y) <= KNIGHT_CHARGE_HIT_RADIUS) {
+      m.bossPhase = 'recover';
+      m.bossT = KNIGHT_RECOVER_T;
+      return { kind: 'bossKnightChargeHit', facing: lookHero(), dmg: KNIGHT_CHARGE_DMG };
+    }
+    const d = Math.hypot(tx - m.x, ty - m.y);
+    if (d < 4 || m.bossT <= 0) {
+      // 목표 지점 도달 또는 시간 초과
+      m.bossPhase = 'recover';
+      m.bossT = KNIGHT_RECOVER_T;
+      return { kind: 'idle', facing: lookHero() };
+    }
+    const vx = ((tx - m.x) / d) * KNIGHT_CHARGE_SPEED;
+    const vy = ((ty - m.y) / d) * KNIGHT_CHARGE_SPEED;
+    m.x += vx * dt;
+    m.y += vy * dt;
+    return { kind: 'bossKnightChargeMove', facing: facingOf(vx, vy) ?? lookHero() };
+  }
+
+  // recover: 패턴 종료 후 무방비
+  if (m.bossPhase === 'recover') {
+    m.bossT = (m.bossT ?? 0) - dt;
+    if (m.bossT > 0) return { kind: 'idle', facing: lookHero() };
+    m.bossPhase = 'cooldown';
+    m.bossT = KNIGHT_PATTERN_CD;
+    return { kind: 'idle', facing: lookHero() };
+  }
+
+  // cooldown: 다음 패턴 대기
+  m.bossT = (m.bossT ?? 0) - dt;
+  const d = Math.hypot(H.x - m.x, H.y - m.y);
+  if (m.bossT > 0) {
+    // 중거리 유지 (너무 가까우면 물러나고, 너무 멀면 접근)
+    const idealDist = 200;
+    if (Math.abs(d - idealDist) > 50) {
+      const vx = ((H.x - m.x) / d) * m.def.speed * (d < idealDist ? -0.5 : 1);
+      const vy = ((H.y - m.y) / d) * m.def.speed * (d < idealDist ? -0.5 : 1);
+      m.x += vx * dt;
+      m.y += vy * dt;
+      return { kind: 'move', facing: facingOf(vx, vy) ?? 'south' };
+    }
+    return { kind: 'idle', facing: lookHero() };
+  }
+
+  // 매우 가까운 거리에서는 기본 칼 휘두르기 (윈드업 없이 즉시 공격)
+  const veryClose = d <= 80;
+  if (veryClose) {
+    m.bossPhase = 'recover';
+    m.bossT = KNIGHT_RECOVER_T;
+    return { kind: 'melee', facing: lookHero(), dmg: m.def.dmg, suicide: false };
+  }
+
+  // 패턴 선택
+  const r = rnd();
+  let pattern: BossPattern;
+  const near = d <= 200;
+  const spaceSlashRange = d <= KNIGHT_SPACESLASH_RANGE; // 공간 가르기는 특정 거리 이내에서만
+
+  if (near) {
+    // 근거리: swordbeam 40%, knightCharge 40%, spaceSlash 20% (거리 내일 때만)
+    if (spaceSlashRange && r < 0.2) pattern = 'spaceSlash';
+    else if (r < 0.6) pattern = 'swordbeam';
+    else pattern = 'knightCharge';
+  } else {
+    // 원거리: swordbeam 70%, knightCharge 30% (공간 가르기는 거리 밖이면 제외)
+    if (spaceSlashRange && r < 0.1) pattern = 'spaceSlash';
+    else if (r < 0.7) pattern = 'swordbeam';
+    else pattern = 'knightCharge';
+  }
+
+  const windup =
+    pattern === 'swordbeam'
+      ? KNIGHT_SWORDBEAM_WINDUP
+      : pattern === 'spaceSlash'
+        ? KNIGHT_SPACESLASH_WINDUP
+        : KNIGHT_CHARGE_WINDUP;
+
+  m.bossPattern = pattern;
+  m.bossPhase = 'windup';
+  m.bossT = windup;
+
+  if (pattern === 'knightCharge') {
+    m.chargeTx = H.x;
+    m.chargeTy = H.y;
+    return { kind: 'bossTelegraph', facing: lookHero(), pattern, windup, chargeTx: H.x, chargeTy: H.y };
+  }
+  if (pattern === 'spaceSlash') {
+    m.spaceSlashDamageTaken = 0; // 초기화
+    return { kind: 'bossSpaceSlashCharge', facing: lookHero(), x: m.x, y: m.y, threshold: KNIGHT_SPACESLASH_THRESHOLD };
+  }
+  return { kind: 'bossTelegraph', facing: lookHero(), pattern, windup };
+}
+
 // ── 화살 ── ('travel'=이동 계속 · {hit}=용사 피격 후 소멸 · 'expire'=빗나가 소멸)
 export type ArrowResult = 'travel' | { hit: number } | 'expire';
 export function stepArrow(a: Arrow, hero: HeroEntity, dt: number): ArrowResult {
   const d = dist(a, { x: a.tx, y: a.ty });
+
+  // 비행 중 충돌 체크 (검기 등)
+  if (a.checkMidair) {
+    const heroDistance = Math.hypot(a.x - hero.x, a.y - hero.y);
+    if (heroDistance < ARROW_HERO_HIT * 1.5) { // 검기는 범위가 더 넓음
+      return { hit: a.dmg };
+    }
+  }
+
   if (d < ARROW_REACH) {
     return Math.hypot(a.tx - hero.x, a.ty - hero.y) < ARROW_HERO_HIT ? { hit: a.dmg } : 'expire';
   }
-  a.x += ((a.tx - a.x) / d) * ARROW_SPEED * dt;
-  a.y += ((a.ty - a.y) / d) * ARROW_SPEED * dt;
+  const speed = a.speed ?? ARROW_SPEED; // 발사체별 속도 사용, 없으면 기본 화살 속도
+  a.x += ((a.tx - a.x) / d) * speed * dt;
+  a.y += ((a.ty - a.y) / d) * speed * dt;
   return 'travel';
 }
 

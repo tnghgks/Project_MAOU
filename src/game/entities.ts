@@ -63,12 +63,14 @@ export interface MonsterEntity {
   kbT?: number; // 공격 넉백 남은 시간(초) — 이 동안 stepMonster가 AI 대신 kbVx/kbVy로만 밀어낸다
   kbVx?: number; // 넉백 속도(px/s)
   kbVy?: number;
-  // ── 보스 전용 상태(stepBossGolem이 쓴다) — 일반 몬스터는 항상 undefined ──
+  // ── 보스 전용 상태(stepBossGolem/stepBossKnight가 쓴다) — 일반 몬스터는 항상 undefined ──
   bossPhase?: 'windup' | 'active' | 'recover' | 'cooldown';
-  bossPattern?: 'rock' | 'stomp' | 'charge'; // 지금(또는 방금) 진행 중인 패턴
+  bossPattern?: 'rock' | 'stomp' | 'charge' | 'swordbeam' | 'spaceSlash' | 'knightCharge'; // 지금(또는 방금) 진행 중인 패턴
   bossT?: number; // 현재 phase 잔여 시간(초)
   chargeTx?: number; // 돌진 목표 좌표(윈드업 종료 시점에 고정 — 추적하지 않는다)
   chargeTy?: number;
+  // 베르하르트 전용
+  spaceSlashDamageTaken?: number; // 공간 가르기 중 받은 누적 데미지
 }
 
 export interface Arrow {
@@ -78,6 +80,8 @@ export interface Arrow {
   ty: number;
   spr: Phaser.GameObjects.Image;
   dmg: number;
+  speed?: number; // 발사체 속도(px/s) — 없으면 기본 ARROW_SPEED 사용
+  checkMidair?: boolean; // 비행 중에도 용사와 충돌 체크 (검기 등)
 }
 
 // 스토어 스탯 → 전투 엔티티. 이중 모델 브리지를 한 곳에 모아 create()의 수동 필드 복사를 없앤다.

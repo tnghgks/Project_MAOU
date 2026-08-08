@@ -4,6 +4,7 @@ import type { Card } from '../data/cards.ts';
 import type { MonsterId } from '../data/monsters.ts';
 import type { SkillId } from '../data/skills.ts';
 import type { ShopLayout } from '../data/merchant.ts';
+import type { BossPattern } from './battleSim.ts';
 
 // 순간적으로 터지는 사건 버스 (지속값은 store). 이벤트 계약은 BusEvents가 강제.
 //
@@ -61,6 +62,7 @@ export interface BusEvents {
   'dev:shop-layout': ShopLayout; // 상인 위치·크기·어둠을 게임 돌린 채로 맞춘다
   'dev:reroll-stock': null; // 상인 재고를 다시 굴린다 (등급 조합 확인용)
   'dev:spawn-boss': null; // 보스를 강제로 소환한다 (보스 페이즈 테스트용)
+  'dev:boss-pattern': { pattern: BossPattern }; // 보스 패턴을 강제로 실행한다 (베르하르트 패턴 테스트용)
 }
 
 // ponytail: Phaser EventEmitter는 제네릭이 없어 as로 타입만 씌움 — 런타임은 그대로
