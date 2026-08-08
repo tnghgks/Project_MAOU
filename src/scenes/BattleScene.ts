@@ -115,6 +115,12 @@ const KNOCKBACK_DIST = 60; // 밀려나는 거리(px)
 const HIT_KNOCKBACK_DIST = 22; // ponytail: 공격 적중마다 밀려나는 기본 거리(px) — monsters.ts의 kb 배율이 곱해진다
 const HIT_KNOCKBACK_DUR = 0.15; // 넉백이 슬라이드로 보이는 시간(초) — 이 안에 위 거리만큼 이동
 const CHARGE_HERO_KB_DIST = 70; // ponytail: 사이클롭스 돌진 충돌 시 용사가 밀려나는 거리(px)
+// 보스 패턴 → 윈드업 동안 돌릴 모션. 사르가스 아틀라스는 패턴별로 전용 액션을 들고 있다
+// (throwing = 돌을 줍고 머리 위로 들기 · attack = 뛰어올라 내려찍기). 재생 속도는 anims.ts가
+// 윈드업 길이에 맞춰 놨으므로 시작만 걸어두면 발동 시각에 딱 그 프레임이 나온다.
+// charge만 비어 있다: 윈드업 동안은 제자리라 rush(질주)를 걸면 발이 미끄러진다 — 예고는
+// 조준선이 맡고, 실제 rush는 돌진이 시작되는 bossChargeMove부터 돈다.
+const BOSS_WINDUP_ANIM: Partial<Record<BossPattern, string>> = { rock: 'throwing', stomp: 'attack' };
 // 용사 원본은 92×92 캔버스에 인물 ~20×46px.
 // 1 = 리샘플 없음 = pixelArt 필터에서 가장 깨끗하다. ponytail: 화면상 크기 knob, 줄이면 축소 시 픽셀이 떤다.
 const HERO_SCALE = 1;
@@ -185,6 +191,13 @@ export default class BattleScene extends Phaser.Scene {
     this.kills = 0;
     this.killGold = 0;
     this.target = targetGold(S.episode);
+    // 개발 리모콘의 보스 버튼으로 들어온 방송 — 등장 게이지를 채운 채로 시작한다. 첫 update()가
+    // 평소 경로 그대로 spawnBoss()로 넘어가므로 보스전 전용 진입 경로를 따로 만들지 않아도 된다
+    // (killGold는 게이지·HUD용 집계일 뿐이라 실제 보유 골드나 정산에는 영향이 없다).
+    if (import.meta.env.DEV && S.devBossJump) {
+      this.killGold = this.target;
+      S.setDevBossJump(false);
+    }
     this.boss = null;
     S.setBossUp(false); // 지난 화 보스 BGM이 새 방송까지 따라오지 않게
     this.critical = false;
@@ -1069,10 +1082,16 @@ export default class BattleScene extends Phaser.Scene {
       const intent = m.type === 'boss_golem' ? stepBossGolem(m, H, dt) : stepMonster(m, H, dt);
       const dir = this.faceMonster(m, intent.facing);
       switch (intent.kind) {
-        case 'move':
-        case 'bossChargeMove': {
+        case 'move': {
           m.spr.setPosition(m.x, m.y);
           playAnim(m.spr, m.char, 'walk', dir); // char 없으면(=대체 상자) no-op
+          break;
+        }
+        // 돌진 중 — 걷기가 아니라 전력 질주(rush). 슬금슬금 다가오는 'move'와 같은 그림이면
+        // "지금 돌진 중"이 안 읽힌다. 돌진은 사르가스 전용이고 rush 아트도 사르가스에만 있다.
+        case 'bossChargeMove': {
+          m.spr.setPosition(m.x, m.y);
+          playAnim(m.spr, m.char, 'rush', dir);
           break;
         }
         // 시위를 당기기 시작. 화살은 아직 없다 — 모션만 걸고 릴리즈 프레임까지 기다린다.
@@ -1102,31 +1121,38 @@ export default class BattleScene extends Phaser.Scene {
         case 'idle':
           playAnim(m.spr, m.char, 'idle', dir);
           break;
-        // ── 여기부터 사이클롭스 전용 3패턴 연출/판정 ──
+        // ── 여기부터 사르가스(1탄 보스) 전용 3패턴 연출/판정 ──
         // 패턴 결정 프레임(윈드업 시작) — 실제 공격 판정은 없고, 앞으로 windup초 동안 뭐가
-        // 나올지 미리 보여주는 경고 연출만 건다. 그동안(윈드업 중)엔 매 프레임 'idle'만 온다.
-        case 'bossTelegraph':
-          playAnim(m.spr, m.char, 'idle', dir);
+        // 나올지 미리 보여주는 경고 연출만 건다. 그동안(윈드업 중)엔 매 프레임 'idle'만 오는데,
+        // 여기서 건 1회성 모션이 playAnim의 busy 가드에 걸려 끝까지 살아남는다 — 즉 모션 자체가
+        // 텔레그래프다. 그래서 발동 프레임(bossRock/bossStomp)에선 모션을 다시 걸지 않는다.
+        case 'bossTelegraph': {
+          const windupAnim = BOSS_WINDUP_ANIM[intent.pattern];
+          if (windupAnim) playOnce(m.spr, m.char, windupAnim, dir);
+          else playAnim(m.spr, m.char, 'idle', dir);
           this.bossTelegraphFx(m, intent.pattern, intent.windup, intent.chargeTx, intent.chargeTy);
           break;
+        }
+        // 던지기 발동 = throwing 마지막 프레임(돌을 머리 위로 든 자세). 모션은 이미 그 자세라 그대로 두고
+        // 돌만 띄운다 — 여기서 다시 재생하면 이미 던진 돌을 다시 줍는 그림이 된다.
         case 'bossRock': {
-          playOnce(m.spr, m.char, 'attack', dir);
           const spr = this.add.image(intent.x, intent.y, 'arrow').setDepth(2).setScale(1.4).setTint(0x8b6b4a);
           spr.setRotation(Math.atan2(intent.ty - intent.y, intent.tx - intent.x) + Math.PI / 2);
           this.arrows.push({ x: intent.x, y: intent.y, tx: intent.tx, ty: intent.ty, spr, dmg: intent.dmg });
           this.floatText(m.x, m.y - m.def.size, '🪨 투척!', '#cc9966');
           break;
         }
+        // 스톰핑 발동 = attack 착지 프레임. 남은 두 프레임(흙먼지)은 무방비(recover) 동안 이어서 돈다.
         case 'bossStomp': {
-          playOnce(m.spr, m.char, 'attack', dir);
           this.impactFx(intent.x, intent.y, intent.radius);
           this.shakeCam(220, 0.012);
           if (Phaser.Math.Distance.Between(intent.x, intent.y, H.x, H.y) <= intent.radius) this.hurtHero(intent.dmg);
           this.floatText(m.x, m.y - m.def.size, '💥 스톰핑!', '#ff8844');
           break;
         }
+        // 돌진 충돌 — 몸통으로 들이받은 것이라 새 모션을 걸지 않는다. attack(뛰어올라 내려찍기)을
+        // 걸면 달려오다 갑자기 하늘로 솟는 그림이 된다. 달리던 rush 그대로 두고 충격만 보여준다.
         case 'bossChargeHit': {
-          playOnce(m.spr, m.char, 'attack', dir);
           this.shakeCam(260, 0.016);
           if (this.hurtHero(intent.dmg)) this.chargeKnockHero(m);
           this.floatText(H.x, H.y - 50, '💢 충돌!', '#ff5555');
@@ -1153,9 +1179,8 @@ export default class BattleScene extends Phaser.Scene {
         duration: ms,
         onComplete: () => ring.destroy(),
       });
-      // cyclops 아틀라스엔 점프/스톰핑 전용 프레임이 없다(walk·attack뿐) — 그림 대신 스프라이트를
-      // 코드로 들었다 내려서 "뛰어오른다"를 만든다. 위로 ms/2, 착지까지 ms/2 — 딱 발동 프레임(bossStomp)에 착지.
-      this.tweens.add({ targets: m.spr, y: m.spr.y - m.def.size * 0.6, duration: ms / 2, yoyo: true, ease: 'Sine.easeInOut' });
+      // 뛰어오르는 그림은 아트에 있다(sargas attack) — 예전엔 전용 프레임이 없어 스프라이트를 코드로
+      // 들었다 내렸지만, 이제 그러면 그림의 점프와 트윈이 겹쳐 두 번 뛴다. 링 예고만 남긴다.
     } else if (pattern === 'charge') {
       this.tweens.add({ targets: m.spr, scaleX: m.spr.scaleX * 1.12, scaleY: m.spr.scaleY * 1.12, duration: ms / 2, yoyo: true });
       // 돌진 조준선 — 어디로 얼마나 오는지 미리 보여준다(피드백: "어디까지 따라오는지 모르겠다").

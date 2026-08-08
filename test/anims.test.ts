@@ -1,6 +1,7 @@
 import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { registerAnims, registerSheetAnims, dirOf, makeActor, playAnim, playOnce, DIRS } from '../src/game/anims.ts';
+import { GOLEM_ROCK_WINDUP, GOLEM_STOMP_WINDUP } from '../src/game/battleSim.ts';
 
 // 실제 아틀라스 JSON으로 등록 로직을 돌린다. 프레임 이름 파싱이 틀리면 애니메이션이
 // 조용히 0개 만들어지고 게임은 첫 프레임에서 얼어붙은 채로 굴러간다 — 여기서 잡는다.
@@ -43,12 +44,13 @@ const GRIM = frameNames('grimhardt');
 
   for (const dir of DIRS) {
     assert.strictEqual(byKey.get(`rian-basic-walk-${dir}`)?.frames.length, 4, `rian-basic-walk-${dir}는 4프레임`);
-    assert.strictEqual(byKey.get(`grimhardt-walk-${dir}`)?.frames.length, 6, `grimhardt-walk-${dir}는 6프레임`);
+    assert.strictEqual(byKey.get(`grimhardt-walk-${dir}`)?.frames.length, 9, `grimhardt-walk-${dir}는 9프레임`);
   }
   assert.strictEqual(byKey.get('rian-basic-idle-south')?.frames.length, 4);
-  assert.strictEqual(byKey.get('grimhardt-idle-south')?.frames.length, 4);
-  // 두 캐릭터 모두 대기 모션은 남쪽만 있다 — 없는 방향까지 만들어내면 안 된다
+  // 대기 모션은 있는 만큼만 — rian-basic은 남쪽뿐이고 grimhardt는 아예 없다.
+  // 없는 방향·액션까지 만들어내면 그쪽에서만 엉뚱한 그림이 돈다.
   assert.ok(!byKey.has('rian-basic-idle-north'), '없는 방향은 등록하지 않는다');
+  assert.ok(!byKey.has('grimhardt-idle-south'), '없는 액션은 등록하지 않는다');
 
   // 정지컷(rotations/south)은 번호가 없으니 애니메이션이 아니다
   assert.ok(!created.some((a) => a.key.includes('rotations')), 'rotations는 애니메이션으로 잡히면 안 된다');
@@ -56,7 +58,7 @@ const GRIM = frameNames('grimhardt');
   // 프레임은 번호 순서대로 (문자열 정렬이면 10이 2보다 앞에 온다)
   assert.deepStrictEqual(
     byKey.get('grimhardt-walk-south')?.frames.map((f) => f.frame),
-    [0, 1, 2, 3, 4, 5].map((i) => `walk/south/${i}`),
+    [0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => `walk/south/${i}`),
   );
   assert.strictEqual(byKey.get('rian-basic-walk-south')?.repeat, -1, '걷기는 무한 반복');
 }
@@ -290,6 +292,39 @@ const GRIM = frameNames('grimhardt');
   const { scene, created } = fakeScene({ 'rian-basic': BASIC });
   registerAnims(scene, 'rian-basic');
   assert.ok(!created.some((a) => a.key.includes('attack')), '없는 액션을 만들어내지 않는다');
+}
+
+// ── 사르가스(1탄 보스): 패턴마다 전용 모션이 있고, 그 모션이 곧 텔레그래프다 ──
+// BattleScene은 패턴별로 다른 액션을 건다(rock→throwing · stomp→attack · charge→rush).
+// 액션이 하나라도 없으면 그 패턴만 조용히 정지 프레임으로 굳는다 — 조합을 다 세어 본다.
+{
+  const SARGAS = frameNames('sargas');
+  const { scene, created } = fakeScene({ sargas: SARGAS });
+  registerAnims(scene, 'sargas');
+  const byKey = new Map(created.map((a) => [a.key, a]));
+
+  for (const dir of DIRS)
+    for (const action of ['throwing', 'attack', 'rush', 'walk'])
+      assert.strictEqual(byKey.get(`sargas-${action}-${dir}`)?.frames.length, 9, `sargas-${action}-${dir}는 9프레임`);
+
+  // 돌진은 달리는 내내 도는 루프, 던지기·내려찍기는 한 번 터지고 끝나는 사건이다.
+  assert.strictEqual(byKey.get('sargas-rush-south')?.repeat, -1, '질주는 무한 반복');
+  assert.strictEqual(byKey.get('sargas-throwing-south')?.repeat, 0, '던지기는 반복하지 않는다');
+  assert.strictEqual(byKey.get('sargas-attack-south')?.repeat, 0, '내려찍기는 반복하지 않는다');
+
+  // 윈드업 = 모션이 "터지는 프레임"까지의 시간. 이게 어긋나면 돌을 아직 줍는 중인데 돌이 날아가고,
+  // 공중에 뜬 채로 지면 충격 판정이 나온다. battleSim은 anims의 값을 그대로 읽으므로 여기서 프레임과 맞춰본다.
+  const at = (key: string, frame: number) => frame / byKey.get(key)!.frameRate;
+  const lands = (key: string, frame: number, windup: number, msg: string) =>
+    assert.ok(Math.abs(at(key, frame) - windup) < 1e-9, `${msg} (${at(key, frame)}초 ≠ 윈드업 ${windup}초)`);
+  lands('sargas-throwing-south', 8, GOLEM_ROCK_WINDUP, '투척은 돌을 머리 위로 든 마지막 프레임에서');
+  lands('sargas-attack-south', 6, GOLEM_STOMP_WINDUP, '스톰핑은 착지 프레임에서');
+  // 발동 뒤에도 남는 프레임이 있어야 던진 자세·흙먼지가 보인다 (윈드업이 모션보다 길면 그 전에 끊긴다)
+  for (const [key, windup] of [
+    ['sargas-throwing-south', GOLEM_ROCK_WINDUP],
+    ['sargas-attack-south', GOLEM_STOMP_WINDUP],
+  ] as const)
+    assert.ok(9 / byKey.get(key)!.frameRate > windup, `${key} 모션이 윈드업보다 먼저 끝난다`);
 }
 
 // ── 참격 시트 격자 ──

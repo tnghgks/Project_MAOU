@@ -9,7 +9,7 @@ import type { Facing } from './battleSim.ts';
 export const DIRS = ['south', 'east', 'north'] as const;
 export type Dir = (typeof DIRS)[number];
 
-const FRAME_RATE: Record<string, number> = { walk: 10, idle: 6, attack: 18 }; // ponytail: 액션별 속도 knob
+const FRAME_RATE: Record<string, number> = { walk: 10, idle: 6, attack: 18, rush: 12 }; // ponytail: 액션별 속도 knob
 const DEFAULT_RATE = 8;
 
 // 활시위를 놓는 순간 = attack 시트 7번 프레임 (고블린 궁수 기준 6번이 최대 당김, 7번에서 화살이
@@ -21,7 +21,24 @@ export const ATTACK_RELEASE_SEC = ATTACK_RELEASE_FRAME / FRAME_RATE.attack;
 // 한 번 재생하고 끝나는 액션. 걷기·대기와 달리 "지금 벌어지는 사건"이라 반복하면 안 된다.
 // 공격 9프레임 @18fps = 0.5초 — 기본 공격 주기(atkSpd 1.0 = 1초)의 절반이라 다음 휘두르기와
 // 겹치지 않는다. 속공을 끝까지 올리면 겹치지만 그땐 재생이 처음부터 다시 시작될 뿐이다.
-const ONCE = new Set(['attack', 'fireball']);
+// rush(전력 질주)는 여기 없다 — 돌진하는 내내 도는 이동 루프라 걷기와 같은 성격이다.
+const ONCE = new Set(['attack', 'fireball', 'throwing']);
+
+// 1탄 보스 사르가스는 패턴마다 전용 모션이 있고, 그 모션의 특정 프레임이 곧 공격 판정 시각이다 —
+// 돌을 머리 위로 들어 올린 마지막 프레임에서 투척이, 뛰어올라 착지하는 프레임에서 스톰핑이 터진다.
+// 그래서 재생 속도를 액션 공용 표에서 가져오지 않고 "터지는 프레임까지 몇 초"에서 역산한다.
+// 아트가 타이밍의 주인이라는 점은 ATTACK_RELEASE_SEC과 같은 원칙 — battleSim의 GOLEM_ROCK_WINDUP·
+// GOLEM_STOMP_WINDUP이 아래 두 값을 그대로 읽어 쓴다. 그래야 텔레그래프 길이 = 모션 길이가 된다.
+export const SARGAS_THROW_RELEASE_SEC = 0.9; // ponytail: 던지기 예고 시간 knob
+export const SARGAS_STOMP_LAND_SEC = 0.7; // ponytail: 스톰핑 예고 시간 knob
+const SARGAS_THROW_HOLD_FRAME = 8; // 돌을 머리 위로 든 자세 (throwing 마지막 프레임)
+const SARGAS_STOMP_LAND_FRAME = 6; // 착지 = 지면 충격 (attack 9프레임 중 6번, 뒤 둘은 흙먼지)
+
+// `아틀라스키-액션` → 재생 속도. 액션 공용 FRAME_RATE보다 우선한다.
+const RATE_OVERRIDE: Record<string, number> = {
+  'sargas-throwing': SARGAS_THROW_HOLD_FRAME / SARGAS_THROW_RELEASE_SEC,
+  'sargas-attack': SARGAS_STOMP_LAND_FRAME / SARGAS_STOMP_LAND_SEC,
+};
 
 // 서쪽 = 동쪽 프레임 + flipX. `[방향, 반전여부]`.
 export function dirOf(facing: Facing): [Dir, boolean] {
@@ -39,11 +56,12 @@ export function registerAnims(scene: Phaser.Scene, key: string) {
   for (const [group, idx] of groups) {
     const animKey = `${key}-${group.replace('/', '-')}`; // rian-walk-south
     if (scene.anims.exists(animKey)) continue;
+    const action = group.split('/')[0];
     scene.anims.create({
       key: animKey,
       frames: idx.sort((a, b) => a - b).map((i) => ({ key, frame: `${group}/${i}` })),
-      frameRate: FRAME_RATE[group.split('/')[0]] ?? DEFAULT_RATE,
-      repeat: ONCE.has(group.split('/')[0]) ? 0 : -1,
+      frameRate: RATE_OVERRIDE[`${key}-${action}`] ?? FRAME_RATE[action] ?? DEFAULT_RATE,
+      repeat: ONCE.has(action) ? 0 : -1,
     });
   }
 }
