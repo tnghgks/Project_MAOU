@@ -1,5 +1,6 @@
 import { useStore } from 'zustand';
 import { gameStore, gameState } from '../game/store.ts';
+import { playSfx } from '../game/sfx.ts';
 
 const FAIL = {
   death: { title: '📵 방 송 사 고', desc: '용사가 사망했습니다. 채널이 폭파되었습니다.' },
@@ -14,6 +15,7 @@ export default function ResultView() {
   }));
   const fail = lastRun.outcome === 'clear' ? null : FAIL[lastRun.outcome];
   const proceed = () => {
+    playSfx('uiSelect');
     if (fail) {
       gameState().resetRun();
       gameState().setPhase('title');

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { bus } from '../game/events.ts';
+import { playSfx } from '../game/sfx.ts';
 import { useBusEvent } from './useBusEvent.ts';
 
 // ESC로 여는 일시정지 오버레이. 도네이션 팝업/보스 컷씬도 같은 scene.pause()를 쓰므로
@@ -18,6 +19,7 @@ export default function PauseOverlay() {
   });
 
   const close = () => {
+    playSfx('uiMove');
     bus.emit('pause:toggle', null);
     mine.current = false;
     setPaused(false);
@@ -31,6 +33,7 @@ export default function PauseOverlay() {
         return;
       }
       if (busy.current) return; // 도네이션/보스 컷씬 중엔 끼어들지 않는다
+      playSfx('uiMove');
       bus.emit('pause:toggle', null);
       mine.current = true;
       setPaused(true);

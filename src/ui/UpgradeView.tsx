@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
 import { gameStore, gameState } from '../game/store.ts';
+import { playSfx } from '../game/sfx.ts';
 import { FINAL_EP } from '../data/progression.ts';
 import { stageCut } from '../data/cutscenes.ts';
 import { RARITY, type Card } from '../data/cards.ts';
@@ -38,9 +39,12 @@ export default function UpgradeView() {
   const nextEp = episode + 1;
 
   const buyCard = (card: Card, i: number) => {
-    if (gameState().buyCard(card, cardPrice(card))) setSold([...sold, i]);
+    if (!gameState().buyCard(card, cardPrice(card))) return; // 골드가 모자라면 소리도 안 난다
+    playSfx('buy');
+    setSold([...sold, i]);
   };
   const next = () => {
+    playSfx('uiSelect');
     gameState().nextEpisode();
     gameState().playCuts(stageCut(nextEp), () => gameState().setPhase('broadcast')); // 스테이지 진입 컷씬
   };

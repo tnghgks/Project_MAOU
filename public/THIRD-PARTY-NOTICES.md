@@ -62,12 +62,18 @@ OFL 1.1은 폰트 재배포 시 라이선스 사본 동봉과 저작권 표시�
 > **⚠ 배포 전 필수 확인** — 아래 항목은 아직 출처와 라이선스가 확정되지 않았습니다.
 > 게임 내 `제작자` 화면에도 경고로 표시되며, 확정되면 이 표와 `src/data/credits.ts`의 `pending` 플래그를 함께 정리하세요.
 
-| 대상 | 경로 | 상태 |
-| --- | --- | --- |
-| 캐릭터 · 몬스터 스프라이트 | `public/assets/character/` | 출처 확인 필요 |
-| 타일셋 · 배경 (성 · 사막 · 묘지) | `public/assets/castle/`, `desert/`, `graveyard/`, `*-tiles.png`, `bg.png` | 출처 확인 필요 |
-| BGM | `public/assets/sounds/bgm/` | 출처 확인 필요 |
-| 효과음 | `public/assets/sounds/sfx/` | 출처 확인 필요 |
+| 대상 | 경로 | 저작자 | 상태 |
+| --- | --- | --- | --- |
+| 캐릭터 · 몬스터 스프라이트 | `public/assets/character/` | — | 출처 확인 필요 |
+| 타일셋 · 배경 (성 · 사막 · 묘지) | `public/assets/castle/`, `desert/`, `graveyard/`, `*-tiles.png`, `bg.png` | — | 출처 확인 필요 |
+| BGM | `public/assets/sounds/bgm/` | — | 출처 확인 필요 |
+| Pixel Game Essentials SFX Pack | `public/assets/sounds/sfx/JDSherbert - Pixel Game Essentials SFX Pack - *.ogg` | JDSherbert | **라이선스 확인 필요** — 저작자·팩 이름은 확정, 배포처 약관 미기재 |
+| 후원 효과음 (small · middle · big) | `public/assets/sounds/sfx/*_donation.mp3` | — | 출처 확인 필요 |
+
+> 효과음 팩은 파일명에 팩 이름이 그대로 남아 있어 출처 추적이 됩니다(그래서 리네임하지 않았습니다).
+> 남은 일은 **받은 배포 페이지의 라이선스 조항과 URL을 이 표에 옮겨 적는 것**입니다.
+> 저작자 표시가 의무인 라이선스라면 `JDSherbert` 표기가 게임 내 `제작자` 화면에도 남아 있어야 하며,
+> 지금은 `src/data/credits.ts`에 `author: 'JDSherbert'` 로 들어가 있어 그 화면에 노출됩니다.
 
 정리 기준:
 

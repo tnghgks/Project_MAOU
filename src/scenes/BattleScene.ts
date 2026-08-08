@@ -23,6 +23,7 @@ import {
 import { dirOf, playAnim, playOnce, makeActor, type Dir } from '../game/anims.ts';
 import { HERO_CHAR, BOX_TEXTURE, FX_BASH, GLOW_TEXTURE, RING_GLOW_TEXTURE } from './BootScene.ts';
 import { gameState, heroPower } from '../game/store.ts';
+import { playSfx } from '../game/sfx.ts';
 import { bus, busBind } from '../game/events.ts';
 import { ARENA, CANVAS, SUMMON_Y, CX, arenaBounds } from '../game/layout.ts';
 import { drawArena } from '../game/arenaRender.ts';
@@ -313,6 +314,7 @@ export default class BattleScene extends Phaser.Scene {
       return;
     }
     this.skillCd[id] = SKILLS[id].cd;
+    playSfx('skill');
     SKILLS[id].effect(this.skillContext(), 1);
     if (!(SKILLS[id] as Skill).noScreenFlash) this.cameras.main.flash(150, 255, 255, 200);
     this.floatText(this.hero.x, this.hero.y - 40, `⚡ ${SKILLS[id].name}`, '#ffee44');
@@ -379,7 +381,11 @@ export default class BattleScene extends Phaser.Scene {
     this.cameras.main.flash(600, 255, 80, 80);
     this.floatText(this.boss.x, this.boss.y - 60, `☠ ${MONSTERS[t].name} 등장!`, '#ff4444');
     this.pushChat('시스템', `☠ ${MONSTERS[t].name} 등장! 용사가 쓰러뜨리면 방송 성공`, '#ff4444');
-    this.pushChat('시스템', '⚔ 보스전 — 도네이션·시청자 요청·소환이 중단됩니다. 지금 있는 것만으로 싸워야 해요', '#ff8844');
+    this.pushChat(
+      '시스템',
+      '⚔ 보스전 — 도네이션·시청자 요청·소환이 중단됩니다. 지금 있는 것만으로 싸워야 해요',
+      '#ff8844',
+    );
     // 보스 등장 컷씬 — 도네이션과 같은 방식으로 전투를 멈추고 React에 넘긴다
     this.scene.pause();
     bus.emit('battle:pause', null); // InfoLayer/ComboMeter 등 React UI도 같이 멈춰야 한다
@@ -455,6 +461,7 @@ export default class BattleScene extends Phaser.Scene {
         // 특성 카드는 스탯이 아니라 전투 규칙을 준다 — grantCard/applyLiveCard 경로를 안 탄다
         gameState().grantTrait(card.trait);
         const t = TRAITS[card.trait];
+        playSfx('trait');
         this.cameras.main.flash(400, 255, 120, 220);
         this.floatText(this.hero.x, this.hero.y - 40, `${t.icon} ${t.name} 각성!`, '#ff66cc');
         this.pushChat('시스템', `🎁 특성 획득 — ${t.icon} ${t.name}: ${t.desc}`, '#ff66cc');
@@ -463,11 +470,13 @@ export default class BattleScene extends Phaser.Scene {
         // summonRandom이 그냥 무시하니 별도 방어 불필요.
         const s = SUMMON_CURSES[card.summonCurse];
         for (let i = 0; i < s.count; i++) this.summonRandom(Phaser.Utils.Array.GetRandom(s.pool));
+        playSfx('heroHurt'); // 보상이 아니라 사고다 — 카드 획득음(card)이 울리면 정반대로 읽힌다
         this.shakeCam(300, 0.008);
         this.floatText(this.hero.x, this.hero.y - 40, `${s.icon} ${s.name}!`, '#ff5555');
         this.pushChat('시스템', `💀 ${s.name} — ${s.desc}`, '#ff5555');
       } else {
         gameState().grantCard(card);
+        playSfx(card.curse ? 'heroHurt' : 'card'); // 저하형 카드(curse)도 강화음이 울리면 안 된다
         this.applyLiveCard(card, card.curse ? `💀 저주받은 카드...` : `🎁 ${RARITY[card.rarity].label} 카드!`);
       }
       this.onCardGranted(card);
@@ -746,6 +755,9 @@ export default class BattleScene extends Phaser.Scene {
     }
     if (m.hp <= 0 && !m.dead) {
       m.dead = true;
+      // 보스는 잡몹 처치음에 묻히면 안 된다 — 격파 자체가 스테이지의 결말이라 따로 운다
+      // (뒤이어 endRun이 800ms 후 stageClear를 얹는다).
+      playSfx(m === this.boss ? 'bossDown' : 'kill');
       const gold = goldWithBonus(m.def.gold, gameState().hero.goldBonus);
       gameState().addGold(gold);
       this.killGold += gold;
@@ -911,11 +923,13 @@ export default class BattleScene extends Phaser.Scene {
     if (H.invulnT > 0) return false;
     const traits = gameState().traits;
     if (rollChance(H.dodge)) {
+      playSfx('dodge');
       this.floatText(H.x, H.y - 50, 'MISS', '#88ccff');
       return false;
     }
     const defense = clamp(H.defense + defenseBonus(traits, H.hp / H.maxHp), 0, 100);
     H.hp -= mitigate(rawDmg, defense);
+    playSfx('heroHurt');
     H.invulnT = HIT_INVULN_DUR; // 같은 프레임에 몬스터 여럿이 때려도 한 번만 맞는다
     this.noHitT = 0;
     if (this.combo > 0) {
@@ -1074,8 +1088,13 @@ export default class BattleScene extends Phaser.Scene {
     const H = this.hero;
     const traits = gameState().traits;
     // 결정 로직은 battleSim.stepHero(순수). 씬은 결과를 스프라이트에 반영 + 공격만 처리.
+    // 대시 발동은 intent에 안 실린다(순수 시뮬은 소리를 모른다) — 쿨타임이 줄기만 하다가 이번
+    // 프레임에 되레 늘었다면 그게 곧 "방금 대시했다"다.
+    const dashCdBefore = H.dashCd;
     const intent = stepHero(H, this.monsters, nearCount, dt, arenaBounds, this.heroInput(), traits);
+    if (H.dashCd > dashCdBefore) playSfx('dash');
     if (intent.swung) {
+      playSfx('hit'); // 스윙 단위 — 광역으로 열 마리를 동시에 베어도 칼 소리는 한 번이다
       const { dmg, crit } = this.heroDamage();
       for (const m of intent.attacks) this.heroHit(m, dmg, crit);
       this.windSlashProc(dmg); // 사거리 밖 추가 타격 — 스윙당 1회, 명중 대상 유무와 무관
@@ -1175,6 +1194,7 @@ export default class BattleScene extends Phaser.Scene {
           break;
         // 시위를 놓는 순간. 모션은 draw에서 이미 돌고 있으니 여기선 화살만 만든다.
         case 'arrow': {
+          playSfx('enemyShot');
           const spr = this.add.image(intent.x, intent.y, 'arrow').setDepth(2).setScale(0.7);
           spr.setRotation(Math.atan2(intent.ty - intent.y, intent.tx - intent.x) + Math.PI / 2);
           this.arrows.push({ x: intent.x, y: intent.y, tx: intent.tx, ty: intent.ty, spr, dmg: intent.dmg });
@@ -1211,6 +1231,7 @@ export default class BattleScene extends Phaser.Scene {
         // 던지기 발동 = throwing 마지막 프레임(돌을 머리 위로 든 자세). 모션은 이미 그 자세라 그대로 두고
         // 돌만 띄운다 — 여기서 다시 재생하면 이미 던진 돌을 다시 줍는 그림이 된다.
         case 'bossRock': {
+          playSfx('enemyShot');
           // 사실적인 바위 모양 생성
           const rock = this.add.graphics();
           rock.setPosition(intent.x, intent.y);
@@ -1339,7 +1360,14 @@ export default class BattleScene extends Phaser.Scene {
             repeat: -1,
           });
 
-          this.arrows.push({ x: intent.x, y: intent.y, tx: intent.tx, ty: intent.ty, spr: rock as any, dmg: intent.dmg });
+          this.arrows.push({
+            x: intent.x,
+            y: intent.y,
+            tx: intent.tx,
+            ty: intent.ty,
+            spr: rock as any,
+            dmg: intent.dmg,
+          });
           this.floatText(m.x, m.y - m.def.size, '🪨 투척!', '#cc9966');
           break;
         }
@@ -1363,6 +1391,7 @@ export default class BattleScene extends Phaser.Scene {
         // 검기 발산: 3개의 부채꼴 검기 발사
         // (attack 애니메이션은 bossTelegraph에서 이미 재생 중 — 윈드업 시간에 맞춰 느리게 돌아가다가 지금 마지막 프레임)
         case 'bossSwordbeam': {
+          playSfx('enemyShot'); // 검기 3개가 한 번에 나가지만 소리는 한 번 — 발사는 한 동작이다
           for (const beam of intent.beams) {
             const angle = Math.atan2(beam.ty - intent.y, beam.tx - intent.x);
 
@@ -1537,7 +1566,13 @@ export default class BattleScene extends Phaser.Scene {
       // 뛰어오르는 그림은 아트에 있다(sargas attack) — 예전엔 전용 프레임이 없어 스프라이트를 코드로
       // 들었다 내렸지만, 이제 그러면 그림의 점프와 트윈이 겹쳐 두 번 뛴다. 링 예고만 남긴다.
     } else if (pattern === 'charge') {
-      this.tweens.add({ targets: m.spr, scaleX: m.spr.scaleX * 1.12, scaleY: m.spr.scaleY * 1.12, duration: ms / 2, yoyo: true });
+      this.tweens.add({
+        targets: m.spr,
+        scaleX: m.spr.scaleX * 1.12,
+        scaleY: m.spr.scaleY * 1.12,
+        duration: ms / 2,
+        yoyo: true,
+      });
     } else if (pattern === 'spaceSlash') {
       // 공간 가르기: 커지는 보라색 원
       const ring = this.add.circle(m.x, m.y, 20, 0x8844ff, 0.3).setStrokeStyle(4, 0x8844ff, 0.9).setDepth(1);
@@ -1550,14 +1585,24 @@ export default class BattleScene extends Phaser.Scene {
       });
     } else if (pattern === 'knightCharge') {
       // 베르하르트 돌진: 크기 확대 효과만
-      this.tweens.add({ targets: m.spr, scaleX: m.spr.scaleX * 1.1, scaleY: m.spr.scaleY * 1.1, duration: ms / 2, yoyo: true });
+      this.tweens.add({
+        targets: m.spr,
+        scaleX: m.spr.scaleX * 1.1,
+        scaleY: m.spr.scaleY * 1.1,
+        duration: ms / 2,
+        yoyo: true,
+      });
     }
     const icon =
-      pattern === 'rock' ? '🪨' :
-      pattern === 'stomp' ? '💥' :
-      pattern === 'swordbeam' ? '⚔️' :
-      pattern === 'spaceSlash' ? '🌀' :
-      '⚡';
+      pattern === 'rock'
+        ? '🪨'
+        : pattern === 'stomp'
+          ? '💥'
+          : pattern === 'swordbeam'
+            ? '⚔️'
+            : pattern === 'spaceSlash'
+              ? '🌀'
+              : '⚡';
     this.floatText(m.x, m.y - m.def.size - 20, icon, '#ff6666');
   }
 
@@ -1639,6 +1684,7 @@ export default class BattleScene extends Phaser.Scene {
     this.reqT = REQ_GAP;
     this.viewers = Math.max(MIN_VIEWERS, this.viewers * (ok ? REQ_WIN : REQ_LOSE));
     if (ok) {
+      playSfx('questClear');
       this.pushChat('시스템', '📢 요청 달성! 시청자가 몰려온다', '#66ddff');
       this.floatText(this.hero.x, this.hero.y - 60, '📢 요청 달성!', '#66ddff');
       const who = this.randomViewer();
@@ -1659,16 +1705,21 @@ export default class BattleScene extends Phaser.Scene {
     });
     const cleared = outcome === 'clear';
     if (outcome === 'death') {
+      playSfx('heroDie');
       const who = this.randomViewer();
       if (who) this.pushChat(who, '...', '#666666');
       this.pushChat('시스템', '용사가 죽었다. 방송 종료', '#ff4444');
       this.shakeCam(500, 0.01);
     } else if (outcome === 'abandoned') {
+      playSfx('runFail');
       this.pushChat('시스템', '아무도 보지 않는다. 채널 폐지', '#ff4444');
     } else {
       this.pushChat('시스템', `🎯 ${this.boss!.def.name} 격파! 스테이지 클리어`, '#ffdd44');
     }
     this.time.delayedCall(cleared ? 800 : 1500, () => {
+      // 클리어 팡파레는 여기서 운다 — 보스 격파음(bossDown)이 바로 직전 프레임에 울렸으니
+      // 곧바로 겹치면 둘 다 뭉개진다. 화면이 정산으로 넘어가는 이 시점이 제자리다.
+      if (cleared) playSfx('stageClear');
       gameState().setPhase(cleared && this.isFinal ? 'ending' : 'result');
     });
   }

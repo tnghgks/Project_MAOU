@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { bus } from '../game/events.ts';
+import { playSfx } from '../game/sfx.ts';
 import { judge, skillResult, type Judgement } from '../formulas.ts';
 import { useBusEvent } from './useBusEvent.ts';
 
@@ -60,6 +61,8 @@ export default function RhythmLane() {
     if (!note) return; // 이미 판정됨 (키 입력 vs 자동 미스 타이머 경합)
     const result = forcedResult ?? judge((now() - note.hitTime) * 1000);
     resultsRef.current.push(result);
+    // 놓친 노트는 조용히 지나간다 — 미스에까지 소리를 붙이면 박자가 아니라 실패만 들린다
+    if (result !== 'miss') playSfx('uiMove');
 
     setFlash(result);
     clearTimeout(flashTimer.current);
