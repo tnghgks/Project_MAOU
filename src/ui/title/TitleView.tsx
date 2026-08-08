@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
 import { gameStore, gameState } from '../../game/store.ts';
+import { playSfx } from '../../game/sfx.ts';
 import { stageCut } from '../../data/cutscenes.ts';
 import PixelWindow from './PixelWindow.tsx';
 import UnlockPanel from './UnlockPanel.tsx';
@@ -44,7 +45,15 @@ export default function TitleView() {
     gameState().playCuts(['intro', stageCut(1)], () => gameState().setPhase('broadcast'));
   };
 
+  // 커서 이동음은 자리가 실제로 바뀔 때만 — 이미 그 항목에 있는데 마우스가 다시 들어와도 울리면
+  // 항목 위에서 손을 떠는 것만으로 소리가 난다.
+  const move = (i: number) => {
+    if (i !== sel) playSfx('uiMove'); // 소리는 setSel 업데이터 밖에서 — 업데이터는 순수해야 한다
+    setSel(i);
+  };
+
   const activate = (id: (typeof MENU)[number]['id']) => {
+    playSfx('uiSelect');
     if (id === 'start') return start();
     setPanel((cur) => (cur === id ? null : id));
   };
@@ -53,6 +62,7 @@ export default function TitleView() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        if (panel) playSfx('uiMove'); // 이미 닫혀 있으면 ESC는 아무 일도 안 한다 — 소리도 안 난다
         setPanel(null);
         return;
       }
@@ -60,6 +70,7 @@ export default function TitleView() {
       const step = e.key === 'ArrowDown' ? 1 : e.key === 'ArrowUp' ? -1 : 0;
       if (!step) return;
       e.preventDefault();
+      playSfx('uiMove');
       setSel((i) => (i + step + MENU.length) % MENU.length);
     };
     window.addEventListener('keydown', onKey);
@@ -88,7 +99,7 @@ export default function TitleView() {
               items.current[i] = el;
             }}
             className={i === sel ? 'px-item on' : 'px-item'}
-            onMouseEnter={() => setSel(i)}
+            onMouseEnter={() => move(i)}
             onClick={() => activate(m.id)}
           >
             <span className="px-cursor" aria-hidden>
@@ -100,7 +111,13 @@ export default function TitleView() {
       </nav>
 
       {panel && (
-        <PixelWindow title={PANEL_TITLE[panel]} onClose={() => setPanel(null)}>
+        <PixelWindow
+          title={PANEL_TITLE[panel]}
+          onClose={() => {
+            playSfx('uiMove'); // ✕ 버튼도 ESC와 같은 소리 — 닫는 동작은 하나다
+            setPanel(null);
+          }}
+        >
           {panel === 'unlock' && <UnlockPanel />}
           {panel === 'options' && <OptionsPanel />}
           {panel === 'credits' && <CreditsPanel />}

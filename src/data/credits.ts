@@ -67,7 +67,16 @@ export const CREDIT_SECTIONS: readonly CreditSection[] = [
     items: [
       { name: '캐릭터 · 몬스터 스프라이트', license: '출처 확인 필요', pending: true },
       { name: '타일셋 · 배경 (성 · 사막 · 묘지)', license: '출처 확인 필요', pending: true },
-      { name: 'BGM · 효과음', license: '출처 확인 필요', pending: true },
+      { name: 'BGM', license: '출처 확인 필요', pending: true },
+      // 효과음 팩은 출처(제작자·팩 이름)가 확실하지만 배포처 약관을 아직 옮겨 적지 않았다 —
+      // 저작자 표시가 의무인 라이선스일 수 있어 확인 전까지는 pending을 유지한다.
+      {
+        name: 'Pixel Game Essentials SFX Pack',
+        author: 'JDSherbert',
+        license: '라이선스 확인 필요 (배포처 약관)',
+        pending: true,
+      },
+      { name: '후원 효과음 (small · middle · big)', license: '출처 확인 필요', pending: true },
     ],
   },
 ];

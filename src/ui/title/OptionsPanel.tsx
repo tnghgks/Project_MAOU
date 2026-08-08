@@ -65,9 +65,10 @@ export default function OptionsPanel() {
   const [confirmClear, setConfirmClear] = useState(false);
 
   // 효과음은 지금 이 화면에서 안 울리므로 조절만으로는 결과를 알 수 없다 — 바꾼 값으로 바로 한 번 들려준다.
+  // 후원 팡파레 대신 UI 확인음을 쓴다: 한 칸씩 눌러 볼 때마다 긴 소리가 겹쳐 울리면 값 비교가 안 된다.
   const changeSfx = (v: number) => {
     gameState().setSfxVol(v);
-    if (v > 0) playSfx('donationSmall');
+    if (v > 0) playSfx('uiSelect');
   };
 
   const clear = () => {
