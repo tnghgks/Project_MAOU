@@ -1274,6 +1274,17 @@ button {
 .summon-tile:active {
   transform: translateY(1px);
 }
+.summon-tile:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(155, 124, 255, 0.05);
+}
+.summon-tile:disabled:hover {
+  background: rgba(155, 124, 255, 0.05);
+}
+.summon-tile:disabled:active {
+  transform: none;
+}
 .skill-tile {
   border-color: #5aa9ff;
   background: rgba(90, 169, 255, 0.12);

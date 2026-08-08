@@ -60,6 +60,7 @@ export interface BusEvents {
   // 받는 쪽은 그대로 둬도 죽은 코드일 뿐이라 import.meta.env.DEV 가드를 씬에만 건다.
   'dev:shop-layout': ShopLayout; // 상인 위치·크기·어둠을 게임 돌린 채로 맞춘다
   'dev:reroll-stock': null; // 상인 재고를 다시 굴린다 (등급 조합 확인용)
+  'dev:spawn-boss': null; // 보스를 강제로 소환한다 (보스 페이즈 테스트용)
 }
 
 // ponytail: Phaser EventEmitter는 제네릭이 없어 as로 타입만 씌움 — 런타임은 그대로
