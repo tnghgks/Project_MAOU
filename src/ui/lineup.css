@@ -474,6 +474,13 @@
   filter: grayscale(1);
   opacity: 0.45;
 }
+/* 키보드 커서 — 마우스 hover와 구분되는 실선 테두리. 방향키로만 도는 사람에게 지금 어디인지 알린다 */
+.pool-card.cursor {
+  box-shadow:
+    inset 2px 2px 0 #4a4287,
+    inset -2px -2px 0 var(--px-ink),
+    0 0 0 3px #7fd4ff;
+}
 /* 초상화 호버 히트박스. 스프라이트를 한 겹 감싸므로 격자 칸은 이 래퍼가 차지한다. */
 .art-hit {
   display: block;
@@ -499,6 +506,21 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* 역할 배지 — 아홉 장을 나란히 비교할 때 산문 설명보다 이게 먼저 눈에 걸린다.
+   설명 줄 맨 앞에 인라인으로 붙는다(이름 줄에 두면 폭을 다투다 긴 이름이 잘린다). */
+.role-badge {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+  vertical-align: 1px;
+  color: #16122a;
+  background: #8f88bb;
 }
 /* 이름 흐름에서 빼내 카드 모서리에 고정 — 이름이 길든 짧든 자리가 안 바뀐다 */
 .pool-cost {
@@ -632,8 +654,28 @@
   box-shadow: inset 0 -2px 0 #2b2450;
 }
 .tip-cost {
+  margin-left: auto;
   font-size: 0.85em;
   color: var(--px-gold);
+}
+/* 쪽지 안에서는 배지가 이름 바로 옆에 붙는다 — 코스트가 auto 여백으로 오른쪽 끝에 밀린다 */
+.tip-name .role-badge {
+  background: #6a63ad;
+  color: #0d0b1a;
+}
+
+/* 조작 힌트 — 방향키로 돌 수 있다는 걸 모르면 아무도 안 쓴다 */
+.lineup-keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+  font-size: clamp(8px, 0.72vw, 11px);
+  letter-spacing: 1px;
+  color: #5f5987;
+}
+.lineup-keys b {
+  color: #9a93c4;
 }
 .tip-stats {
   display: grid;

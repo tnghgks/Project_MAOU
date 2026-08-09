@@ -21,7 +21,7 @@ import {
   defaultLineup,
   type Lineup,
 } from '../src/data/waves.ts';
-import { MONSTERS, type MonsterId, type MonsterDef } from '../src/data/monsters.ts';
+import { MONSTERS, ROLE_LABEL, type MonsterId, type MonsterDef } from '../src/data/monsters.ts';
 import { FINAL_EP } from '../src/data/progression.ts';
 
 // 편성은 방송 전체의 입력값이다 — 잘못된 편성이 씬까지 흘러가면 "아무것도 안 나오는 방송"이 된다.
@@ -138,6 +138,14 @@ for (const id of summonableAt(FINAL_EP)) {
   // 편성한 몬스터 종류 — 요청 출제 풀이 이걸 본다
   assert.deepStrictEqual(lineupMonsters(l).sort(), ['archer', 'slime']);
   assert.deepStrictEqual(lineupMonsters(emptyLineup()), []);
+}
+
+// 편성 가능한 몬스터는 전부 역할 배지를 갖는다. role은 선택적 필드라 빠뜨려도 컴파일에서
+// 안 걸리는데, 없으면 팔레트 카드에 배지 자리만 비어 다른 카드와 어긋나 보인다.
+for (const id of summonableAt(FINAL_EP)) {
+  const role = (MONSTERS[id] as MonsterDef).role;
+  assert.ok(role, `${id}에 role이 없다`);
+  assert.ok(ROLE_LABEL[role], `${id}의 role('${role}')에 대응하는 라벨이 없다`);
 }
 
 // ── 위협도 ──

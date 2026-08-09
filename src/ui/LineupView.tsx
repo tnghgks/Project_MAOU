@@ -1,8 +1,8 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useStore } from 'zustand';
 import { gameStore, gameState } from '../game/store.ts';
 import { playSfx } from '../game/sfx.ts';
-import { MONSTERS, type MonsterId, type MonsterDef } from '../data/monsters.ts';
+import { MONSTERS, ROLE_LABEL, type MonsterId, type MonsterDef } from '../data/monsters.ts';
 import { CUTSCENES, stageCut } from '../data/cutscenes.ts';
 import { targetGold } from '../data/progression.ts';
 import SpriteBox from './SpriteBox.tsx';
@@ -147,6 +147,7 @@ export default function LineupView() {
     return validateLineup(carried, episode) ? defaultLineup(episode) : carried;
   });
   const [sel, setSel] = useState(0);
+  const [poolSel, setPoolSel] = useState(0); // 키보드용 팔레트 커서. 마우스로 누를 땐 안 본다
   const [tip, setTip] = useState<TipState | null>(null);
 
   const budget = lineupBudget(episode);
@@ -185,6 +186,37 @@ export default function LineupView() {
   // 선택한 웨이브를 한 마리씩 펼친다 — "×6"보다 스프라이트 여섯 개가 밀도를 빨리 알려준다.
   const selCount = lineup[sel].reduce((s, e) => s + e.count, 0);
   const previewUnits = lineup[sel].flatMap((e) => Array.from({ length: e.count }, () => e.type)).slice(0, PREVIEW_MAX);
+
+  // 키보드 조작. 타이틀 메뉴가 방향키 + 커서(▶)로 도니 편성도 마우스 없이 끝낼 수 있어야 한다.
+  // 타임라인이 가로라 ←→가 웨이브, ↑↓가 팔레트다 — 화면에서 그 축이 실제로 그렇게 놓여 있다.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // 컷씬이 떠 있으면(방송 시작 직후) 그쪽이 입력을 갖는다 — 덮인 화면을 조작하면 안 된다.
+      if (document.querySelector('.cutscene')) return;
+      const k = e.key;
+      if (k === 'ArrowLeft' || k === 'ArrowRight') {
+        e.preventDefault();
+        setSel((s) => (s + (k === 'ArrowRight' ? 1 : lineup.length - 1)) % lineup.length);
+        playSfx('uiMove');
+      } else if (k === 'ArrowUp' || k === 'ArrowDown') {
+        e.preventDefault();
+        setPoolSel((p) => (p + (k === 'ArrowDown' ? 1 : pool.length - 1)) % pool.length);
+        playSfx('uiMove');
+      } else if (k === 'Enter') {
+        e.preventDefault();
+        // Ctrl+Enter는 방송 시작 — 그냥 Enter로 두면 출연진을 넣다가 실수로 방송이 나간다
+        if (e.ctrlKey || e.metaKey) start();
+        else tryAdd(pool[poolSel]);
+      } else if (k === 'Backspace' || k === 'Delete') {
+        e.preventDefault();
+        // 선택한 웨이브에서 마지막으로 넣은 종류부터 뺀다 — 되돌리기에 가장 가까운 동작이다
+        const w = lineup[sel];
+        if (w.length) tryRemove(sel, w[w.length - 1].type);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
 
   // 초상화 기준으로 쪽지를 띄운다 — 마우스 좌표를 쓰면 손을 조금만 떨어도 쪽지가 흔들린다.
   const showTip = useCallback((id: MonsterId, el: HTMLElement) => {
@@ -384,18 +416,31 @@ export default function LineupView() {
                 <span className="px-count">초상화에 마우스를 올리면 상세 정보 · 남은 예산 {left}p</span>
               </h3>
               <ul className="pool-grid">
-                {pool.map((id) => {
+                {pool.map((id, i) => {
                   const def: MonsterDef = MONSTERS[id];
                   const affordable = def.cost <= left;
                   return (
                     <li key={id}>
-                      <button type="button" className="pool-card" disabled={!affordable} onClick={() => tryAdd(id)}>
+                      <button
+                        type="button"
+                        className={i === poolSel ? 'pool-card cursor' : 'pool-card'}
+                        disabled={!affordable}
+                        onClick={() => {
+                          setPoolSel(i);
+                          tryAdd(id);
+                        }}
+                      >
                         <Portrait id={id} box={POOL_BOX} onShow={showTip} onHide={hideTip} />
                         {/* 코스트는 이름의 자식이 아니라 형제다 — .pool-name이 한 줄 고정을 위해
                             overflow: hidden을 갖고 있어서, 안에 두면 절대배치 배지가 잘린다 */}
                         <span className="pool-name">{def.name}</span>
                         <span className="pool-cost">{def.cost}p</span>
-                        <span className="pool-role">{MONSTER_ROLE[id] ?? ''}</span>
+                        {/* 배지는 이름 줄이 아니라 설명 줄에 둔다 — 이름 줄은 한 줄 고정이라
+                            배지가 끼면 폭을 다투다가 긴 이름(고블린 주술사)이 잘린다. */}
+                        <span className="pool-role">
+                          {def.role && <span className="role-badge">{ROLE_LABEL[def.role]}</span>}
+                          {MONSTER_ROLE[id] ?? ''}
+                        </span>
                       </button>
                     </li>
                   );
@@ -417,7 +462,27 @@ export default function LineupView() {
           ▶ 방송 시작
         </button>
       </div>
-      {error && <p className="lineup-error">! {ERROR_TEXT[error]}</p>}
+      {error ? (
+        <p className="lineup-error">! {ERROR_TEXT[error]}</p>
+      ) : (
+        <p className="lineup-keys">
+          <span>
+            <b>← →</b> 웨이브
+          </span>
+          <span>
+            <b>↑ ↓</b> 출연진
+          </span>
+          <span>
+            <b>Enter</b> 섭외
+          </span>
+          <span>
+            <b>Backspace</b> 빼기
+          </span>
+          <span>
+            <b>Ctrl+Enter</b> 방송 시작
+          </span>
+        </p>
+      )}
 
       {tip && <MonsterTip id={tip.id} x={tip.x} y={tip.y} />}
     </div>

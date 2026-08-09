@@ -1,4 +1,4 @@
-import { MONSTERS, type MonsterId, type MonsterDef } from '../data/monsters.ts';
+import { MONSTERS, ROLE_LABEL, type MonsterId, type MonsterDef } from '../data/monsters.ts';
 
 // 몬스터 초상화에 마우스를 올리면 뜨는 스탯 쪽지.
 // 카드에 스탯을 전부 박아 넣으면 팔레트가 표가 돼서 훑어보기가 안 된다 — 평소엔 역할 한 줄만 두고,
@@ -70,6 +70,7 @@ export default function MonsterTip({ id, x, y }: MonsterTipProps) {
     >
       <p className="tip-name">
         {def.name}
+        {def.role && <span className="role-badge">{ROLE_LABEL[def.role]}</span>}
         <span className="tip-cost">{def.cost}p</span>
       </p>
       <dl className="tip-stats">

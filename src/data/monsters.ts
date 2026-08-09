@@ -1,4 +1,17 @@
 // GDD 3-5. 신규 몬스터 = 여기에 한 줄 추가. unlock = 등장 시작 화수.
+
+/** 편성 화면에서 한눈에 훑기 위한 분류. 산문 설명은 읽는 데 시간이 걸려서, 아홉 장을 나란히
+ *  비교할 땐 배지 하나가 훨씬 빠르다. 전투 로직은 이 값을 안 본다 — 순전히 표시용이다. */
+export type MonsterRole = 'swarm' | 'ranged' | 'tank' | 'buffer' | 'bomber' | 'splitter';
+export const ROLE_LABEL: Record<MonsterRole, string> = {
+  swarm: '물량',
+  ranged: '원거리',
+  tank: '탱커',
+  buffer: '버퍼',
+  bomber: '자폭',
+  splitter: '분열',
+};
+
 export interface MonsterDef {
   name: string;
   hp: number;
@@ -18,6 +31,8 @@ export interface MonsterDef {
    *  방향·액션 구분이 없어 걷든 서든 같은 루프가 돈다 (일반 몬스터는 이 정도면 충분하다). */
   sheet?: number;
   unlock: number;
+  /** 편성 화면 배지용 분류. 보스는 편성 대상이 아니라 없다. */
+  role?: MonsterRole;
   /** 웨이브 편성 코스트(data/waves.ts). 방송 전 편성 포인트 예산을 이걸로 쓴다 —
    *  "한 마리를 몇 점에 살 것인가"가 곧 편성의 유일한 통화다. 보스는 편성 대상이 아니라 0. */
   cost: number;
@@ -52,23 +67,23 @@ export interface MonsterDef {
 // char가 빈 줄은 아직 아트가 없어 대체 상자로 뜬다 — 아틀라스가 나오면 char만 채우면 된다.
 // prettier-ignore
 export const MONSTERS = {
-  slime:  { name: '슬라임',      hp: 20,  dmg: 3,  atkCd: 1.0, speed: 60,  range: 24,  gold: 5,  size: 16, unlock: 1, cost: 1, char: 'slime', sheet: 32, kb: 1.6 },
-  archer: { name: '고블린 궁수', hp: 15,  dmg: 4,  atkCd: 2.0, speed: 70,  range: 240, gold: 8,  size: 15, unlock: 1, cost: 2, ranged: true, char: 'goblinarcher', kb: 1 },
-  golem:  { name: '사이클롭스',        hp: 120, dmg: 8,  atkCd: 1.5, speed: 35,  range: 30,  gold: 20, size: 26, unlock: 1, cost: 5, kb: 0.3, char: 'cyclops', scale: 1.5 },
-  bat:    { name: '폭탄 박쥐',   hp: 10,  dmg: 20, atkCd: 0.1, speed: 120, range: 22,  gold: 12, size: 14, unlock: 2, cost: 3, suicide: true, char: 'bombbat', sheet: 64, kb: 1.2 },
-  knight: { name: '정예 기사',   hp: 300, dmg: 15, atkCd: 1.2, speed: 45,  range: 34,  gold: 60, size: 28, unlock: 3, cost: 8, kb: 0.15, char: 'blackknight'},
+  slime:  { name: '슬라임',      hp: 20,  dmg: 3,  atkCd: 1.0, speed: 60,  range: 24,  gold: 5,  size: 16, unlock: 1, cost: 1, role: 'swarm',  char: 'slime', sheet: 32, kb: 1.6 },
+  archer: { name: '고블린 궁수', hp: 15,  dmg: 4,  atkCd: 2.0, speed: 70,  range: 240, gold: 8,  size: 15, unlock: 1, cost: 2, role: 'ranged', ranged: true, char: 'goblinarcher', kb: 1 },
+  golem:  { name: '사이클롭스',        hp: 120, dmg: 8,  atkCd: 1.5, speed: 35,  range: 30,  gold: 20, size: 26, unlock: 1, cost: 5, role: 'tank',   kb: 0.3, char: 'cyclops', scale: 1.5 },
+  bat:    { name: '폭탄 박쥐',   hp: 10,  dmg: 20, atkCd: 0.1, speed: 120, range: 22,  gold: 12, size: 14, unlock: 2, cost: 3, role: 'bomber', suicide: true, char: 'bombbat', sheet: 64, kb: 1.2 },
+  knight: { name: '정예 기사',   hp: 300, dmg: 15, atkCd: 1.2, speed: 45,  range: 34,  gold: 60, size: 28, unlock: 3, cost: 8, role: 'tank',   kb: 0.15, char: 'blackknight'},
 
   // ── 역할 몬스터 4종 (2026-08-09) — 편성에서 "물량 vs 역할"을 고르게 만드는 게 목적이다.
   // 넷 다 전용 아트가 아직 없어 기존 아틀라스를 tint로 재활용한다(BootScene이 char로 로드하므로
   // 새 파일 없이 바로 뜬다). 전용 스프라이트가 나오면 char/tint 두 칸만 갈아끼우면 된다.
   // splitter: 죽어야 진짜 물량이 나온다 — 콤보·처치수 요청의 축.
-  splitter: { name: '분열 슬라임',   hp: 34, dmg: 4,  atkCd: 1.2, speed: 55, range: 24,  gold: 9,  size: 16, unlock: 1, cost: 3, char: 'slime', sheet: 32, scale: 1.5, tint: 0xffaa66, kb: 1.4, split: { into: 'slime', count: 2 } },
+  splitter: { name: '분열 슬라임',   hp: 34, dmg: 4,  atkCd: 1.2, speed: 55, range: 24,  gold: 9,  size: 16, unlock: 1, cost: 3, role: 'splitter', char: 'slime', sheet: 32, scale: 1.5, tint: 0xffaa66, kb: 1.4, split: { into: 'slime', count: 2 } },
   // turtle: 느리고 안 죽는 벽. armor 5라 용사 초기 공격력(10)으론 절반밖에 안 박힌다 — 데미지 강화의 존재 이유.
-  turtle:   { name: '바위 거북',     hp: 90, dmg: 6,  atkCd: 1.8, speed: 22, range: 26,  gold: 16, size: 24, unlock: 1, cost: 4, tint: 0x88aa66, kb: 0.2, armor: 5 },
+  turtle:   { name: '바위 거북',     hp: 90, dmg: 6,  atkCd: 1.8, speed: 22, range: 26,  gold: 16, size: 24, unlock: 1, cost: 4, role: 'tank',   tint: 0x88aa66, kb: 0.2, armor: 5 },
   // shaman: 자체 전투력은 종잇장인데 주변을 강하게 만든다 — 용사가 "누구부터 자를지" 판단하게 만드는 역할.
-  shaman:   { name: '고블린 주술사', hp: 40, dmg: 5,  atkCd: 2.2, speed: 55, range: 180, gold: 22, size: 16, unlock: 2, cost: 5, ranged: true, char: 'goblinarcher', tint: 0xaa77ff, kb: 1, aura: { radius: 160, atk: 1.35, speed: 1.25 } },
+  shaman:   { name: '고블린 주술사', hp: 40, dmg: 5,  atkCd: 2.2, speed: 55, range: 180, gold: 22, size: 16, unlock: 2, cost: 5, role: 'buffer', ranged: true, char: 'goblinarcher', tint: 0xaa77ff, kb: 1, aura: { radius: 160, atk: 1.35, speed: 1.25 } },
   // sniper: 화면 반대편에서 아프게 때린다. 무시하면 계속 맞고, 끊으러 가면 다른 몹에게 등을 내준다.
-  sniper:   { name: '저격 고블린',   hp: 18, dmg: 16, atkCd: 4.0, speed: 45, range: 520, gold: 18, size: 15, unlock: 2, cost: 4, ranged: true, char: 'goblinarcher', tint: 0x66ddaa, scale: 1.1, kb: 1.1 },
+  sniper:   { name: '저격 고블린',   hp: 18, dmg: 16, atkCd: 4.0, speed: 45, range: 520, gold: 18, size: 15, unlock: 2, cost: 4, role: 'ranged', ranged: true, char: 'goblinarcher', tint: 0x66ddaa, scale: 1.1, kb: 1.1 },
 
   // 보스 — unlock 99라 소환 버튼에 안 뜬다. 목표 골드 달성 시 BattleScene이 직접 소환한다. kb: 0 = 넉백 면역.
   // 2026-08-07: 3패턴 보스전 도입(battleSim.stepBossGolem)에 맞춰 hp 상향 + 덩치 키움(scale 1→1.35).
