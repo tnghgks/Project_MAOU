@@ -4,26 +4,16 @@
      2) 테두리는 이미지가 아니라 겹친 box-shadow. 어느 해상도에서도 계단이 그대로 산다.
      3) 움직임은 steps()로만. 부드러운 ease는 도트와 안 어울린다. */
 
+/* --px-* 토큰과 공용 프리미티브(.px-window/.px-card/.px-thumb/.px-scanlines/.px-section)는
+   ui/pixel.css로 옮겼다 — 웨이브 편성 화면이 같은 것을 쓴다. 여기엔 타이틀 전용만 남는다. */
 .title-screen {
-  --px-ink: #0a0a14; /* 가장 어두운 외곽선 */
-  --px-hi: #4a4a78; /* 베벨 하이라이트 */
-  --px-face: #16122a; /* 창 바탕 */
-  --px-gold: #ffcf3a;
-  --px-warn: #ff8a5c;
   image-rendering: pixelated;
   gap: 0;
   padding: clamp(10px, 2.4vh, 28px) 3%;
   justify-content: center;
 }
 
-/* 주사선 — 브라운관 흉내. 배경 도트를 죽이지 않을 만큼만 얇고 옅게. */
-.px-scanlines {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  pointer-events: none;
-  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.26) 0 2px, rgba(0, 0, 0, 0) 2px 4px);
-}
+/* 주사선(.px-scanlines) 자체는 pixel.css에 있다 — 여긴 타이틀에서의 겹침 순서만 정한다. */
 .title-screen > *:not(.px-scanlines) {
   position: relative;
   z-index: 2;
@@ -99,11 +89,7 @@
   visibility: visible;
   animation: px-blink 0.72s steps(1, end) infinite;
 }
-@keyframes px-blink {
-  50% {
-    opacity: 0;
-  }
-}
+/* @keyframes px-blink는 pixel.css에 있다 — 편성 화면 커서도 같은 걸 쓴다 */
 
 .title-screen .records {
   margin-top: 10px;
@@ -117,87 +103,7 @@
   color: #7a749c;
 }
 
-/* ── 창틀: 3겹 테두리. 패널 3종이 공유한다 ── */
-.px-window {
-  width: min(700px, 92%);
-  max-height: min(58vh, 480px);
-  display: flex;
-  flex-direction: column;
-  margin: 12px 0 4px;
-  background: var(--px-face);
-  box-shadow:
-    0 0 0 3px var(--px-ink),
-    0 0 0 6px var(--px-hi),
-    0 0 0 9px var(--px-ink);
-  text-align: left;
-}
-.px-window-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 6px 10px;
-  background: #2b2450;
-  color: var(--px-gold);
-  letter-spacing: 2px;
-  font-size: clamp(12px, 1.2vw, 17px);
-  font-weight: 700;
-  box-shadow: inset 0 -3px 0 var(--px-ink);
-}
-.px-window-close {
-  padding: 2px 9px;
-  color: #ffd9d0;
-  background: #6a2438;
-  border: none;
-  cursor: pointer;
-  box-shadow:
-    inset 2px 2px 0 #a84a60,
-    inset -2px -2px 0 #2a0a14;
-}
-.px-window-close:hover {
-  background: #8c3048;
-}
-.px-window-body {
-  display: grid;
-  gap: 16px;
-  padding: 14px;
-  overflow-y: auto;
-  font-size: clamp(11px, 1.05vw, 15px);
-  line-height: 1.7;
-}
-/* 스크롤바까지 도트로 — 여기만 둥글면 창 전체가 웹페이지처럼 보인다 */
-.px-window-body::-webkit-scrollbar {
-  width: 10px;
-}
-.px-window-body::-webkit-scrollbar-track {
-  background: #0d0b1a;
-}
-.px-window-body::-webkit-scrollbar-thumb {
-  background: #46407a;
-  box-shadow:
-    inset 2px 2px 0 #6a63ad,
-    inset -2px -2px 0 #1a1730;
-}
-
-.px-section {
-  display: grid;
-  gap: 8px;
-}
-.px-section-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  font-size: clamp(12px, 1.15vw, 16px);
-  color: var(--px-gold);
-  letter-spacing: 2px;
-  padding-bottom: 4px;
-  box-shadow: inset 0 -3px 0 #2b2450;
-}
-.px-count {
-  color: #8f88bb;
-  font-weight: 400;
-}
+/* 창틀(.px-window*)·구획(.px-section*·.px-count)은 pixel.css로 옮겼다 — 편성 화면과 공유한다. */
 .px-lead {
   color: #cdc6e4;
 }
@@ -287,60 +193,8 @@
   gap: 6px;
 }
 
-/* ── 해금 도감 카드 ── */
-.px-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-  gap: 8px;
-}
-.px-card {
-  display: grid;
-  gap: 4px;
-  justify-items: center;
-  padding: 8px 6px;
-  text-align: center;
-  background: #191533;
-  box-shadow:
-    inset 2px 2px 0 #34305c,
-    inset -2px -2px 0 var(--px-ink);
-}
-.px-card b {
-  color: #fff;
-  font-size: 0.95em;
-}
-.px-card small {
-  color: #857ead;
-  font-size: 0.78em;
-  line-height: 1.4;
-}
-.px-card.locked b {
-  color: #5f5987;
-  letter-spacing: 2px;
-}
-.px-thumb {
-  position: relative;
-  display: block;
-  width: 72px;
-  height: 72px;
-  overflow: hidden;
-  background: #0d0b1a;
-  box-shadow: inset 0 0 0 2px var(--px-ink);
-}
-.px-thumb-in {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform-origin: center;
-  background-repeat: no-repeat;
-  image-rendering: pixelated;
-}
-.px-thumb-glyph {
-  display: block;
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 72px;
-  color: #3f3a63;
-}
+/* 카드 격자(.px-grid/.px-card)와 스프라이트 썸네일(.px-thumb*)은 pixel.css로 옮겼다 —
+   해금 도감과 편성 팔레트가 같은 카드를 쓴다. */
 
 /* ── 제작진 · 라이선스 ── */
 .px-list {
@@ -389,13 +243,7 @@
 .px-window-body a {
   color: #7fd4ff;
 }
-.px-note {
-  color: #857ead;
-  font-size: 0.86em;
-}
-.px-note.warn {
-  color: var(--px-warn);
-}
+/* .px-note는 pixel.css에 있다 */
 
 @media (prefers-reduced-motion: reduce) {
   .title-screen .title-logo,
