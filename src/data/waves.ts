@@ -1,4 +1,4 @@
-import { MONSTERS, type MonsterId } from './monsters.ts';
+import { MONSTERS, type MonsterId, type MonsterDef } from './monsters.ts';
 import { clamp } from '../formulas.ts';
 
 // 웨이브 편성 (2026-08-09 구조 개편). 예전엔 방송 중 숫자키로 한 마리씩 직접 소환했다 —
@@ -73,6 +73,35 @@ export function waveAt(l: Lineup, index: number): WaveEntry[] {
 
 /** 편성한 웨이브 수 (빈 칸 제외) — HUD가 "3/5 웨이브"를 그릴 때 쓴다. */
 export const filledWaves = (l: Lineup) => l.filter((w) => w.length > 0).length;
+
+// ── 위협도 ──
+// 코스트는 "얼마를 썼나"이지 "얼마나 위험한가"가 아니다. 싼 걸 잔뜩 넣은 웨이브와 비싼 하나를
+// 넣은 웨이브가 코스트가 같아도 체감은 완전히 다르다 — 편성 화면이 그 차이를 보여주려면
+// 스탯에서 파생한 지표가 따로 필요하다. 표시 전용이다: 전투 계산에는 일절 끼어들지 않는다.
+export const THREAT_HP_WEIGHT = 10; // 체력 이만큼이 초당 피해 1과 맞먹는다고 본다
+export const THREAT_ARMOR_WEIGHT = 10; // 방어 1당 체력 +10%로 환산 (약한 다타를 막는 값어치)
+export const THREAT_SPLIT_WEIGHT = 0.35; // 분열체 한 마리당 +35%
+
+/** 몬스터 한 마리의 위협도. */
+export function unitThreat(id: MonsterId): number {
+  // MonsterDef로 좁혀 받는다 — MONSTERS는 satisfies라 줄마다 리터럴 타입이 유니온으로 남고,
+  // 선택적 필드(suicide/armor/split)를 안 가진 몬스터가 섞이면 유니온 접근이 막힌다.
+  const def: MonsterDef = MONSTERS[id];
+  // 자폭은 한 번 터지고 죽는다 — dmg/atkCd로 재면 폭탄 박쥐(atkCd 0.1)가 초당 200이 돼 폭주한다.
+  const dps = def.suicide ? def.dmg : def.dmg / Math.max(0.1, def.atkCd);
+  const bulk = (def.hp * (1 + (def.armor ?? 0) / THREAT_ARMOR_WEIGHT)) / THREAT_HP_WEIGHT;
+  const split = def.split ? 1 + def.split.count * THREAT_SPLIT_WEIGHT : 1;
+  return (dps + bulk) * split;
+}
+
+/** 웨이브 하나의 위협도. 오라는 자기 몫이 아니라 무리 전체를 세게 만드는 것이라 마지막에 곱한다
+ *  (겹쳐도 가장 센 것 하나만 — battleSim.applyAuras와 같은 규칙). */
+export function waveThreat(w: Wave): number {
+  if (!w.length) return 0;
+  const base = w.reduce((s, e) => s + unitThreat(e.type) * e.count, 0);
+  const aura = Math.max(1, ...w.map((e) => (MONSTERS[e.type] as MonsterDef).aura?.atk ?? 1));
+  return Math.round(base * aura);
+}
 
 export interface WaveTimer {
   waveT: number; // 다음 투입까지 남은 시간(초)

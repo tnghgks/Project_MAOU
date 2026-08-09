@@ -12,6 +12,8 @@ import {
   emptyLineup,
   validateLineup,
   waveAt,
+  waveThreat,
+  unitThreat,
   stepWave,
   WAVE_INTERVAL,
   filledWaves,
@@ -136,6 +138,41 @@ for (const id of summonableAt(FINAL_EP)) {
   // 편성한 몬스터 종류 — 요청 출제 풀이 이걸 본다
   assert.deepStrictEqual(lineupMonsters(l).sort(), ['archer', 'slime']);
   assert.deepStrictEqual(lineupMonsters(emptyLineup()), []);
+}
+
+// ── 위협도 ──
+// 표시 전용 지표지만 편성 판단의 근거로 쓰이므로, 설계 의도가 숫자로 지켜지는지 확인한다.
+{
+  assert.strictEqual(waveThreat([]), 0, '빈 웨이브는 0');
+  assert.ok(Number.isInteger(waveThreat([{ type: 'slime', count: 3 }])), '표시용이라 정수로 떨어져야 한다');
+
+  // 마릿수에 단조 증가
+  const one = waveThreat([{ type: 'slime', count: 1 }]);
+  const four = waveThreat([{ type: 'slime', count: 4 }]);
+  assert.ok(four > one, '많을수록 위협적');
+
+  // 자폭은 한 방으로 계산한다 — dmg/atkCd로 재면 폭탄 박쥐가 초당 200이 돼 지표가 폭주한다
+  const bat = MONSTERS.bat;
+  assert.ok(unitThreat('bat') < bat.dmg / bat.atkCd, '자폭은 dps 환산에서 제외돼야 한다');
+  assert.ok(unitThreat('bat') < unitThreat('knight'), '박쥐가 정예 기사보다 위협적일 수는 없다');
+
+  // 분열 슬라임 하나가 슬라임 둘보다 위협적이다 — 죽어야 진짜 물량이 나오는 값어치
+  assert.ok(unitThreat('splitter') > unitThreat('slime') * 2, '분열 몫이 반영돼야 한다');
+
+  // 방어는 체력으로 환산돼 붙는다 — 체력 몫만으로 설명되면 안 된다
+  assert.ok(MONSTERS.turtle.armor && MONSTERS.turtle.armor > 0);
+  assert.ok(unitThreat('turtle') > MONSTERS.turtle.hp / 10, '방어가 체력 몫 위에 얹혀야 한다');
+
+  // 오라는 자기 몫이 아니라 무리 전체를 곱한다 — 따로 더한 값보다 커야 의미가 있다
+  const pack = waveThreat([
+    { type: 'slime', count: 4 },
+    { type: 'shaman', count: 1 },
+  ]);
+  const apart = waveThreat([{ type: 'slime', count: 4 }]) + unitThreat('shaman');
+  assert.ok(pack > apart, '주술사를 섞으면 무리 전체가 세져야 한다');
+
+  // 편성 가능한 몬스터는 전부 양수 — 0이면 막대가 안 그려진다
+  for (const id of summonableAt(FINAL_EP)) assert.ok(unitThreat(id) > 0, `${id}의 위협도가 0 이하`);
 }
 
 // ── 투입 타이머 (stepWave) ──

@@ -16,7 +16,10 @@ import {
   summonableAt,
   validateLineup,
   waveCost,
+  waveThreat,
+  waveAt,
   WAVE_CYCLE_GROWTH,
+  WAVE_CYCLE_MAX,
   WAVE_ENTRY_MAX,
   WAVE_TYPES_MAX,
   WAVE_INTERVAL,
@@ -69,9 +72,12 @@ const ERROR_TEXT: Record<LineupError, string> = {
   tooManyCount: `한 종류는 ${WAVE_ENTRY_MAX}마리까지만`,
 };
 
-const CHIP_BOX = 34; // 칩 안 썸네일 한 변(px) — 이름·수량과 한 줄에 들어가야 한다
+const CHIP_BOX = 34; // 타임라인 칸 안 썸네일 한 변(px)
 const POOL_BOX = 44; // 팔레트 카드 썸네일
+const PREVIEW_BOX = 30; // 미리보기 스트립 — 마릿수만큼 깔리므로 작게
+const PREVIEW_MAX = 24; // 이 이상은 "+N"으로 접는다. 상한(12마리 × 3종)을 다 깔면 줄이 넘친다
 const BUDGET_CELLS = 20; // 예산 게이지 칸 수. 예산이 화마다 달라도 칸 수는 고정이라 눈이 익는다
+const CYCLE_TAIL = 3; // 타임라인 끝에 미리 보여줄 반복 웨이브 수
 
 // 몬스터 한 마리 추가 — 이미 있으면 수량만 올린다. 종류 상한에 걸리면 같은 배열을 그대로 돌려준다
 // (호출부가 참조 비교로 "아무 일도 안 일어났다"를 안다).
@@ -109,18 +115,25 @@ interface PortraitProps {
   onShow: (id: MonsterId, el: HTMLElement) => void;
   onHide: () => void;
 }
-function Portrait({ id, box, onShow, onHide }: PortraitProps) {
+/** 스프라이트만. 고스트 칸·미리보기처럼 호버 쪽지가 필요 없는 자리에 쓴다. */
+function MonsterArt({ id, box }: { id: MonsterId; box: number }) {
   const def: MonsterDef = MONSTERS[id];
   return (
+    <SpriteBox
+      char={def.char}
+      sheet={def.sheet}
+      tint={def.tint}
+      scale={def.scale}
+      box={box}
+      glyph={def.name.slice(0, 1)}
+    />
+  );
+}
+
+function Portrait({ id, box, onShow, onHide }: PortraitProps) {
+  return (
     <span className="art-hit" onMouseEnter={(e) => onShow(id, e.currentTarget)} onMouseLeave={onHide}>
-      <SpriteBox
-        char={def.char}
-        sheet={def.sheet}
-        tint={def.tint}
-        scale={def.scale}
-        box={box}
-        glyph={def.name.slice(0, 1)}
-      />
+      <MonsterArt id={id} box={box} />
     </span>
   );
 }
@@ -143,6 +156,35 @@ export default function LineupView() {
   const error = validateLineup(lineup, episode);
   const filled = Math.round((Math.min(cost, budget) / budget) * BUDGET_CELLS);
   const epTitle = CUTSCENES[stageCut(episode)]?.title ?? `${episode}화`;
+
+  // 투입 시각은 슬롯 번호가 아니라 "채워진 칸의 순번"으로 정해진다 — waveAt이 빈 칸을 건너뛰고
+  // 압축하기 때문이다. 슬롯 인덱스로 계산하면 중간에 빈 칸이 있을 때 표시가 실제와 어긋난다.
+  const airTime: (number | null)[] = [];
+  let nth = 0;
+  for (const w of lineup) airTime.push(w.length ? nth++ * WAVE_INTERVAL : null);
+  const filledCount = nth;
+
+  // 위협도 막대는 이 편성 안에서의 상대값이다. 절대 기준을 잡으려면 "적정 난이도"가 먼저
+  // 정해져야 하는데 아직 밸런스가 굳지 않았다 — 지금은 웨이브끼리의 경중만 보여준다.
+  const maxThreat = Math.max(1, ...lineup.map(waveThreat));
+
+  // 편성을 다 쓴 뒤 이어질 반복 웨이브. 마릿수는 waveAt에서 그대로 가져온다.
+  const cycleTail = filledCount
+    ? Array.from({ length: CYCLE_TAIL }, (_, k) => {
+        const index = filledCount + k;
+        const cycle = Math.min(WAVE_CYCLE_MAX, Math.floor(index / filledCount));
+        return {
+          index,
+          at: index * WAVE_INTERVAL,
+          mult: (1 + cycle * WAVE_CYCLE_GROWTH).toFixed(1),
+          entries: waveAt(lineup, index),
+        };
+      })
+    : [];
+
+  // 선택한 웨이브를 한 마리씩 펼친다 — "×6"보다 스프라이트 여섯 개가 밀도를 빨리 알려준다.
+  const selCount = lineup[sel].reduce((s, e) => s + e.count, 0);
+  const previewUnits = lineup[sel].flatMap((e) => Array.from({ length: e.count }, () => e.type)).slice(0, PREVIEW_MAX);
 
   // 초상화 기준으로 쪽지를 띄운다 — 마우스 좌표를 쓰면 손을 조금만 떨어도 쪽지가 흔들린다.
   const showTip = useCallback((id: MonsterId, el: HTMLElement) => {
@@ -230,60 +272,110 @@ export default function LineupView() {
           </header>
           <div className="px-window-body">
             <div className="px-section">
-              <ol className="wave-list">
-                {lineup.map((w, i) => (
-                  <li key={i}>
-                    <button
-                      type="button"
-                      className={i === sel ? 'wave-row on' : 'wave-row'}
-                      onClick={() => setSel(i)}
-                      aria-pressed={i === sel}
-                    >
-                      <span className="wave-cursor">▶</span>
-                      <span className="wave-no">
-                        웨이브 {i + 1}
-                        {/* 몇 초에 나오는지 — 이 목록이 곧 시간표라는 걸 숫자로 못박는다 */}
-                        <span className="wave-at">{i * WAVE_INTERVAL}초</span>
+              {/* 시간이 왼쪽에서 오른쪽으로 흐르는 타임라인. 세로 목록이던 걸 눕힌 이유는
+                  이 화면의 본질이 "무엇을 넣나"가 아니라 "언제 무엇이 나오나"이기 때문이다. */}
+              <ol className="wave-track">
+                {lineup.map((w, i) => {
+                  const threat = waveThreat(w);
+                  const at = airTime[i];
+                  return (
+                    <li key={i}>
+                      <button
+                        type="button"
+                        className={i === sel ? 'wave-card on' : 'wave-card'}
+                        onClick={() => setSel(i)}
+                        aria-pressed={i === sel}
+                      >
+                        <span className="wave-time">{at === null ? '건너뜀' : `${at}초`}</span>
+                        <span className="wave-no">웨이브 {i + 1}</span>
+                        <span className="wave-units">
+                          {w.length === 0 ? (
+                            <span className="wave-empty">비어 있음</span>
+                          ) : (
+                            w.map((e) => (
+                              <span
+                                key={e.type}
+                                className="wave-unit"
+                                role="button"
+                                tabIndex={0}
+                                title={`${MONSTERS[e.type].name} 한 마리 빼기`}
+                                onClick={(ev) => {
+                                  ev.stopPropagation(); // 칸 선택으로 번지지 않게 — 칩은 "빼기" 전용이다
+                                  tryRemove(i, e.type);
+                                }}
+                                onKeyDown={(ev) => {
+                                  if (ev.key !== 'Enter' && ev.key !== ' ') return;
+                                  ev.stopPropagation();
+                                  ev.preventDefault();
+                                  tryRemove(i, e.type);
+                                }}
+                              >
+                                {/* 이름은 뺐다 — 칸이 좁아 두 줄로 접힌다. 스프라이트로 알아보고
+                                    자세한 건 호버 쪽지가 맡는다. */}
+                                <Portrait id={e.type} box={CHIP_BOX} onShow={showTip} onHide={hideTip} />
+                                <span className="unit-count">×{e.count}</span>
+                                <span className="unit-minus">−</span>
+                              </span>
+                            ))
+                          )}
+                        </span>
+                        {/* 위협도 — 코스트는 "얼마 썼나"라서 무게를 못 말해준다.
+                            막대는 이 편성 안에서 가장 무거운 웨이브를 100%로 잡은 상대값이다. */}
+                        <span className="wave-meter" aria-hidden="true">
+                          <span
+                            className="wave-meter-fill"
+                            style={{ width: `${Math.round((threat / maxThreat) * 100)}%` }}
+                          />
+                        </span>
+                        <span className="wave-foot">
+                          <span>{waveCost(w)}p</span>
+                          <span className="wave-threat">위협 {threat}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+
+                {/* 반복 사이클 꼬리 — 편성이 5칸에서 끝나지 않는다는 걸 문장이 아니라 칸으로 보여준다.
+                    실제 투입될 마릿수를 waveAt으로 그대로 뽑아 쓴다(추정이 아니라 사실). */}
+                {cycleTail.map((t) => (
+                  <li key={`ghost-${t.index}`}>
+                    <div className="wave-card ghost">
+                      <span className="wave-time">{t.at}초</span>
+                      <span className="wave-no">↻ ×{t.mult}</span>
+                      <span className="wave-units">
+                        {t.entries.map((e) => (
+                          <span key={e.type} className="wave-unit">
+                            <MonsterArt id={e.type} box={CHIP_BOX} />
+                            <span className="unit-count">×{e.count}</span>
+                          </span>
+                        ))}
                       </span>
-                      <span className="wave-slots">
-                        {w.length === 0 ? (
-                          <span className="wave-empty">비어 있음 — 아래에서 출연진을 고르세요</span>
-                        ) : (
-                          w.map((e) => (
-                            <span
-                              key={e.type}
-                              className="wave-chip"
-                              role="button"
-                              tabIndex={0}
-                              title={`${MONSTERS[e.type].name} 한 마리 빼기`}
-                              onClick={(ev) => {
-                                ev.stopPropagation(); // 칸 선택으로 번지지 않게 — 칩은 "빼기" 전용이다
-                                tryRemove(i, e.type);
-                              }}
-                              onKeyDown={(ev) => {
-                                if (ev.key !== 'Enter' && ev.key !== ' ') return;
-                                ev.stopPropagation();
-                                ev.preventDefault();
-                                tryRemove(i, e.type);
-                              }}
-                            >
-                              <Portrait id={e.type} box={CHIP_BOX} onShow={showTip} onHide={hideTip} />
-                              <span className="chip-name">{MONSTERS[e.type].name}</span>
-                              <span className="chip-count">×{e.count}</span>
-                              <span className="chip-minus">−</span>
-                            </span>
-                          ))
-                        )}
+                      <span className="wave-foot">
+                        <span>반복</span>
                       </span>
-                      <span className="wave-cost">{waveCost(w)}p</span>
-                    </button>
+                    </div>
                   </li>
                 ))}
               </ol>
-              {/* 5칸이 끝이 아니라는 사실 — 힌트 문장에만 있으면 아무도 안 읽는다 */}
-              <p className="wave-loop">
-                ↻ 마지막 웨이브 뒤엔 처음부터 반복 — 한 바퀴 돌 때마다 마릿수 +{Math.round(WAVE_CYCLE_GROWTH * 100)}%
-              </p>
+            </div>
+
+            {/* 선택한 웨이브가 실제로 화면에 얼마나 깔리는지 — 숫자 "×6"보다 스프라이트 여섯 개가 빠르다 */}
+            <div className="px-section">
+              <h3 className="px-section-title">
+                웨이브 {sel + 1}에 나올 무리
+                <span className="px-count">
+                  {selCount}마리 · 위협 {waveThreat(lineup[sel])}
+                </span>
+              </h3>
+              <div className="wave-preview">
+                {selCount === 0 ? (
+                  <span className="wave-empty">아직 아무도 없습니다</span>
+                ) : (
+                  previewUnits.map((id, k) => <MonsterArt key={k} id={id} box={PREVIEW_BOX} />)
+                )}
+                {selCount > PREVIEW_MAX && <span className="preview-more">+{selCount - PREVIEW_MAX}</span>}
+              </div>
             </div>
 
             <div className="px-section">
