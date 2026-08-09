@@ -1,6 +1,12 @@
 import { clamp, danger, hypeTier, viewerDrift, MIN_VIEWERS, type HypeTier } from '../formulas.ts';
 import type { HeroEntity, MonsterEntity, Arrow } from './entities.ts';
-import { hasTrait, INFINITE_DANCE_RATE, INFINITE_DANCE_MAX, INFINITE_DANCE_RESET_IDLE, type TraitId } from '../data/traits.ts';
+import {
+  hasTrait,
+  INFINITE_DANCE_RATE,
+  INFINITE_DANCE_MAX,
+  INFINITE_DANCE_RESET_IDLE,
+  type TraitId,
+} from '../data/traits.ts';
 import { ATTACK_RELEASE_SEC, SARGAS_THROW_RELEASE_SEC, SARGAS_STOMP_LAND_SEC } from './anims.ts'; // 값만 가져온다 — anims의 Phaser는 type import라 런타임에 없다
 
 // "엔티티용 formulas.ts" — 전투 시뮬 결정 로직을 Phaser 없이 모은다.
@@ -28,6 +34,34 @@ const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.
 // 근접 몬스터 수 (회복 입력). update와 stepHero가 공유.
 export function countNear(monsters: readonly MonsterEntity[], hero: HeroEntity): number {
   return monsters.filter((m) => !m.dead && dist(m, hero) < NEAR_RADIUS).length;
+}
+
+// ── 역할 기믹 (monsters.ts의 armor/aura를 실제 전투에 먹이는 두 함수) ──
+
+/** armor로 다 막혀도 최소 이만큼은 들어간다. 0이면 공격력이 armor 이하인 동안 영원히 못 죽인다. */
+export const ARMOR_MIN_DMG = 1;
+export const armorReduce = (dmg: number, armor = 0) => Math.max(ARMOR_MIN_DMG, dmg - armor);
+
+/** 오라 몬스터 주변 아군의 버프 배율을 매 프레임 통째로 다시 칠한다.
+ *  누적이 아니라 재계산인 이유: 오라 몬스터가 죽거나 서로 멀어지면 버프도 즉시 풀려야 하는데
+ *  누적 방식은 해제 시점을 놓친다. 겹친 오라는 곱하지 않고 가장 센 것 하나만 먹는다 —
+ *  주술사를 여러 마리 겹쳐 세워 배율을 폭주시키는 편성을 막는다. */
+export function applyAuras(monsters: readonly MonsterEntity[]): void {
+  const sources = monsters.filter((m) => !m.dead && m.def.aura);
+  for (const m of monsters) {
+    let atk = 1;
+    let spd = 1;
+    for (const s of sources) {
+      // 자기 자신은 안 버프한다 — 주술사가 스스로 세지면 "약한데 남을 강하게 한다"는 역할이 흐려진다
+      if (s === m) continue;
+      const a = s.def.aura!;
+      if (dist(m, s) > a.radius) continue;
+      atk = Math.max(atk, a.atk);
+      spd = Math.max(spd, a.speed);
+    }
+    m.auraAtk = atk;
+    m.auraSpd = spd;
+  }
 }
 
 // ── 용사 AI ──
@@ -151,9 +185,13 @@ export function stepHero(
 // 씬이 모션을 새로 걸지 않는다 — 이미 도는 공격 애니메이션을 끊지 않으려는 것.
 export type BossPattern =
   // 사르가스 (boss_golem)
-  | 'rock' | 'stomp' | 'charge'
+  | 'rock'
+  | 'stomp'
+  | 'charge'
   // 베르하르트 (boss_knight)
-  | 'swordbeam' | 'spaceSlash' | 'knightCharge';
+  | 'swordbeam'
+  | 'spaceSlash'
+  | 'knightCharge';
 export type MonsterIntent =
   | { kind: 'move'; facing: Facing }
   | { kind: 'melee'; facing: Facing; dmg: number; suicide: boolean }
@@ -176,7 +214,14 @@ export type MonsterIntent =
   | { kind: 'bossChargeMove'; facing: Facing } // 돌진 이동 중(매 프레임)
   | { kind: 'bossChargeHit'; facing: Facing; dmg: number } // 돌진 중 용사와 충돌
   // ── 베르하르트(기사) 전용 ──
-  | { kind: 'bossSwordbeam'; facing: Facing; x: number; y: number; beams: Array<{ tx: number; ty: number }>; dmg: number } // 검기 3개 발사
+  | {
+      kind: 'bossSwordbeam';
+      facing: Facing;
+      x: number;
+      y: number;
+      beams: Array<{ tx: number; ty: number }>;
+      dmg: number;
+    } // 검기 3개 발사
   | { kind: 'bossSpaceSlashCharge'; facing: Facing; x: number; y: number; threshold: number } // 공간 가르기 시작 (threshold: 저지에 필요한 데미지)
   | { kind: 'bossSpaceSlashFail'; facing: Facing; x: number; y: number; radius: number; dmg: number } // 공간 가르기 저지 실패 → 광역 공격
   | { kind: 'bossKnightChargeMove'; facing: Facing } // 베르하르트 돌진 이동 중
@@ -214,13 +259,16 @@ export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): Mon
     m.windupT = Math.max(0, m.windupT - dt);
     const aim = facingOf(H.x - m.x, H.y - m.y) ?? 'south';
     if (m.windupT > 0) return { kind: 'idle', facing: aim };
-    return { kind: 'arrow', facing: aim, x: m.x, y: m.y, tx: H.x, ty: H.y, dmg: m.def.dmg };
+    return { kind: 'arrow', facing: aim, x: m.x, y: m.y, tx: H.x, ty: H.y, dmg: m.def.dmg * (m.auraAtk ?? 1) };
   }
 
+  // 오라 버프(주술사)는 기저 스탯을 안 건드리고 쓰는 자리에서만 곱한다 — applyAuras가 매 프레임
+  // 다시 칠하므로 버프원이 사라지면 다음 프레임에 저절로 원래 수치로 돌아온다.
   const d = dist(m, H);
   if (d > m.def.range) {
-    const vx = ((H.x - m.x) / d) * m.def.speed;
-    const vy = ((H.y - m.y) / d) * m.def.speed;
+    const spd = m.def.speed * (m.auraSpd ?? 1);
+    const vx = ((H.x - m.x) / d) * spd;
+    const vy = ((H.y - m.y) / d) * spd;
     m.x += vx * dt;
     m.y += vy * dt;
     // 용사 쪽으로 이동 중이므로 속도가 0일 수 없다 (d > range > 0)
@@ -235,7 +283,7 @@ export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): Mon
       m.windupT = ATTACK_RELEASE_SEC;
       return { kind: 'draw', facing };
     }
-    return { kind: 'melee', facing, dmg: m.def.dmg, suicide: !!m.def.suicide };
+    return { kind: 'melee', facing, dmg: m.def.dmg * (m.auraAtk ?? 1), suicide: !!m.def.suicide };
   }
   return { kind: 'idle', facing };
 }
@@ -550,7 +598,8 @@ export function stepArrow(a: Arrow, hero: HeroEntity, dt: number): ArrowResult {
   // 비행 중 충돌 체크 (검기 등)
   if (a.checkMidair) {
     const heroDistance = Math.hypot(a.x - hero.x, a.y - hero.y);
-    if (heroDistance < ARROW_HERO_HIT * 1.5) { // 검기는 범위가 더 넓음
+    if (heroDistance < ARROW_HERO_HIT * 1.5) {
+      // 검기는 범위가 더 넓음
       return { hit: a.dmg };
     }
   }

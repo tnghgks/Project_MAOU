@@ -12,6 +12,7 @@ import PauseOverlay from './ui/PauseOverlay.tsx';
 import ComboMeter from './ui/ComboMeter.tsx';
 import MenuOverlay from './ui/MenuOverlay.tsx';
 import TitleView from './ui/title/TitleView.tsx';
+import LineupView from './ui/LineupView.tsx';
 import CutsceneView from './ui/CutsceneView.tsx';
 import DevPanel from './ui/DevPanel.tsx';
 import { useBgm } from './ui/useBgm.ts';
@@ -70,6 +71,8 @@ export default function App() {
       {/* 타이틀과 컷씬은 방송 프레임까지 덮는 전체화면.
           boot 동안에도 타이틀을 띄워 방송 프레임(빈 캔버스)이 잠깐 노출되는 걸 막는다. */}
       {(phase === 'title' || phase === 'boot') && <TitleView />}
+      {/* 편성 화면도 방송 프레임까지 덮는 전체화면 — 방송 전 결정이라 채팅·사이드바가 보일 이유가 없다 */}
+      {phase === 'lineup' && <LineupView />}
       <CutsceneView />
       {import.meta.env.DEV && <DevPanel />}
     </>

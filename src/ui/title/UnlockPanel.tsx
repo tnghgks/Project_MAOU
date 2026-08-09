@@ -1,6 +1,6 @@
 import { useStore } from 'zustand';
 import { gameStore } from '../../game/store.ts';
-import { MONSTERS, type MonsterId } from '../../data/monsters.ts';
+import { MONSTERS, type MonsterId, type MonsterDef } from '../../data/monsters.ts';
 import { SKILLS, type SkillId } from '../../data/skills.ts';
 import { EPISODES, FINAL_EP } from '../../data/progression.ts';
 import { useSpriteThumb, type SpriteThumb } from './useSpriteThumb.ts';
@@ -34,7 +34,10 @@ function monsterEntries(bestEpisode: number): Entry[] {
   return (Object.keys(MONSTERS) as MonsterId[])
     .filter((id) => MONSTERS[id].unlock < 99)
     .map((id) => {
-      const def = MONSTERS[id];
+      // MonsterDef로 한 번 좁혀 받는다 — MONSTERS는 satisfies라 각 줄의 리터럴 타입이 유니온으로
+      // 남고, 선택적 필드(char 등)를 안 가진 몬스터가 하나라도 생기면 유니온 접근이 막힌다
+      // (BootScene도 같은 이유로 `as MonsterDef[]`를 쓴다).
+      const def: MonsterDef = MONSTERS[id];
       return {
         key: id,
         name: def.name,
@@ -50,7 +53,10 @@ function bossEntries(seen: readonly MonsterId[]): Entry[] {
   return (Object.keys(MONSTERS) as MonsterId[])
     .filter((id) => MONSTERS[id].unlock >= 99)
     .map((id) => {
-      const def = MONSTERS[id];
+      // MonsterDef로 한 번 좁혀 받는다 — MONSTERS는 satisfies라 각 줄의 리터럴 타입이 유니온으로
+      // 남고, 선택적 필드(char 등)를 안 가진 몬스터가 하나라도 생기면 유니온 접근이 막힌다
+      // (BootScene도 같은 이유로 `as MonsterDef[]`를 쓴다).
+      const def: MonsterDef = MONSTERS[id];
       const ep = bossEpisode.get(id) ?? FINAL_EP;
       return {
         key: id,
