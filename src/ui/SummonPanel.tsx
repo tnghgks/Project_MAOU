@@ -11,7 +11,7 @@ import { FINAL_EP } from '../data/progression.ts';
 import { SUMMON_Y, CANVAS } from '../game/layout.ts';
 
 const PANEL_TOP_PCT = (SUMMON_Y / CANVAS.H) * 100;
-const SKILL_KEYS = ['Q', 'W', 'E', 'R'];
+const SKILL_KEYS = ['1', '2', '3', '4']; // 2026-08-10: QWER → 숫자키 (WASD 이동과 겹치지 않게)
 const ALL_SKILL_IDS = Object.keys(SKILLS) as SkillId[];
 const UPGRADE_KEYS = Object.keys(UPGRADES) as UpgradeKey[];
 // 진짜 진행도 개념(경험치 등)이 없어 순수 장식 — 레벨 10에서 꽉 찬다는 감만 준다.

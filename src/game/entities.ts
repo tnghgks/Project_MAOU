@@ -22,6 +22,7 @@ export interface HeroEntity {
   lifesteal: number;
   knockback: number;
   regenFlat: number;
+  regen: number;
   goldBonus: number;
   atkCd: number;
   dashT: number; // 대시 남은 시간 (용사 모드)
@@ -106,6 +107,7 @@ export function spawnHero(s: HeroStats, at: { x: number; y: number }): HeroEntit
     lifesteal: s.lifesteal,
     knockback: s.knockback,
     regenFlat: s.regenFlat,
+    regen: s.regen,
     goldBonus: s.goldBonus,
     atkCd: 0,
     dashT: 0,

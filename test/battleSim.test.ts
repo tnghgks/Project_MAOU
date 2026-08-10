@@ -14,6 +14,8 @@ import {
   GOLEM_ROCK_WINDUP,
   GOLEM_CHARGE_HIT_RADIUS,
   GOLEM_CHARGE_MAX_T,
+  GOLEM_CHARGE_DIST,
+  GOLEM_CHARGE_WALL_STUN,
   type MonsterIntent,
 } from '../src/game/battleSim.ts';
 import { ATTACK_RELEASE_SEC } from '../src/game/anims.ts';
@@ -36,6 +38,7 @@ const stats = {
   lifesteal: 0,
   knockback: 0,
   regenFlat: 0,
+  regen: 0,
   goldBonus: 0,
 };
 
@@ -63,16 +66,28 @@ const mon = (type: keyof typeof MONSTERS, x: number, y: number): MonsterEntity =
 
 const still = { dx: 0, dy: 0, dash: false };
 
-// ── stepHero: 근접 0마리 지속이 REGEN_DELAY(1.5s)를 넘어야 REGEN_RATE(0.05) 회복 시작 ──
+// ── stepHero: 근접 0마리 지속이 REGEN_DELAY(1.5s)를 넘어야 REGEN_RATE(0.1) 회복 시작 ──
 {
   const hero = spawnHero(stats, HOME);
   hero.hp = 50;
   let intent = stepHero(hero, [], 0, 1, arenaBounds, still); // dt=1, 몬스터 없음 (유예 아직)
   assert.strictEqual(hero.hp, 50, '유예 시간(1.5s) 전엔 회복 없음');
   intent = stepHero(hero, [], 0, 1, arenaBounds, still); // 누적 2s ≥ REGEN_DELAY
-  assert.strictEqual(hero.hp, 55, '50 + 100*0.05*1 (유예 지난 뒤 회복)');
+  assert.strictEqual(hero.hp, 60, '50 + 100*0.1*1 (유예 지난 뒤 회복, 2026-08-10 2배)');
   assert.deepStrictEqual(intent.attacks, []);
   assert.strictEqual(intent.facing, null, '입력 없으면 대기');
+}
+
+// ── stepHero: 체력 재생 스탯(regen)은 근접 몬스터가 있어도 돈다 ──
+{
+  const hero = spawnHero({ ...stats, regen: 2 }, HOME);
+  hero.hp = 50;
+  stepHero(hero, [], 3, 1, arenaBounds, still); // nearCount 3 → 비전투 회복은 막힌 상태
+  assert.strictEqual(hero.hp, 52, '적이 붙어 있어도 regen만큼은 찬다');
+  assert.strictEqual(hero.safeT, 0, '비전투 회복은 여전히 안 돈다');
+  hero.hp = 99.5;
+  stepHero(hero, [], 3, 1, arenaBounds, still);
+  assert.strictEqual(hero.hp, 100, '최대치를 넘지 않는다');
 }
 
 // ── stepHero: 휘두르기는 광역이되 바라보는 쪽 180°만 ──
@@ -300,7 +315,8 @@ const still = { dx: 0, dy: 0, dash: false };
 }
 
 // ── stepBossGolem: 돌진 목표는 윈드업 "시작" 시점에 고정되고 텔레그래프에 실려 나간다
-// (씬이 이 좌표로 윈드업 내내 조준선을 그려야 회피가 성립한다) ──
+// (씬이 이 좌표로 윈드업 내내 조준선을 그려야 회피가 성립한다).
+// 2026-08-10: 목표 = 용사 위치가 아니라 용사 쪽으로 GOLEM_CHARGE_DIST만큼 뻗은 끝점 ──
 {
   const hero = spawnHero(stats, HOME);
   const boss = mon('boss_golem', HOME.x + 200, HOME.y);
@@ -308,13 +324,14 @@ const still = { dx: 0, dy: 0, dash: false };
   boss.bossT = 0.05;
   const rnd1 = () => 0.9; // rnd >= 0.5 → 'charge' (near/far 둘 다)
   const tele = stepBossGolem(boss, hero, 0.1, rnd1);
+  const endX = HOME.x + 200 - GOLEM_CHARGE_DIST; // 용사가 -x쪽이라 그 방향으로 340px
   assert.strictEqual(tele.kind, 'bossTelegraph');
   if (tele.kind === 'bossTelegraph') {
     assert.strictEqual(tele.pattern, 'charge');
-    assert.strictEqual(tele.chargeTx, hero.x, '텔레그래프에 목표 좌표가 실린다');
+    assert.strictEqual(tele.chargeTx, endX, '텔레그래프에 목표 좌표가 실린다');
     assert.strictEqual(tele.chargeTy, hero.y);
   }
-  assert.strictEqual(boss.chargeTx, hero.x, '엔티티에도 즉시 고정된다');
+  assert.strictEqual(boss.chargeTx, endX, '용사 앞이 아니라 정해진 길이 끝에 고정된다');
 
   hero.x = HOME.x + 900; // 윈드업 중 용사가 도망가도 목표는 안 바뀐다
   boss.bossT = 0.01;
@@ -329,6 +346,32 @@ const still = { dx: 0, dy: 0, dash: false };
     if (i.kind === 'idle' && boss.bossPhase === 'recover') missed = i;
   }
   assert.ok(missed, '고정된 목표에 도달하면 멈춘다(빗나간 돌진)');
+}
+
+// ── stepBossGolem: 돌진이 맵 끝에 부딪히면 GOLEM_CHARGE_WALL_STUN(3초) 기절 ──
+{
+  const hero = spawnHero(stats, HOME);
+  const boss = mon('boss_golem', arenaBounds.minX + 40, HOME.y);
+  hero.x = arenaBounds.minX; // 벽 쪽으로 유인 — 돌진 340px는 경계를 훌쩍 넘는다
+  boss.bossPhase = 'windup';
+  boss.bossPattern = 'charge';
+  boss.bossT = 0.01;
+  boss.chargeTx = boss.x - GOLEM_CHARGE_DIST;
+  boss.chargeTy = boss.y;
+  hero.y = HOME.y - 400; // 충돌(bossChargeHit)이 아니라 벽 판정을 보고 싶다 — 용사는 치워둔다
+  stepBossGolem(boss, hero, 0.1, Math.random, arenaBounds); // 윈드업 종료 → 돌진 시작
+  let wall: MonsterIntent | null = null;
+  for (let t = 0; t < GOLEM_CHARGE_MAX_T && !wall; t += 0.05) {
+    const i = stepBossGolem(boss, hero, 0.05, Math.random, arenaBounds);
+    if (i.kind === 'bossChargeWall') wall = i;
+  }
+  assert.ok(wall, '맵 끝까지 달리면 벽에 처박힌다');
+  assert.strictEqual(boss.stunT, GOLEM_CHARGE_WALL_STUN);
+  assert.ok(boss.x >= arenaBounds.minX, '경계 밖으로는 안 나간다');
+  // 기절 중엔 AI가 통째로 멈춘다(stepStunOrKb) — recover 타이머도 같이 얼어 있다
+  const during = stepBossGolem(boss, hero, 0.5, Math.random, arenaBounds);
+  assert.strictEqual(during.kind, 'idle');
+  assert.ok((boss.stunT ?? 0) > 0, '3초는 그대로 서 있는다');
 }
 
 // ── stepBossGolem: 돌진 중 용사가 고정된 목표 자리에 그대로 있으면 충돌로 끝난다 ──

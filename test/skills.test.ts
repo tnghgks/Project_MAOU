@@ -61,6 +61,7 @@ function makeCtx(hero: HeroEntity, monsters: MonsterEntity[], randValue = 100) {
     lifesteal: 0,
     knockback: 0,
     regenFlat: 0,
+    regen: 0,
     goldBonus: 0,
   }, { x: 0, y: 0 });
   const inRange = mon(100, 0); // 거리 100 ≤ 180
@@ -93,6 +94,7 @@ function makeCtx(hero: HeroEntity, monsters: MonsterEntity[], randValue = 100) {
     lifesteal: 0,
     knockback: 0,
     regenFlat: 0,
+    regen: 0,
     goldBonus: 0,
   }, { x: 0, y: 0 });
   const target = mon(100, 100);
@@ -121,6 +123,7 @@ function makeCtx(hero: HeroEntity, monsters: MonsterEntity[], randValue = 100) {
     lifesteal: 0,
     knockback: 0,
     regenFlat: 0,
+    regen: 0,
     goldBonus: 0,
   }, { x: 0, y: 0 });
   const { ctx, calls } = makeCtx(hero, [], 100);
@@ -146,6 +149,7 @@ function makeCtx(hero: HeroEntity, monsters: MonsterEntity[], randValue = 100) {
     lifesteal: 0,
     knockback: 0,
     regenFlat: 0,
+    regen: 0,
     goldBonus: 0,
   }, { x: 0, y: 0 });
   hero.hp = 10;
@@ -174,6 +178,7 @@ function makeCtx(hero: HeroEntity, monsters: MonsterEntity[], randValue = 100) {
     lifesteal: 0,
     knockback: 0,
     regenFlat: 0,
+    regen: 0,
     goldBonus: 0,
   }, { x: 0, y: 0 });
   const { ctx, calls } = makeCtx(hero, []);

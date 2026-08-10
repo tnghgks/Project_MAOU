@@ -43,6 +43,9 @@ export type StatCardId =
   | 'deadlyBlessing'
   | 'unyieldingHeart'
   | 'ultimateEdge'
+  // 2026-08-10 추가: 상시 체력 재생(HeroStats.regen) — 비전투 회복(regenFlat)과 달리 교전 중에도 돈다
+  | 'lifeSpring'
+  | 'trollBlood'
   // 2026-08-06 추가: "나쁜" 도네 카드(curse: true) — 능력치가 깎이는 common 카드. common 풀 일부를
   // 대체하는 게 아니라 그대로 추가된다(가중치는 등급 하나로 묶여 있어 common 자체가 뽑힐 확률은 그대로,
   // 그 안에서 어떤 카드가 걸리느냐만 늘어난다).
@@ -130,6 +133,13 @@ export const STAT_CARDS = {
                          { stat: 'atk' as const,      mode: 'pctCurrent' as const, value: 0.30 },
                          { stat: 'critMult' as const, mode: 'flat' as const,       value: 50 },
                        ] },
+
+  // ── 상시 체력 재생 — regenFlat("비전투 시 5초마다")과 달리 적이 붙어 있어도 계속 찬다.
+  // 초당 수치라 한 장으로는 미미하고 겹칠수록 버티는 빌드가 된다.
+  lifeSpring:       { name: '생명의 샘',        icon: '🌿', rarity: 'common',   desc: '전투 중에도 초당 체력 +0.4 재생',
+                       mods: [{ stat: 'regen' as const,      mode: 'flat' as const,       value: 0.4 }] },
+  trollBlood:       { name: '트롤의 피',        icon: '🧪', rarity: 'magic',    desc: '전투 중에도 초당 체력 +1.5 재생',
+                       mods: [{ stat: 'regen' as const,      mode: 'flat' as const,       value: 1.5 }] },
 
   // ── 나쁜 카드(curse) — 도네이션이 항상 이득만은 아니게. common 등급, 수치는 한 장으로는
   // 체감이 크지 않되 여러 장 겹치면 아쉬워지는 선(음수 pctCurrent/%미터라 값이 음수로 폭주하지
