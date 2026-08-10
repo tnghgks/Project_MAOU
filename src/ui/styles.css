@@ -1157,6 +1157,62 @@ button {
   margin-left: auto;
   white-space: nowrap;
 }
+/* 웨이브 시계 — 상단바 한가운데 판. 바 안에 인라인으로 끼우면 좌우 정보의 폭에 따라 가운데가
+   밀려서 매번 눈이 시계를 찾아야 한다. 화면 정중앙에 못 박는다.
+   top/bottom을 둘 다 0으로 묶어 높이를 헤더와 똑같이 가져간다 — 아레나로 넘치지 않는다.
+   테두리를 .px-window식 바깥 3겹(box-shadow spread)으로 그리면 요소 밖 9px까지 뻗어서, 위로는
+   .player의 overflow:hidden에 잘리고 아래로는 아레나를 덮는다. 그래서 inset 베벨만 쓴다 —
+   inset은 요소 상자 안쪽에만 그려지므로 헤더 높이를 한 픽셀도 넘지 않는다. */
+.wave-clock {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  background: #100d22;
+  box-shadow: var(--bevel);
+  pointer-events: none;
+}
+/* Galmuri11은 11px 비트맵이라 11의 배수(22·33·44)에서만 도트가 정수배로 떨어진다. clamp로 32px 같은
+   어중간한 값이 잡히면 글자가 뭉개져 "픽셀아트"가 아니라 그냥 흐린 글씨가 된다 — 그래서 무단계
+   clamp를 버리고 배수 단계로만 키운다.
+   line-height를 글자 크기보다 작게 잡는 건 두 줄을 헤더 높이(창에 따라 32~52px) 안에 넣기 위해서다.
+   숫자와 라틴 대문자만 들어가는 자리라 밑으로 삐치는 글자가 없어 잘리지 않는다.
+   큰 단계(33px)는 헤더가 그만큼 높아지는 창에서만 켠다 — 헤더 높이는 창 세로에 비례하기 때문이다. */
+.wave-clock-time {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 20px;
+  letter-spacing: 3px;
+  color: var(--px-gold);
+  text-shadow: 0 2px 0 #8a5c00; /* 블러 없는 아래쪽 두께만 (title.css 원칙 1) */
+}
+@media (min-height: 1000px) {
+  .wave-clock-time {
+    font-size: 33px;
+    line-height: 30px;
+  }
+}
+.wave-clock-sub {
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 10px;
+  letter-spacing: 3px;
+  color: #8f88bb;
+}
+/* 임박: 색만 바꾼다. 5초 내내 깜빡이면 시선을 아레나에서 뺏어간다 */
+.wave-clock.urgent .wave-clock-time {
+  color: var(--px-warn);
+}
+.wave-clock.urgent .wave-clock-sub {
+  color: #c8896b;
+}
+
 .info-crit {
   position: absolute;
   font-size: clamp(16px, 2vw, 28px);
@@ -1533,19 +1589,69 @@ button {
 .tile.wave-tile {
   border-color: var(--brand);
 }
+/* 다음 웨이브 예고 — 이름 나열 대신 인게임 스프라이트. 편성 화면 타임라인 칩(.wave-unit)과
+   같은 문법을 쓴다: 그림 위 오른쪽 아래에 수량 배지, 그 밑에 이름 한 줄.
+   글자 크기가 전부 11px로 고정인 건 시계와 같은 이유다 — Galmuri11은 11px 배수에서만 안 뭉개진다. */
 .wave-next {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  justify-content: center;
+  gap: 4px;
   flex-shrink: 0;
   min-width: clamp(120px, 14vw, 200px);
 }
 .wave-next-label {
-  font-size: clamp(9px, 0.75vw, 12px);
+  font-size: 11px;
+  line-height: 11px;
+  letter-spacing: 1px;
   color: #8888aa;
 }
 .wave-next-list {
-  font-size: clamp(10px, 0.85vw, 13px);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px; /* 이름이 11px로 고정이라 칩 폭이 안 줄어든다 — 간격은 좁게 잡아 패널 가로를 아낀다 */
+}
+.wave-next-empty {
+  font-size: 11px;
+  color: #4e4972;
+}
+.wave-mob {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+/* 수량 배지는 썸네일 상자에 물려야 한다 — 칩(.wave-mob) 기준으로 잡으면 이름 줄 높이만큼 어긋난다 */
+.wave-mob-art {
+  position: relative;
+  display: block;
+}
+/* 썸네일 바탕만 편성 화면(.px-thumb 기본 #0d0b1a)보다 밝게 깐다. 고블린 궁수처럼 어두운 스프라이트가
+   검은 바탕에 묻혀 실루엣조차 안 보였다 — 편성은 크게 뜯어보는 화면이지만 여긴 곁눈질로 봐야 한다. */
+.wave-mob .px-thumb {
+  background: #2b2550;
+}
+.wave-mob-count {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  padding: 0 3px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 11px;
+  color: var(--px-gold);
+  background: var(--px-ink);
+}
+/* 이름은 무조건 한 줄 — 두 줄로 접히면 패널 높이가 고정이라 아래가 잘린다.
+   폭은 현재 가장 긴 이름("고블린 주술사")이 말줄임 없이 들어가는 값이다. 더 긴 이름이 생기면
+   말줄임으로 받고 전체 이름은 호버 title이 알려준다. */
+.wave-mob-name {
+  max-width: 88px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 11px;
+  line-height: 11px;
+  letter-spacing: 0;
   color: #ccd;
-  line-height: 1.4;
 }

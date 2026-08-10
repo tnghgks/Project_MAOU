@@ -5,7 +5,7 @@ import { playSfx } from '../game/sfx.ts';
 import { MONSTERS, ROLE_LABEL, type MonsterId, type MonsterDef } from '../data/monsters.ts';
 import { CUTSCENES, stageCut } from '../data/cutscenes.ts';
 import { targetGold } from '../data/progression.ts';
-import SpriteBox from './SpriteBox.tsx';
+import { MonsterArt } from './SpriteBox.tsx';
 import HeroCard from './HeroCard.tsx';
 import MonsterTip from './MonsterTip.tsx';
 import {
@@ -107,29 +107,12 @@ interface TipState {
 // 몬스터 초상화 + 호버 감지. 반드시 모듈 스코프에 둔다 — LineupView 안에서 정의하면 렌더마다
 // 새 컴포넌트 타입이 되어 초상화 전체가 언마운트/재마운트되고, 호버 한 번에 스프라이트 로딩까지
 // 다시 시작해 쪽지가 갱신되지 않는다.
-// MonsterDef로 좁혀 받는 건 MONSTERS가 satisfies라 줄마다 리터럴 타입이 유니온으로 남기 때문이다
-// (선택적 필드를 안 가진 몬스터가 섞이면 유니온 접근이 막힌다).
 interface PortraitProps {
   id: MonsterId;
   box: number;
   onShow: (id: MonsterId, el: HTMLElement) => void;
   onHide: () => void;
 }
-/** 스프라이트만. 고스트 칸·미리보기처럼 호버 쪽지가 필요 없는 자리에 쓴다. */
-function MonsterArt({ id, box }: { id: MonsterId; box: number }) {
-  const def: MonsterDef = MONSTERS[id];
-  return (
-    <SpriteBox
-      char={def.char}
-      sheet={def.sheet}
-      tint={def.tint}
-      scale={def.scale}
-      box={box}
-      glyph={def.name.slice(0, 1)}
-    />
-  );
-}
-
 function Portrait({ id, box, onShow, onHide }: PortraitProps) {
   return (
     <span className="art-hit" onMouseEnter={(e) => onShow(id, e.currentTarget)} onMouseLeave={onHide}>

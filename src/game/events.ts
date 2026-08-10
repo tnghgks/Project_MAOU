@@ -39,8 +39,9 @@ export interface HudTick {
   stageGold: number;
   target: number;
   req: { label: string; pct: number; t: number } | null;
-  /** 웨이브 진행 상황. null = 웨이브가 안 도는 구간(보스전·최종화) — SummonPanel이 칸을 통째로 숨긴다.
-   *  index는 지금까지 투입한 웨이브 수, t는 다음 투입까지 남은 초, next는 그때 나올 구성이다. */
+  /** 웨이브 진행 상황. null = 웨이브가 안 도는 구간(보스전·최종화) — 시계가 --:--로 멈춘다.
+   *  index는 지금까지 투입한 웨이브 수, t는 다음 투입까지 남은 초, next는 그때 나올 구성이다.
+   *  소비처가 둘로 갈린다: 상단바 시계(InfoLayer)가 t·index를, 하단 예고(SummonPanel)가 next를 쓴다. */
   wave: { index: number; t: number; next: WaveEntry[] } | null;
   skillCd: Partial<Record<SkillId, number>>; // QWER 쿨타임 잔여 — React SummonPanel이 스킬 칸에 표시
   dashCd: number; // Shift 대시 쿨타임 잔여 — 위와 같은 이유로 SummonPanel이 표시

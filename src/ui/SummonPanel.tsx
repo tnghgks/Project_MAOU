@@ -3,7 +3,8 @@ import { useStore } from 'zustand';
 import { gameStore } from '../game/store.ts';
 import { bus, type HudTick } from '../game/events.ts';
 import { useBusEvent } from './useBusEvent.ts';
-import { MONSTERS, type MonsterId } from '../data/monsters.ts';
+import { MONSTERS } from '../data/monsters.ts';
+import { MonsterArt } from './SpriteBox.tsx';
 import { UPGRADES, statOf, type UpgradeKey } from '../data/upgrades.ts';
 import { SKILLS, type SkillId } from '../data/skills.ts';
 import { TRAITS } from '../data/traits.ts';
@@ -25,19 +26,9 @@ const UPGRADE_BAR_MAX_LV = 10;
 // 용사 HP는 아레나 안 heroHpBar로 이미 보이니 여기선 안 그린다 — 육성 정보만 남긴다.
 // 특성(traits)은 스탯과 달리 전투 규칙 자체를 바꾸는 별도 개념이라(GDD 3-10), 같은 줄에 섞지 않고
 // 버튼으로 열리는 팝업에 따로 모아 보여준다.
-const MONSTER_ICON: Partial<Record<MonsterId, string>> = {
-  slime: '🟢',
-  archer: '🏹',
-  golem: '🗿',
-  bat: '🦇',
-  knight: '⚔️',
-  splitter: '🟠',
-  turtle: '🐢',
-  shaman: '🔮',
-  sniper: '🎯',
-  imp: '😈',
-  zombie: '🧟',
-};
+// 다음 웨이브 예고 썸네일 한 변(px). 편성 화면 칩(34)보다 큰 건 방송 중엔 이걸 곁눈질로 봐야 해서다 —
+// 44 + 이름 한 줄이 옆 스킬 타일과 같은 높이로 떨어져 패널 줄도 맞는다.
+const NEXT_ART_BOX = 44;
 const SKILL_ICON: Record<SkillId, string> = {
   화염폭발: '🔥',
   낙뢰: '⚡',
@@ -79,10 +70,14 @@ export default function SummonPanel() {
     if (tick.dashCd > prevDashCd.current + 0.01) setDashPop((p) => p + 1);
     prevDashCd.current = tick.dashCd;
     setDashCd(tick.dashCd);
-    setWave(tick.wave && { ...tick.wave });
+    // 남은 시간(t)은 이제 상단바 시계가 그린다 — 여기서 필요한 건 "몇 번째 웨이브의 구성인가"뿐이라
+    // index가 그대로면 이전 객체를 그대로 돌려준다. 매 tick(0.1초)마다 새 객체를 넣으면 스프라이트
+    // 예고가 초당 열 번 재조정된다.
+    setWave((prev) => (prev?.index === tick.wave?.index ? prev : tick.wave && { ...tick.wave }));
   });
 
-  // 웨이브 현황도 씬 전용 실시간 값이라 store엔 없다 — skillCd와 같은 이유로 매번 새 객체로 복사한다.
+  // 웨이브 현황도 씬 전용 실시간 값이라 store엔 없다 — 다만 이 패널이 쓰는 건 구성(next)뿐이라
+  // skillCd처럼 매 tick 복사하지 않고 index가 바뀔 때만 새 객체로 갈아끼운다(위 hud:tick 참고).
   //
   // wavePop은 클릭 피드백용 — 호출이 들어올 때마다 값을 올려서 key로 써먹는다. key가 바뀌면 React가
   // 그 타일을 새로 그리면서 CSS "등장" 애니메이션(tile-pop)이 다시 걸린다 — 타이머로 클래스를 붙였다
@@ -117,24 +112,37 @@ export default function SummonPanel() {
         >
           <span className="tile-key">Space</span>
           <span className="tile-icon">🌊</span>
-          <span className="tile-name">웨이브 호출{wave ? ` ${Math.ceil(wave.t)}s` : ''}</span>
+          <span className="tile-name">웨이브 호출</span>
         </button>
+        {/* 다음에 나올 얼굴들. 이름을 나열한 한 줄 텍스트였는데, 화면에 실제로 나오는 그림과 아무 관계가
+            없어서 읽어야만 알 수 있었다 — 편성 화면과 같은 스프라이트(MonsterArt)를 같은 크기로 세워
+            "저 그림이 곧 온다"가 한눈에 잡히게 했다. 남은 시간·웨이브 번호는 상단바 시계가 맡는다. */}
         <div className="wave-next">
-          {wave ? (
-            <>
-              <span className="wave-next-label">웨이브 {wave.index + 1} 예정</span>
-              <span className="wave-next-list">
-                {wave.next.length === 0
-                  ? '—'
-                  : wave.next
-                      .map((e) => `${MONSTER_ICON[e.type] ?? '❔'}${MONSTERS[e.type].name}×${e.count}`)
-                      .join(' ')}
-              </span>
-            </>
-          ) : (
-            <span className="wave-next-label">
-              {isFinal ? '최종화 — 웨이브 없음' : bossUp ? '보스전 — 웨이브 중단' : '웨이브 준비 중…'}
-            </span>
+          <span className="wave-next-label">
+            {wave
+              ? '다음 출연진'
+              : isFinal
+                ? '최종화 — 웨이브 없음'
+                : bossUp
+                  ? '보스전 — 웨이브 중단'
+                  : '웨이브 준비 중…'}
+          </span>
+          {wave && (
+            <div className="wave-next-list">
+              {wave.next.length === 0 ? (
+                <span className="wave-next-empty">편성 없음</span>
+              ) : (
+                wave.next.map((e) => (
+                  <span key={e.type} className="wave-mob" title={`${MONSTERS[e.type].name} ×${e.count}`}>
+                    <span className="wave-mob-art">
+                      <MonsterArt id={e.type} box={NEXT_ART_BOX} />
+                      <span className="wave-mob-count">×{e.count}</span>
+                    </span>
+                    <span className="wave-mob-name">{MONSTERS[e.type].name}</span>
+                  </span>
+                ))
+              )}
+            </div>
           )}
         </div>
       </div>

@@ -4,6 +4,7 @@ import { gameStore } from '../game/store.ts';
 import { useBusEvent } from './useBusEvent.ts';
 import type { HudTick } from '../game/events.ts';
 import { clamp } from '../formulas.ts';
+import { FINAL_EP } from '../data/progression.ts';
 import { ARENA, CANVAS } from '../game/layout.ts';
 
 // Phaser HudScene가 그리던 상단 정보바(시청자수·위험도·골드·시점버튼)를 React로 옮긴 레이어
@@ -18,6 +19,13 @@ const REQ_TOP_PCT = (48 / CANVAS.H) * 100;
 const VIGNETTE_H_PCT = (ARENA.h / CANVAS.H) * 100;
 
 const ALERT_COLORS = { normal: '#ffffff', warn: '#ff9933', critical: '#ff4444' } as const;
+const WAVE_URGENT_T = 5; // 이 아래로 남으면 시계를 경고색으로 — "곧 온다"를 숫자보다 색이 먼저 알린다
+
+/** 남은 초를 00:00으로. 내림이 아니라 올림이라 0.4초가 남았어도 00:01이고, 진짜 0에서만 00:00이 된다. */
+function clockText(t: number): string {
+  const s = Math.ceil(Math.max(0, t));
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+}
 
 const INIT_TICK: HudTick = {
   D: 0,
@@ -32,7 +40,7 @@ const INIT_TICK: HudTick = {
   skillCd: {},
   dashCd: 0,
   req: null,
-  wave: null, // 웨이브 표시는 SummonPanel 담당 — 여기선 타입을 맞추는 초기값일 뿐이다
+  wave: null,
 };
 
 export default function InfoLayer() {
@@ -42,6 +50,12 @@ export default function InfoLayer() {
   const gold = useStore(gameStore, (s) => s.gold);
   const viewers = useStore(gameStore, (s) => s.viewers);
   const tierColor = `#${tick.tierColor.toString(16).padStart(6, '0')}`;
+
+  // 웨이브 시계가 --:--로 멈춰 있을 때 왜 멈췄는지는 tick만 봐선 모른다(둘 다 wave === null이다) —
+  // SummonPanel과 같은 규칙으로 store에서 갈라 읽는다.
+  const bossUp = useStore(gameStore, (s) => s.bossUp);
+  const isFinal = useStore(gameStore, (s) => s.episode) >= FINAL_EP;
+  const wave = tick.wave;
 
   return (
     <div className="info-layer">
@@ -63,6 +77,16 @@ export default function InfoLayer() {
             ? `☠ ${tick.boss.name} ${Math.ceil(tick.boss.hp).toLocaleString()} / ${tick.boss.maxHp.toLocaleString()}`
             : `🎯 ${Math.floor(tick.stageGold).toLocaleString()} / ${tick.target.toLocaleString()}G`}
         </span>
+
+        {/* 웨이브 시계 — 상단바 한가운데에 걸린 간판. 방송 중 제일 자주 보는 숫자라 다른 정보와 같은
+            줄에 섞지 않고, 좌(시청자·골드)와 우(목표)의 사이에 절대 위치로 못 박는다.
+            남은 시간이 주인공이고 몇 번째 웨이브인지는 그 밑에 작게 — 그래서 시계가 크고 라벨이 작다. */}
+        <div className={wave && wave.t <= WAVE_URGENT_T ? 'wave-clock urgent' : 'wave-clock'}>
+          <span className="wave-clock-time">{wave ? clockText(wave.t) : '--:--'}</span>
+          <span className="wave-clock-sub">
+            {wave ? `WAVE ${wave.index + 1}` : isFinal ? 'FINAL' : bossUp ? 'BOSS' : 'READY'}
+          </span>
+        </div>
       </div>
 
       {tick.critical && (

@@ -1,4 +1,5 @@
 import { useSpriteThumb, type SpriteThumb } from './useSpriteThumb.ts';
+import { MONSTERS, type MonsterId, type MonsterDef } from '../data/monsters.ts';
 
 // 게임에 실제로 쓰는 스프라이트를 상자 하나에 담아 보여주는 공용 조각.
 // 원래 UnlockPanel 안에 파일 로컬로 있었는데 웨이브 편성 화면이 같은 그림을 써야 해서 꺼냈다 —
@@ -89,4 +90,23 @@ export function SpriteFrame({
 export default function SpriteBox({ char, sheet, ...rest }: SpriteBoxProps) {
   const thumb = useSpriteThumb(char, sheet);
   return <SpriteFrame thumb={thumb} {...rest} />;
+}
+
+/** 몬스터 id 하나로 인게임과 같은 그림을 그린다(tint·scale 포함).
+ *  편성 화면(LineupView)에 파일 로컬로 있었는데, 방송 중 다음 웨이브 예고(SummonPanel)가 같은 그림을
+ *  써야 해서 꺼냈다 — 편성에서 본 그림과 방송에서 보는 그림이 다르면 예고가 예고 구실을 못 한다.
+ *  MonsterDef로 좁혀 받는 건 MONSTERS가 satisfies라 줄마다 리터럴 타입이 유니온으로 남기 때문이다
+ *  (선택적 필드를 안 가진 몬스터가 섞이면 유니온 접근이 막힌다). */
+export function MonsterArt({ id, box }: { id: MonsterId; box: number }) {
+  const def: MonsterDef = MONSTERS[id];
+  return (
+    <SpriteBox
+      char={def.char}
+      sheet={def.sheet}
+      tint={def.tint}
+      scale={def.scale}
+      box={box}
+      glyph={def.name.slice(0, 1)}
+    />
+  );
 }
