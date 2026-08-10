@@ -76,8 +76,6 @@ const ERROR_TEXT: Record<LineupError, string> = {
 
 const CHIP_BOX = 34; // 타임라인 칸 안 썸네일 한 변(px)
 const POOL_BOX = 44; // 팔레트 카드 썸네일
-const PREVIEW_BOX = 30; // 미리보기 스트립 — 마릿수만큼 깔리므로 작게
-const PREVIEW_MAX = 24; // 이 이상은 "+N"으로 접는다. 상한(12마리 × 3종)을 다 깔면 줄이 넘친다
 const BUDGET_CELLS = 20; // 예산 게이지 칸 수. 예산이 화마다 달라도 칸 수는 고정이라 눈이 익는다
 const CYCLE_TAIL = 3; // 타임라인 끝에 미리 보여줄 반복 웨이브 수
 
@@ -185,10 +183,6 @@ export default function LineupView() {
       })
     : [];
 
-  // 선택한 웨이브를 한 마리씩 펼친다 — "×6"보다 스프라이트 여섯 개가 밀도를 빨리 알려준다.
-  const selCount = lineup[sel].reduce((s, e) => s + e.count, 0);
-  const previewUnits = lineup[sel].flatMap((e) => Array.from({ length: e.count }, () => e.type)).slice(0, PREVIEW_MAX);
-
   // 키보드 조작. 타이틀 메뉴가 방향키 + 커서(▶)로 도니 편성도 마우스 없이 끝낼 수 있어야 한다.
   // 타임라인이 가로라 ←→가 웨이브, ↑↓가 팔레트다 — 화면에서 그 축이 실제로 그렇게 놓여 있다.
   useEffect(() => {
@@ -265,11 +259,11 @@ export default function LineupView() {
           <HeroCard />
 
           {/* 처음 하는 사람이 이 화면에서 알아야 할 전부. 규칙을 여기 한 번 적어두면
-              힌트를 화면 곳곳에 흩뿌리지 않아도 된다. */}
-          <section className="guide-card">
-            <header className="px-window-bar">
-              <span className="px-window-title">◆ 방송은 이렇게 굴러간다</span>
-            </header>
+              힌트를 화면 곳곳에 흩뿌리지 않아도 된다.
+              1화에서만 펼쳐둔다 — 두 번째부터는 이미 아는 내용이라 왼쪽 열을 비워주는 편이 낫다.
+              open은 초기값으로만 먹는다(React는 값이 안 바뀌면 DOM을 다시 안 건드린다). */}
+          <details className="guide-card" open={episode === 1}>
+            <summary className="px-window-bar">◆ 방송은 이렇게 굴러간다</summary>
             <ol className="guide-list">
               <li>
                 <b>웨이브</b>는 한 번에 내보내는 몬스터 한 무리다. 방송이 시작되면 <b>{WAVE_INTERVAL}초</b>마다 다음
@@ -286,7 +280,7 @@ export default function LineupView() {
                 잡으면 오늘 방송 성공.
               </li>
             </ol>
-          </section>
+          </details>
         </aside>
 
         <section className="px-window wide">
@@ -312,6 +306,7 @@ export default function LineupView() {
                 {lineup.map((w, i) => {
                   const threat = waveThreat(w);
                   const at = airTime[i];
+                  const count = w.reduce((s, e) => s + e.count, 0);
                   return (
                     <li key={i}>
                       <button
@@ -354,16 +349,18 @@ export default function LineupView() {
                           )}
                         </span>
                         {/* 위협도 — 코스트는 "얼마 썼나"라서 무게를 못 말해준다.
-                            막대는 이 편성 안에서 가장 무거운 웨이브를 100%로 잡은 상대값이다. */}
-                        <span className="wave-meter" aria-hidden="true">
+                            막대는 이 편성 안에서 가장 무거운 웨이브를 100%로 잡은 상대값이다.
+                            숫자는 뺐다 — 발에 "위협 12"와 "36p"가 나란히 있으면 초보자는 둘 다 안 읽는다.
+                            정확한 값이 필요한 사람만 막대에 마우스를 올린다. */}
+                        <span className="wave-meter" title={`위협 ${threat}`}>
                           <span
                             className="wave-meter-fill"
                             style={{ width: `${Math.round((threat / maxThreat) * 100)}%` }}
                           />
                         </span>
                         <span className="wave-foot">
+                          <span>{count}마리</span>
                           <span>{waveCost(w)}p</span>
-                          <span className="wave-threat">위협 {threat}</span>
                         </span>
                       </button>
                     </li>
@@ -394,28 +391,12 @@ export default function LineupView() {
               </ol>
             </div>
 
-            {/* 선택한 웨이브가 실제로 화면에 얼마나 깔리는지 — 숫자 "×6"보다 스프라이트 여섯 개가 빠르다 */}
-            <div className="px-section">
-              <h3 className="px-section-title">
-                웨이브 {sel + 1}에 나올 무리
-                <span className="px-count">
-                  {selCount}마리 · 위협 {waveThreat(lineup[sel])}
-                </span>
-              </h3>
-              <div className="wave-preview">
-                {selCount === 0 ? (
-                  <span className="wave-empty">아직 아무도 없습니다</span>
-                ) : (
-                  previewUnits.map((id, k) => <MonsterArt key={k} id={id} box={PREVIEW_BOX} />)
-                )}
-                {selCount > PREVIEW_MAX && <span className="preview-more">+{selCount - PREVIEW_MAX}</span>}
-              </div>
-            </div>
-
+            {/* 미리보기 섹션은 없앴다 — 웨이브 칸이 이미 같은 스프라이트를 같은 순서로 보여준다.
+                빠져 있던 건 총 마릿수뿐이라 그것만 칸 발("N마리")로 옮겼다. */}
             <div className="px-section">
               <h3 className="px-section-title">
                 웨이브 {sel + 1}에 섭외
-                <span className="px-count">초상화에 마우스를 올리면 상세 정보 · 남은 예산 {left}p</span>
+                <span className="px-count">남은 예산 {left}p</span>
               </h3>
               <ul className="pool-grid">
                 {pool.map((id, i) => {

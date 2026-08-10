@@ -16,6 +16,40 @@
   --px-warn: #ff8a5c;
 }
 
+/* ── 스크롤바: 전역으로 한 벌만 ──
+   창 안(.px-window-body)·타임라인(.wave-track)·소환 패널이 각자 규칙을 갖고 있었고 그중 하나는
+   border-radius까지 달려 있었다 — 화면마다 스크롤바가 다르게 생기면 도트 룩이 제일 먼저 깨진다.
+   여기 한 벌로 통일하고 각 화면의 중복 규칙은 지웠다. 트랙/썸 모두 각지게, 베벨은 box-shadow로. */
+* {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: #46407a #0d0b1a;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: #0d0b1a;
+  box-shadow: inset 0 0 0 2px var(--px-ink);
+}
+*::-webkit-scrollbar-thumb {
+  background: #46407a;
+  border-radius: 0; /* 다른 규칙이 둥글려 놓는 걸 막는다 */
+  box-shadow:
+    inset 2px 2px 0 #6a63ad,
+    inset -2px -2px 0 #1a1730;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #5a5396;
+}
+*::-webkit-scrollbar-thumb:active {
+  background: var(--px-gold);
+  box-shadow:
+    inset 2px 2px 0 #ffe98a,
+    inset -2px -2px 0 #b06a10;
+}
+
 /* 선택 커서(▶) 깜빡임. 타이틀 메뉴와 편성 화면이 같은 커서 관례를 쓰므로 공용이다 —
    title.css에만 두면 타이틀이 마운트되지 않은 화면에선 깜빡임이 죽는다. */
 @keyframes px-blink {
@@ -85,19 +119,6 @@
   overflow-y: auto;
   font-size: clamp(11px, 1.05vw, 15px);
   line-height: 1.7;
-}
-/* 스크롤바까지 도트로 — 여기만 둥글면 창 전체가 웹페이지처럼 보인다 */
-.px-window-body::-webkit-scrollbar {
-  width: 10px;
-}
-.px-window-body::-webkit-scrollbar-track {
-  background: #0d0b1a;
-}
-.px-window-body::-webkit-scrollbar-thumb {
-  background: #46407a;
-  box-shadow:
-    inset 2px 2px 0 #6a63ad,
-    inset -2px -2px 0 #1a1730;
 }
 
 /* ── 창 안 구획 ── */

@@ -229,7 +229,23 @@
   color: var(--px-gold);
 }
 
-/* ── 왼쪽 열: 방송 규칙 안내 ── */
+/* ── 왼쪽 열: 방송 규칙 안내 ──
+   <details>로 접는다. 규칙 네 줄은 1화에서만 새 정보고, 그 뒤엔 화면 왼쪽을 계속 차지하는
+   읽지 않는 글이 된다. 여닫이는 브라우저가 해주니 상태를 들고 있을 필요가 없다. */
+.guide-card > summary {
+  cursor: pointer;
+  list-style: none; /* 기본 삼각형 마커 제거 — 아래 ▼로 갈음한다 */
+}
+.guide-card > summary::-webkit-details-marker {
+  display: none;
+}
+.guide-card > summary::after {
+  content: '▼';
+  font-size: 0.7em;
+}
+.guide-card[open] > summary::after {
+  content: '▲';
+}
 .guide-list {
   display: grid;
   gap: 6px;
@@ -252,22 +268,11 @@
 .wave-track {
   display: flex;
   gap: 6px;
-  padding-bottom: 6px;
+  /* 사방 4px은 선택 칸의 금테(box-shadow 3px) 자리다 — box-shadow는 레이아웃 크기에 안 잡혀서
+     여백이 없으면 overflow가 그대로 잘라낸다. 아래 10px은 그 위에 스크롤바 몫을 더한 값. */
+  padding: 4px 4px 10px;
   list-style: none;
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-.wave-track::-webkit-scrollbar {
-  height: 8px;
-}
-.wave-track::-webkit-scrollbar-track {
-  background: #0d0b1a;
-}
-.wave-track::-webkit-scrollbar-thumb {
-  background: #46407a;
-  box-shadow:
-    inset 2px 2px 0 #6a63ad,
-    inset -2px -2px 0 #1a1730;
+  overflow-x: auto; /* 스크롤바 모양은 pixel.css의 전역 한 벌을 그대로 쓴다 */
 }
 .wave-track > li {
   display: flex;
@@ -403,28 +408,6 @@
   gap: 6px;
   font-size: clamp(8px, 0.7vw, 11px);
   color: #7a749c;
-}
-.wave-threat {
-  color: #9a93c4;
-}
-
-/* ── 선택 웨이브 미리보기 ──
-   "×6"이라는 숫자보다 스프라이트 여섯 개가 밀도를 빨리 알려준다. */
-.wave-preview {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 3px;
-  min-height: 40px;
-  padding: 6px;
-  background: #0d0b1a;
-  box-shadow: inset 0 0 0 2px var(--px-ink);
-}
-.preview-more {
-  margin-left: 4px;
-  font-size: clamp(9px, 0.8vw, 12px);
-  font-weight: 700;
-  color: var(--px-gold);
 }
 
 /* ── 팔레트 ── */

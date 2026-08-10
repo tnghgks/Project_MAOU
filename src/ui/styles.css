@@ -1203,15 +1203,7 @@ button {
   border-top: 2px solid var(--line);
   overflow-x: auto;
   overflow-y: hidden;
-  scrollbar-width: thin;
   pointer-events: auto;
-}
-.summon-panel::-webkit-scrollbar {
-  height: 6px;
-}
-.summon-panel::-webkit-scrollbar-thumb {
-  background: var(--line);
-  border-radius: 3px;
 }
 /* 소환(마왕) / 대시·스킬(용사) — 구분선만으로 나눈다(라벨 없이, 타일 테두리 색으로 구분). */
 .tile-row {

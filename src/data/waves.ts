@@ -10,7 +10,7 @@ import { clamp } from '../formulas.ts';
 // 여기 목록을 따로 유지하지 않는다.
 
 export const WAVE_SLOTS = 5; // 편성 칸 수
-export const WAVE_INTERVAL = 16; // 자동 투입 간격(초). ponytail: 방송 템포 knob
+export const WAVE_INTERVAL = 15; // 자동 투입 간격(초). ponytail: 방송 템포 knob
 export const WAVE_ENTRY_MAX = 12; // 한 칸에 넣을 수 있는 최대 마릿수 (동시 생존 상한과 UI 폭 양쪽 고려)
 export const WAVE_TYPES_MAX = 3; // 한 웨이브에 섞을 수 있는 몬스터 종류 수
 
