@@ -162,13 +162,18 @@ const FRESH_RECORDS: Records = { bestViewers: 0, bestGold: 0, bestEpisode: 1, le
 // 설정 기본값. 음량은 배율이라 1이 "파일별 기본 볼륨 그대로"다.
 const DEFAULT_SETTINGS = { bgmOn: true, bgmVol: 1, sfxVol: 1, screenShake: true };
 
+// 2026-08-10: 화수별 스킬 해금 — 상점 구매 제거, 화수 진행에 따라 자동 해금
+const getUnlockedSkills = (episode: number): SkillId[] => {
+  return (Object.keys(SKILLS) as SkillId[]).filter((id) => SKILLS[id].unlock <= episode);
+};
+
 const freshRun = () => ({
   gold: 0,
   episode: 1,
   hero: { ...BASE_HERO },
   lineup: defaultLineup(1), // 새 런은 1화 자동 편성에서 시작 — 편성 화면에서 곧바로 손볼 수 있다
   upgradeLevels: { hp: 0, atk: 0, atkSpd: 0, speed: 0, range: 0 },
-  skills: ['낙뢰'] as SkillId[], // 스킬은 런 한정 — 사망/타이틀 복귀 시 세이브에서도 지워진다
+  skills: getUnlockedSkills(1), // 2026-08-10: 화수별 자동 해금 (1화 = 낙뢰·회복의성가)
   skillUses: {} as Partial<Record<SkillId, number>>, // 스테이지마다 리셋
   traits: [] as TraitId[],
   viewers: 0,
@@ -241,10 +246,15 @@ export const gameStore = createStore<GameState>()((set, get) => ({
   addGold: (n) => set({ gold: get().gold + n }),
   // 다음 화는 지난 화 최고 시청자수의 절반을 이어받는다 — 단, 다음 화 목표 골드가 요구하는
   // 최소 시청자 규모(stageViewerFloor) 밑으로는 안 내려간다 (BattleScene.create가 이 값을 읽는다).
+  // 2026-08-10: 화수 증가 시 해금된 스킬 업데이트
   nextEpisode: () => {
     const ep = get().episode + 1;
     const carried = Math.floor(get().lastRun.peakViewers / 2);
-    set({ episode: ep, viewers: Math.max(stageViewerFloor(ep), carried) });
+    set({
+      episode: ep,
+      viewers: Math.max(stageViewerFloor(ep), carried),
+      skills: getUnlockedSkills(ep), // 화수별 자동 해금
+    });
   },
   resetRun: () => {
     set({ ...freshRun() });
@@ -293,17 +303,9 @@ export const gameStore = createStore<GameState>()((set, get) => ({
     return true;
   },
 
+  // 2026-08-10: 스킬 상점 구매 비활성화 — 화수별 자동 해금으로 변경
   learnSkill: (id, cost) => {
-    if (get().gold < cost) return false;
-    const r = get().records;
-    set({
-      gold: get().gold - cost,
-      skills: [...get().skills, id],
-      // 보유 스킬은 런이 끝나면 날아가지만 "배운 적 있다"는 사실은 도감에 남는다
-      records: r.learnedSkills.includes(id) ? r : { ...r, learnedSkills: [...r.learnedSkills, id] },
-    });
-    saveGame(); // 스킬 영구 해금
-    return true;
+    return false; // 스킬은 더 이상 구매 불가 (화수별 자동 해금)
   },
 
   // 스킬 사용 시도. 횟수 제한을 확인하고 사용 가능하면 카운터를 증가시킨다.

@@ -33,17 +33,17 @@ export const REQ_SCALE = 0.5; // 전투력 2배당 목표치 +50% (로그 — �
 // prettier-ignore
 // 2026-08-10: 소환 관련 요청 제거 — 웨이브 편성 시스템으로 바뀌어 특정 몬스터를 원하는 시점에 소환할 수 없음.
 // 보스 관련 요청도 제거 — 보스전에는 소환이 막혀 잡몹이 새로 나오지 않아 "보스만 노려" 같은 미션이 무의미.
-// 2026-08-10 재구성: 극단적으로 단순화 — 처치와 콤보만. 복잡한 조건 전부 제거. 시간 단축.
+// 2026-08-10 재구성: 극단적으로 단순화 — 처치와 콤보만. 복잡한 조건 전부 제거. 시간 대폭 단축(~40%).
 export const REQUESTS: RequestDef[] = [
   // 처치 미션 — 가장 기본적인 목표
-  { text: '몬스터 {n}마리 잡아줘',       dur: 15, need: 5,  now: (c) => c.killsSince },
-  { text: '{n}마리 처치 가보자',         dur: 18, need: 8,  now: (c) => c.killsSince },
-  { text: '{n}마리 잡아보자',            dur: 22, need: 12, now: (c) => c.killsSince },
-  { text: '{n}마리 잡자',                dur: 25, need: 15, now: (c) => c.killsSince },
+  { text: '몬스터 {n}마리 잡아줘',       dur: 12, need: 5,  now: (c) => c.killsSince },
+  { text: '{n}마리 처치 가보자',         dur: 15, need: 8,  now: (c) => c.killsSince },
+  { text: '{n}마리 잡아보자',            dur: 18, need: 12, now: (c) => c.killsSince },
+  { text: '{n}마리 잡자',                dur: 20, need: 15, now: (c) => c.killsSince },
 
   // 콤보 미션
-  { text: '콤보 {n}개 쌓아봐',           dur: 18, need: 4,  now: (c) => c.combo, max: 12 },
-  { text: '{n}콤보 가보자',              dur: 22, need: 7,  now: (c) => c.combo, max: 12 },
+  { text: '콤보 {n}개 쌓아봐',           dur: 15, need: 4,  now: (c) => c.combo, max: 12 },
+  { text: '{n}콤보 가보자',              dur: 18, need: 7,  now: (c) => c.combo, max: 12 },
 ];
 
 export interface ActiveRequest {
