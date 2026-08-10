@@ -309,12 +309,11 @@ export default class BattleScene extends Phaser.Scene {
     // 개발 모드 전용: 보스 패턴 강제 실행
     busBind(this, 'dev:boss-pattern', ({ pattern }) => this.forceBossPattern(pattern));
 
-    // 용사 이동/대시는 폴링 (매 프레임 눌림 상태를 읽어야 한다). 방향키만 — WASD를 겹쳐 쓰면
-    // W가 스킬(Q/W/E/R)과 부딪힌다.
-    this.keys = this.input.keyboard!.addKeys('UP,DOWN,LEFT,RIGHT,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
-    // SPACE = 다음 웨이브 즉시 호출, Q/W/E/R = 스킬 1~4 시전.
-    // 숫자키 소환은 없어졌다(2026-08-09 웨이브 편성 개편) — 방송 중 소환 관련 조작은 SPACE 하나뿐이고,
-    // 몬스터 구성은 방송 전 편성 화면에서 이미 끝났다. 덕분에 방송 중엔 용사 조작에 집중할 수 있다.
+    // 용사 이동/대시는 폴링 (매 프레임 눌림 상태를 읽어야 한다). 2026-08-10: 방향키 → WASD.
+    // 예전엔 W가 스킬(Q/W/E/R)과 부딪혀 방향키를 썼지만, 스킬이 숫자키로 내려가면서 자리가 비었다.
+    this.keys = this.input.keyboard!.addKeys('W,A,S,D,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
+    // SPACE = 다음 웨이브 즉시 호출, 1/2/3/4 = 스킬 1~4 시전.
+    // 숫자키 소환은 없어졌다(2026-08-09 웨이브 편성 개편) — 그래서 비어 있던 숫자열을 스킬이 가져갔다.
     // 도네이션 중엔 이 씬이 pause라 QWER(RhythmLane 리듬 판정)와 동시 발화하지 않는다.
     // 둘 다 메서드를 직접 부르지 않고 이벤트로 emit한다 — React SummonPanel 버튼 클릭과 같은 경로를
     // 타야 그쪽의 클릭 피드백(팝 애니메이션)이 키 입력에도 걸린다.
@@ -323,8 +322,8 @@ export default class BattleScene extends Phaser.Scene {
         e.preventDefault(); // 스페이스는 브라우저 기본 스크롤이 붙는다
         return bus.emit('wave:call', null);
       }
-      const qwer = ['q', 'w', 'e', 'r'].indexOf(e.key.toLowerCase());
-      if (qwer >= 0) bus.emit('skill:request', { index: qwer });
+      const slot = ['1', '2', '3', '4'].indexOf(e.key);
+      if (slot >= 0) bus.emit('skill:request', { index: slot });
     });
 
     this.pushChat(
@@ -1016,12 +1015,12 @@ export default class BattleScene extends Phaser.Scene {
     }
   }
 
-  // 방향키 입력 벡터 — 상시 수동 조작이라 항상 값을 만든다(자동 AI 없음).
+  // WASD 입력 벡터 — 상시 수동 조작이라 항상 값을 만든다(자동 AI 없음).
   heroInput(): HeroInput {
     const k = this.keys;
     return {
-      dx: (k.RIGHT.isDown ? 1 : 0) - (k.LEFT.isDown ? 1 : 0),
-      dy: (k.DOWN.isDown ? 1 : 0) - (k.UP.isDown ? 1 : 0),
+      dx: (k.D.isDown ? 1 : 0) - (k.A.isDown ? 1 : 0),
+      dy: (k.S.isDown ? 1 : 0) - (k.W.isDown ? 1 : 0),
       dash: k.SHIFT.isDown,
     };
   }
@@ -1281,7 +1280,7 @@ export default class BattleScene extends Phaser.Scene {
       // 보스들은 전용 AI 사용
       const intent =
         m.type === 'boss_golem'
-          ? stepBossGolem(m, H, dt)
+          ? stepBossGolem(m, H, dt, Math.random, arenaBounds) // 돌진이 맵 끝에 처박히는 판정을 위해 경계를 넘긴다
           : m.type === 'boss_knight'
             ? stepBossKnight(m, H, dt)
             : stepMonster(m, H, dt);
@@ -1498,6 +1497,16 @@ export default class BattleScene extends Phaser.Scene {
           this.floatText(H.x, H.y - 50, '💢 충돌!', '#ff5555');
           break;
         }
+        // 돌진하다 벽에 처박힘 — 시뮬이 이미 stunT를 걸어놨다. 여기선 "지금이 반격 타이밍"이라는
+        // 신호만 크게 준다(별을 띄우고 화면을 흔든다). 다음 프레임부터는 stepStunOrKb가 idle을 준다.
+        case 'bossChargeWall': {
+          playSfx('heroHurt');
+          this.shakeCam(400, 0.02);
+          this.impactFx(m.x, m.y, 40);
+          this.floatText(m.x, m.y - m.def.size, `💫 벽에 처박혔다! ${intent.stun}초 기절`, '#ffdd44');
+          this.pushChat('시스템', '💫 사르가스가 벽에 처박혔다 — 지금이 기회!', '#ffdd44');
+          break;
+        }
         // ── 베르하르트(기사) 전용 패턴 ──
         // 검기 발산: 3개의 부채꼴 검기 발사
         // (attack 애니메이션은 bossTelegraph에서 이미 재생 중 — 윈드업 시간에 맞춰 느리게 돌아가다가 지금 마지막 프레임)
@@ -1684,6 +1693,13 @@ export default class BattleScene extends Phaser.Scene {
         duration: ms / 2,
         yoyo: true,
       });
+      // 돌진은 이제 용사 앞에서 멈추지 않고 정해진 길이를 끝까지 달린다 — 그 선을 실제로 그려줘야
+      // "옆으로 비키면 지나간다"가 읽힌다. 조준선 없이는 새 패턴이 그냥 불합리하게 느껴진다.
+      if (chargeTx !== undefined && chargeTy !== undefined) {
+        const line = this.add.graphics().setDepth(1);
+        line.lineStyle(6, 0xff3333, 0.35).beginPath().moveTo(m.x, m.y).lineTo(chargeTx, chargeTy).strokePath();
+        this.tweens.add({ targets: line, alpha: 0, duration: ms, onComplete: () => line.destroy() });
+      }
     } else if (pattern === 'spaceSlash') {
       // 공간 가르기: 커지는 보라색 원
       const ring = this.add.circle(m.x, m.y, 20, 0x8844ff, 0.3).setStrokeStyle(4, 0x8844ff, 0.9).setDepth(1);

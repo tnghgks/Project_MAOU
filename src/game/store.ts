@@ -26,6 +26,7 @@ export interface HeroStats {
   lifesteal: number; // 가한 피해 흡혈 비율(%)
   knockback: number; // 피격 시 주변 몬스터 밀쳐낼 확률(%)
   regenFlat: number; // 비전투 회복 시 5초마다 추가로 회복하는 고정 체력량
+  regen: number; // 초당 자동 회복량 — regenFlat과 달리 근처에 적이 있든 없든 항상 돈다
   goldBonus: number; // 처치 골드 보너스(%)
 }
 // lineup = 방송 전 웨이브 편성 화면. 방송(broadcast) 직전에 반드시 한 번 거친다 —
@@ -115,7 +116,9 @@ export const BASE_HERO: HeroStats = {
   maxHp: 70,
   atk: 10,
   atkSpd: 0.7,
-  speed: 60,
+  // 2026-08-10 상향(+20%, 60 → 72): 웨이브가 통째로 밀려오는 구조에선 초기 기동력이 곧 생존력이다.
+  // heroPower는 BASE_HERO를 분모로 쓰므로 시작 전투력 1.00 기준은 그대로다.
+  speed: 72,
   range: 60,
   defense: 0,
   dodge: 0,
@@ -124,6 +127,7 @@ export const BASE_HERO: HeroStats = {
   lifesteal: 0,
   knockback: 0,
   regenFlat: 0,
+  regen: 0,
   goldBonus: 0,
 };
 
