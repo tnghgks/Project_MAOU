@@ -2,6 +2,7 @@ import assert from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { registerAnims, registerSheetAnims, dirOf, makeActor, playAnim, playOnce, DIRS } from '../src/game/anims.ts';
 import { GOLEM_ROCK_WINDUP, GOLEM_STOMP_WINDUP } from '../src/game/battleSim.ts';
+import { MONSTERS, type MonsterDef } from '../src/data/monsters.ts';
 
 // 실제 아틀라스 JSON으로 등록 로직을 돌린다. 프레임 이름 파싱이 틀리면 애니메이션이
 // 조용히 0개 만들어지고 게임은 첫 프레임에서 얼어붙은 채로 굴러간다 — 여기서 잡는다.
@@ -325,6 +326,21 @@ const GRIM = frameNames('grimhardt');
     ['sargas-attack-south', GOLEM_STOMP_WINDUP],
   ] as const)
     assert.ok(9 / byKey.get(key)!.frameRate > windup, `${key} 모션이 윈드업보다 먼저 끝난다`);
+}
+
+// ── 아트가 붙은 몬스터는 세 방향 걷기가 다 있어야 한다 ──
+// 생성 툴이 액션 폴더명을 프롬프트 그대로 뱉은 적이 있다(goblinshaman의 walk가
+// small_hunched_goblin_shaman_in_...로 나왔다). 그러면 걷기 애니메이션이 조용히 0개가 되고
+// 몬스터가 첫 프레임으로 굳은 채 미끄러진다 — char를 채운 줄 전부를 훑어 본다.
+{
+  for (const [id, def] of Object.entries(MONSTERS) as [string, MonsterDef][]) {
+    if (!def.char || def.sheet) continue; // 시트형은 프레임 이름이 번호뿐이라 대상이 아니다
+    const { scene, created } = fakeScene({ [def.char]: frameNames(def.char) });
+    registerAnims(scene, def.char);
+    const keys = new Set(created.map((a) => a.key));
+    for (const dir of DIRS)
+      assert.ok(keys.has(`${def.char}-walk-${dir}`), `${id}(${def.char})에 walk/${dir}이 없다 — 액션 폴더명을 확인해라`);
+  }
 }
 
 // ── 참격 시트 격자 ──

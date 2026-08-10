@@ -62,6 +62,8 @@ const MONSTER_ROLE: Partial<Record<MonsterId, string>> = {
   turtle: '피해 감소. 약한 공격은 안 통한다',
   shaman: '주변 아군 강화. 먼저 끊어야 할 표적',
   sniper: '초장거리 저격. 무시하면 계속 맞는다',
+  imp: '가장 빠른 발. 도망치는 용사를 물고 늘어진다',
+  zombie: '느리지만 질기다. 앞줄에서 시간을 번다',
 };
 
 const ERROR_TEXT: Record<LineupError, string> = {
