@@ -161,9 +161,10 @@ const CHARGE_HERO_KB_DIST = 70; // ponytail: 사이클롭스 돌진 충돌 시 �
 const BOSS_WINDUP_ANIM: Partial<Record<BossPattern, string>> = {
   rock: 'throwing',
   stomp: 'attack',
-  // 베르하르트 검기: attack 애니메이션(윈드업 0.7초에 맞춰 느리게 재생, 마지막 프레임에서 발사)
+  // 베르하르트 검기: attack 애니메이션 + 회전 이펙트 (윈드업 0.7초에 맞춰 느리게 재생, 마지막 프레임에서 발사)
   swordbeam: 'attack',
   // 공간 가르기는 윈드업 때 idle만 (실제 발동 시 attack 재생)
+  // 2026-08-10: 베르하르트 검기 발사는 회전 베기 연출로 시각적으로 강화
 };
 // 용사 원본은 92×92 캔버스에 인물 ~20×46px.
 // 1 = 리샘플 없음 = pixelArt 필터에서 가장 깨끗하다. ponytail: 화면상 크기 knob, 줄이면 축소 시 픽셀이 떤다.
@@ -1347,7 +1348,7 @@ export default class BattleScene extends Phaser.Scene {
           : m.type === 'boss_knight'
             ? stepBossKnight(m, H, dt)
             : m.type === 'boss_maou'
-              ? stepBossMaou(m, H, dt)
+              ? stepBossMaou(m, H, dt, Math.random, arenaBounds) // 워프·이동에서 맵 밖으로 나가지 않도록 경계 전달
               : stepMonster(m, H, dt);
       const dir = this.faceMonster(m, intent.facing);
       switch (intent.kind) {
@@ -1695,7 +1696,8 @@ export default class BattleScene extends Phaser.Scene {
         // 베르하르트 돌진 이동
         case 'bossKnightChargeMove': {
           m.spr.setPosition(m.x, m.y);
-          playAnim(m.spr, m.char, 'rush', dir);
+          // whirlwind는 south만 있어서 방향 무관하게 south로 재생
+          playAnim(m.spr, m.char, 'whirlwind', 'south');
           break;
         }
         // 베르하르트 돌진 충돌

@@ -652,7 +652,8 @@ export const MAOU_ENERGYBALL_SPREAD = Math.PI / 12; // 15도 × 4칸 = 총 60도
 // 빛의 심판: 무작위 지점 + 용사 현재 위치, 총 MAOU_LIGHTRAIN_COUNT곳에 낙뢰 예고 → 윈드업 끝나면 전부 동시 타격.
 // 지점은 윈드업 "시작" 시점(패턴 선택 프레임)에 고정 — charge류와 같은 원칙으로, 씬이 그 좌표에
 // 경고 원을 그려야 회피가 성립한다. 용사가 그 자리에 그대로 있으면 최소 1곳(현재 위치)은 반드시 맞는다.
-export const MAOU_LIGHTRAIN_WINDUP = 1.4;
+// 2026-08-10 쿨타임 감소: 1.4 → 1.1초 (발동 빈도 증가)
+export const MAOU_LIGHTRAIN_WINDUP = 1.1;
 export const MAOU_LIGHTRAIN_COUNT = 4;
 export const MAOU_LIGHTRAIN_RADIUS = 70;
 export const MAOU_LIGHTRAIN_DMG = 24;
@@ -680,11 +681,14 @@ export const MAOU_WARP_HEAL_RATIO = 0.15; // 최대체력의 15%를 사라지는
 export const MAOU_WARP_SUMMON_COUNT = 4;
 export const MAOU_WARP_REAPPEAR_DIST = 260; // 재등장 시 용사로부터 이만큼 떨어진 곳에 나타난다
 
+// bounds를 넘기면 워프 재등장·cooldown 이동에서 맵 안쪽으로 클램프한다 — 안 넘기면(테스트 등) 경계 없는 셈.
+// 씬은 arenaBounds를 그대로 넘겨준다.
 export function stepBossMaou(
   m: MonsterEntity,
   hero: HeroEntity,
   dt: number,
   rnd: () => number = Math.random,
+  bounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null,
 ): MonsterIntent {
   const H = hero;
   m.atkCd = Math.max(0, m.atkCd - dt);
@@ -737,10 +741,15 @@ export function stepBossMaou(
     if (m.bossT > 0) return { kind: 'idle', facing: lookHero() };
     m.bossPhase = 'recover';
     m.bossT = MAOU_RECOVER_T;
-    // 재등장 좌표 — 용사 기준 무작위 방향으로 MAOU_WARP_REAPPEAR_DIST만큼. 아레나 경계는 씬이 클램프한다.
+    // 재등장 좌표 — 용사 기준 무작위 방향으로 MAOU_WARP_REAPPEAR_DIST만큼.
+    // 2026-08-10: 경계 클램프 추가 — 재등장 시에도 맵 안쪽으로 물린다.
     const ang = rnd() * Math.PI * 2;
-    const rx = H.x + Math.cos(ang) * MAOU_WARP_REAPPEAR_DIST;
-    const ry = H.y + Math.sin(ang) * MAOU_WARP_REAPPEAR_DIST;
+    let rx = H.x + Math.cos(ang) * MAOU_WARP_REAPPEAR_DIST;
+    let ry = H.y + Math.sin(ang) * MAOU_WARP_REAPPEAR_DIST;
+    if (bounds) {
+      rx = clamp(rx, bounds.minX, bounds.maxX);
+      ry = clamp(ry, bounds.minY, bounds.maxY);
+    }
     return { kind: 'bossWarpEnd', facing: lookHero(), x: rx, y: ry };
   }
 
@@ -753,6 +762,7 @@ export function stepBossMaou(
   }
 
   // cooldown(+ 최초 미초기화 상태) — 다음 패턴을 기다리며 적당한 거리를 유지한다.
+  // 2026-08-10: 경계 클램프 추가 — 맵 밖으로 나가는 문제 해결.
   m.bossT = (m.bossT ?? 0) - dt;
   const d = Math.hypot(H.x - m.x, H.y - m.y);
   if (m.bossT > 0) {
@@ -760,8 +770,16 @@ export function stepBossMaou(
     if (Math.abs(d - idealDist) > 50) {
       const vx = ((H.x - m.x) / d) * m.def.speed * (d < idealDist ? -0.5 : 1);
       const vy = ((H.y - m.y) / d) * m.def.speed * (d < idealDist ? -0.5 : 1);
-      m.x += vx * dt;
-      m.y += vy * dt;
+      const nx = m.x + vx * dt;
+      const ny = m.y + vy * dt;
+      // 맵 경계 클램프 — 벽 밖으로 나가지 않도록
+      if (bounds) {
+        m.x = clamp(nx, bounds.minX, bounds.maxX);
+        m.y = clamp(ny, bounds.minY, bounds.maxY);
+      } else {
+        m.x = nx;
+        m.y = ny;
+      }
       return { kind: 'move', facing: facingOf(vx, vy) ?? 'south' };
     }
     return { kind: 'idle', facing: lookHero() };

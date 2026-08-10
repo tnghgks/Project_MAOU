@@ -9,7 +9,7 @@ import type { Facing } from './battleSim.ts';
 export const DIRS = ['south', 'east', 'north'] as const;
 export type Dir = (typeof DIRS)[number];
 
-const FRAME_RATE: Record<string, number> = { walk: 10, idle: 6, attack: 18, rush: 12 }; // ponytail: 액션별 속도 knob
+const FRAME_RATE: Record<string, number> = { walk: 10, idle: 6, attack: 18, rush: 12, whirlwind: 15 }; // ponytail: 액션별 속도 knob
 const DEFAULT_RATE = 8;
 
 // 활시위를 놓는 순간 = attack 시트 7번 프레임 (고블린 궁수 기준 6번이 최대 당김, 7번에서 화살이
