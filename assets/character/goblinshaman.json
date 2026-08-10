@@ -1,0 +1,1193 @@
+{
+ "frames": {
+  "rotations/east": {
+   "frame": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "rotations/north": {
+   "frame": {
+    "x": 86,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "rotations/north-east": {
+   "frame": {
+    "x": 172,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "rotations/north-west": {
+   "frame": {
+    "x": 258,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "rotations/south": {
+   "frame": {
+    "x": 344,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "rotations/south-east": {
+   "frame": {
+    "x": 430,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "rotations/south-west": {
+   "frame": {
+    "x": 516,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "rotations/west": {
+   "frame": {
+    "x": 602,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/east/0": {
+   "frame": {
+    "x": 0,
+    "y": 86,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/east/1": {
+   "frame": {
+    "x": 86,
+    "y": 86,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/east/2": {
+   "frame": {
+    "x": 172,
+    "y": 86,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/east/3": {
+   "frame": {
+    "x": 258,
+    "y": 86,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/east/4": {
+   "frame": {
+    "x": 344,
+    "y": 86,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/east/5": {
+   "frame": {
+    "x": 430,
+    "y": 86,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/east/6": {
+   "frame": {
+    "x": 516,
+    "y": 86,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/east/7": {
+   "frame": {
+    "x": 602,
+    "y": 86,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/north/0": {
+   "frame": {
+    "x": 0,
+    "y": 172,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/north/1": {
+   "frame": {
+    "x": 86,
+    "y": 172,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/north/2": {
+   "frame": {
+    "x": 172,
+    "y": 172,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/north/3": {
+   "frame": {
+    "x": 258,
+    "y": 172,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/north/4": {
+   "frame": {
+    "x": 344,
+    "y": 172,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/north/5": {
+   "frame": {
+    "x": 430,
+    "y": 172,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/north/6": {
+   "frame": {
+    "x": 516,
+    "y": 172,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/north/7": {
+   "frame": {
+    "x": 602,
+    "y": 172,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/south/0": {
+   "frame": {
+    "x": 0,
+    "y": 258,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/south/1": {
+   "frame": {
+    "x": 86,
+    "y": 258,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/south/2": {
+   "frame": {
+    "x": 172,
+    "y": 258,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/south/3": {
+   "frame": {
+    "x": 258,
+    "y": 258,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/south/4": {
+   "frame": {
+    "x": 344,
+    "y": 258,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/south/5": {
+   "frame": {
+    "x": 430,
+    "y": 258,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/south/6": {
+   "frame": {
+    "x": 516,
+    "y": 258,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "small_hunched_goblin_shaman_in_ragged_tribal_robes/south/7": {
+   "frame": {
+    "x": 602,
+    "y": 258,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/east/0": {
+   "frame": {
+    "x": 0,
+    "y": 344,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/east/1": {
+   "frame": {
+    "x": 86,
+    "y": 344,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/east/2": {
+   "frame": {
+    "x": 172,
+    "y": 344,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/east/3": {
+   "frame": {
+    "x": 258,
+    "y": 344,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/east/4": {
+   "frame": {
+    "x": 344,
+    "y": 344,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/east/5": {
+   "frame": {
+    "x": 430,
+    "y": 344,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/east/6": {
+   "frame": {
+    "x": 516,
+    "y": 344,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/east/7": {
+   "frame": {
+    "x": 602,
+    "y": 344,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/east/8": {
+   "frame": {
+    "x": 0,
+    "y": 430,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/north/0": {
+   "frame": {
+    "x": 86,
+    "y": 430,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/north/1": {
+   "frame": {
+    "x": 172,
+    "y": 430,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/north/2": {
+   "frame": {
+    "x": 258,
+    "y": 430,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/north/3": {
+   "frame": {
+    "x": 344,
+    "y": 430,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/north/4": {
+   "frame": {
+    "x": 430,
+    "y": 430,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/north/5": {
+   "frame": {
+    "x": 516,
+    "y": 430,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/north/6": {
+   "frame": {
+    "x": 602,
+    "y": 430,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/north/7": {
+   "frame": {
+    "x": 0,
+    "y": 516,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/north/8": {
+   "frame": {
+    "x": 86,
+    "y": 516,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/south/0": {
+   "frame": {
+    "x": 172,
+    "y": 516,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/south/1": {
+   "frame": {
+    "x": 258,
+    "y": 516,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/south/2": {
+   "frame": {
+    "x": 344,
+    "y": 516,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/south/3": {
+   "frame": {
+    "x": 430,
+    "y": 516,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/south/4": {
+   "frame": {
+    "x": 516,
+    "y": 516,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/south/5": {
+   "frame": {
+    "x": 602,
+    "y": 516,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/south/6": {
+   "frame": {
+    "x": 0,
+    "y": 602,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/south/7": {
+   "frame": {
+    "x": 86,
+    "y": 602,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  },
+  "spell/south/8": {
+   "frame": {
+    "x": 172,
+    "y": 602,
+    "w": 84,
+    "h": 84
+   },
+   "rotated": false,
+   "trimmed": false,
+   "spriteSourceSize": {
+    "x": 0,
+    "y": 0,
+    "w": 84,
+    "h": 84
+   },
+   "sourceSize": {
+    "w": 84,
+    "h": 84
+   }
+  }
+ },
+ "meta": {
+  "image": "goblinshaman.png",
+  "format": "RGBA8888",
+  "size": {
+   "w": 686,
+   "h": 686
+  },
+  "scale": "1"
+ }
+}
