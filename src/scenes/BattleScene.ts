@@ -317,6 +317,12 @@ export default class BattleScene extends Phaser.Scene {
     busBind(this, 'skill:request', ({ index }) => this.castSkill(index));
     // 개발 모드 전용: 보스 강제 소환
     busBind(this, 'dev:spawn-boss', () => this.spawnBoss());
+    // 개발 모드 전용: 보스 즉시 처치
+    busBind(this, 'dev:kill-boss', () => {
+      if (this.boss && this.boss.hp > 0) {
+        this.boss.hp = 0;
+      }
+    });
     // 개발 모드 전용: 보스 패턴 강제 실행
     busBind(this, 'dev:boss-pattern', ({ pattern }) => this.forceBossPattern(pattern));
 
@@ -375,9 +381,9 @@ export default class BattleScene extends Phaser.Scene {
     // 전투 영역 chrome — 상단바(InfoLayer)·하단 소환/용사 패널(SummonPanel)·리듬레인(Rhythm) 전부 React.
   }
 
-  // 보스전 중엔 도네이션·소환·시청자 요청을 전부 막는다(2026-08-07, 피드백: "보스전엔 다른 거 다
-  // 막고 보스에만 집중하고 싶다") — 보스가 죽거나(endRun 'clear') 용사가 죽는 것 말고는 보스전을
-  // 벗어날 방법이 없어서, "잠깐 막았다가 나중에 푼다" 같은 재개 로직이 필요 없다.
+  // 보스전 중엔 소환·시청자 요청을 막는다(2026-08-07, 피드백: "보스전엔 다른 거 다 막고 보스에만 집중하고 싶다")
+  // 2026-08-10: 도네이션은 재활성화 (밸런스 완화) — 보스가 죽거나(endRun 'clear') 용사가 죽는 것 말고는
+  // 보스전을 벗어날 방법이 없어서, "잠깐 막았다가 나중에 푼다" 같은 재개 로직이 필요 없다.
   bossActive(): boolean {
     return !!this.boss && !this.boss.dead;
   }
@@ -490,7 +496,7 @@ export default class BattleScene extends Phaser.Scene {
     this.pushChat('시스템', `☠ ${MONSTERS[t].name} 등장! 용사가 쓰러뜨리면 방송 성공`, '#ff4444');
     this.pushChat(
       '시스템',
-      '⚔ 보스전 — 도네이션·시청자 요청·소환이 중단됩니다. 지금 있는 것만으로 싸워야 해요',
+      '⚔ 보스전 — 시청자 요청·소환이 중단됩니다. 도네이션으로 강화를 받으며 싸우세요!',
       '#ff8844',
     );
     // 보스 등장 컷씬 — 도네이션과 같은 방식으로 전투를 멈추고 React에 넘긴다
@@ -975,15 +981,17 @@ export default class BattleScene extends Phaser.Scene {
     this.updateCritical(dt);
     if (this.over) return;
 
-    if (!this.isFinal && !this.bossActive()) {
-      // 최종화는 도네이션 금지 (GDD 7장, 2026-07-28 정정) — 보스전도 같은 이유(2026-08-07): 보스전엔
-      // 순수 실력전이어야 하니 중간에 카드/버프가 끼어들면 안 된다.
+    if (!this.isFinal) {
+      // 최종화는 도네이션 금지 (GDD 7장, 2026-07-28 정정)
+      // 2026-08-10: 보스전 중 도네이션 재활성화 (밸런스 완화)
       this.donateT -= dt;
       if (this.donateT <= 0) {
         this.fireDonation();
         // FULL 콤보 중 터진 도네이션은 다음 간격을 살짝 당겨준다 (체감 미미한 보상)
         const cut = this.combo >= COMBO_FULL ? COMBO_DONATION_CUT : 0;
-        this.donateT = donationInterval(this.viewers) - cut;
+        // 보스전 중에는 도네이션 간격을 30% 단축 (더 빈번하게 강화 기회 제공)
+        const bossCut = this.bossActive() ? donationInterval(this.viewers) * 0.3 : 0;
+        this.donateT = donationInterval(this.viewers) - cut - bossCut;
       }
     }
 
@@ -2077,9 +2085,8 @@ export default class BattleScene extends Phaser.Scene {
     this.reqT -= dt;
     if (this.reqT > 0) return;
     const boss = this.boss && !this.boss.dead ? this.boss : null;
-    // 출제 풀은 "해금된 몬스터"가 아니라 "이번 방송에 편성한 몬스터"다 — 안 데려온 몬스터를 요구하면
-    // 달성할 방법이 아예 없다(소환이 자동 웨이브가 됐으므로). 덕분에 편성이 요청 내용까지 좌우한다.
-    const def = pickRequest({ monsters: this.lineupTypes, boss: !!boss }, Math.random, this.lastReq ?? undefined);
+    // 2026-08-10: 소환 관련 요청 제거로 monsters 필드 제거 — 전투/생존/처치 중심 미션만 출제
+    const def = pickRequest({ boss: !!boss }, Math.random, this.lastReq ?? undefined);
     if (!def) return;
     // 목표치는 출제 시점의 용사 전투력으로 확정 — 용사가 셀수록 시청자 요구도 커진다
     this.req = startRequest(def, heroPower(gameState().hero), this.kills, boss?.hp ?? 0);
@@ -2108,8 +2115,18 @@ export default class BattleScene extends Phaser.Scene {
     this.viewers = Math.max(MIN_VIEWERS, this.viewers * (ok ? REQ_WIN : REQ_LOSE));
     if (ok) {
       playSfx('questClear');
-      this.pushChat('시스템', '📢 요청 달성! 시청자가 몰려온다', '#66ddff');
-      this.floatText(this.hero.x, this.hero.y - 60, '📢 요청 달성!', '#66ddff');
+      // 2026-08-10: 미션 달성 시 랜덤 능력치 상승 (업그레이드 1레벨의 약 1/10)
+      const statBonus = [
+        { stat: 'maxHp' as const, value: 8, label: '체력 +8' },
+        { stat: 'atk' as const, value: 1, label: '공격력 +1' },
+        { stat: 'atkSpd' as const, value: 0.02, label: '공속 +0.02' },
+        { stat: 'speed' as const, value: 1, label: '이속 +1' },
+        { stat: 'range' as const, value: 1, label: '사거리 +1' },
+      ];
+      const bonus = Phaser.Utils.Array.GetRandom(statBonus);
+      gameState().applyStatMods([{ stat: bonus.stat, mode: 'flat', value: bonus.value }]);
+      this.pushChat('시스템', `📢 요청 달성! 시청자가 몰려온다 (${bonus.label})`, '#66ddff');
+      this.floatText(this.hero.x, this.hero.y - 60, `📢 요청 달성! ${bonus.label}`, '#66ddff');
       const who = this.randomViewer();
       if (who) this.pushChat(who, Phaser.Utils.Array.GetRandom(CHAT_POOLS.allperfect as string[]), '#66ddff');
     } else {

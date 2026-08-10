@@ -309,10 +309,11 @@ export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): Mon
 // 충분했지만, 보스는 윈드업 → 발동 → 무방비(recover) → 다음 패턴 대기(cooldown)까지 4단계 상태머신이
 // 필요하다. m.bossPhase/bossPattern/bossT(+ 돌진 목표 chargeTx/Ty)에 프레임마다 상태를 싣는다.
 // ponytail: 보스 밸런스 knob — 전부 여기 상수로
-// 2026-08-07: 보스전 중엔 도네이션·소환·미션을 전부 막아 순수 실력전으로 만들었다(BattleScene) —
-// 그만큼 난이도를 hp(monsters.ts)와 패턴 쉴 틈(GOLEM_PATTERN_CD)으로 올렸다. 개별 타격 피해량은
-// 안 건드렸다(방금 낮춘 값 그대로) — "한 대에 훅 간다"가 아니라 "쉴 틈이 없다"로 어려워야 한다.
-export const GOLEM_PATTERN_CD = 2.4; // 3.2 → 2.4: recover 종료 후 다음 패턴까지 대기(초) — 텀이 짧아졌다
+// 2026-08-07: 보스전 중엔 소환·미션을 막아 보스에 집중하도록 만들었다(BattleScene)
+// 2026-08-10: 도네이션 재활성화 (밸런스 완화) + hp·dmg·패턴 쿨다운 조정
+// 개별 타격 피해량은 안 건드렸다(방금 낮춘 값 그대로) — "한 대에 훅 간다"가 아니라 "쉴 틈이 없다"로 어려워야 한다.
+// 2026-08-10 밸런스 하향: 2.4 → 3.2초로 증가 (패턴 간 간격 확대로 난이도 완화)
+export const GOLEM_PATTERN_CD = 3.2; // 3.2 → 2.4 → 3.2: recover 종료 후 다음 패턴까지 대기(초)
 // 던지기·스톰핑 윈드업은 아트가 정한다 — 사르가스엔 그 패턴 전용 모션이 있고(돌을 줍고 들어 올리는
 // throwing · 뛰어올라 내려찍는 attack) 윈드업이 곧 그 모션이 도는 시간이다. 텔레그래프 길이를 여기서
 // 따로 정하면 돌을 아직 줍는 중인데 돌이 날아가는 식으로 그림과 판정이 어긋난다. 조절은 anims.ts에서.
@@ -338,7 +339,8 @@ export const GOLEM_CHARGE_HIT_RADIUS = 62; // 46 → 62: 덩치(scale 1.35)에 �
 export const GOLEM_RECOVER_T = 1.2; // 0.8 → 1.2: 패턴 종료 후 무방비 — 플레이어에게 반격 타이밍을 더 준다
 
 // ── 베르하르트(2탄 보스, boss_knight) 패턴 상수 ──
-export const KNIGHT_PATTERN_CD = 2.0; // 패턴 간 대기 시간
+// 2026-08-10 밸런스 하향: 패턴 간 대기 시간 증가 (2.0 → 2.6초)
+export const KNIGHT_PATTERN_CD = 2.6; // 패턴 간 대기 시간
 export const KNIGHT_RECOVER_T = 1.0; // 패턴 종료 후 무방비 시간
 
 // 검기 발산 (가장 빈번한 패턴). 2026-08-10 상향(피드백: "수를 늘려달라") 3발 → 5발.
@@ -588,14 +590,6 @@ export function stepBossKnight(
     return { kind: 'idle', facing: lookHero() };
   }
 
-  // 매우 가까운 거리에서는 기본 칼 휘두르기 (윈드업 없이 즉시 공격)
-  const veryClose = d <= 80;
-  if (veryClose) {
-    m.bossPhase = 'recover';
-    m.bossT = KNIGHT_RECOVER_T;
-    return { kind: 'melee', facing: lookHero(), dmg: m.def.dmg, suicide: false };
-  }
-
   // 패턴 선택
   const r = rnd();
   let pattern: BossPattern;
@@ -640,7 +634,8 @@ export function stepBossKnight(
 // ── 그림하르트(최종보스, boss_maou) 패턴 상수 ──
 // 최종보스답게 텀이 셋 중 가장 짧다(MAOU_PATTERN_CD) — 대신 개별 타격 피해는 앞선 두 보스와
 // 비슷한 수준으로 맞췄다. "쉴 틈이 없다"는 golem/knight 하향 때 잡은 방향을 그대로 잇는다.
-export const MAOU_PATTERN_CD = 1.6;
+// 2026-08-10 밸런스 하향: 패턴 간 대기 시간 증가 (1.6 → 2.2초)
+export const MAOU_PATTERN_CD = 2.2;
 export const MAOU_RECOVER_T = 1.0;
 
 // 에너지볼: 기본 견제기 — 부채꼴 5연발(검기 3연발보다 넓고 촘촘하게, 그림하르트가 마법사형이라는 인상을 준다).
@@ -670,7 +665,8 @@ export const MAOU_LIGHTRAIN_SCATTER_MAX = 340;
 // 못 넣으면 회피 불가 고정 피해가 들어간다 — 자리를 옮겨서 피하는 게 아니라 화력으로 끊어야 한다.
 // 2026-08-07 상향(피드백: "실행 시간이 너무 빠르다"): 2.0초는 화면을 가로질러 떨어지는 운석 연출을
 // 담기엔 너무 촉박했다 — 공간 가르기(3.5초)에 가깝게 늘려 낙하가 실제로 무겁게 보일 시간을 준다.
-export const MAOU_METEOR_WINDUP = 3.2;
+// 2026-08-10 추가 상향: 3.2초도 여전히 짧아 저지 기회가 부족 — 5.0초로 늘려 여유 있게 저지 가능하도록.
+export const MAOU_METEOR_WINDUP = 5.0;
 export const MAOU_METEOR_THRESHOLD = 150; // 이 데미지 이상 넣어야 저지된다
 export const MAOU_METEOR_DMG = 45; // 저지 실패 시 고정 피해 — 위치 무관, 막지 못하면 그대로 맞는다
 

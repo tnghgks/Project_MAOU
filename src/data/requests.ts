@@ -19,10 +19,8 @@ export interface RequestDef {
   dur: number; // 제한시간(초)
   need: number; // 전투력 1.00 기준값 — 실제 목표는 startRequest가 스케일한다
   now(c: ReqCtx): number;
-  needs?: MonsterId[]; // 이 몬스터를 이번 방송에 편성했어야 출제 (해금이 아니라 편성 기준 — ReqPool 참고)
   noScale?: boolean; // 비율 목표(HP 등) — 전투력으로 늘리면 말이 안 된다
-  max?: number; // 스케일 상한. 동시 생존 상한(BattleScene.MAX_ALIVE=60)을 넘기면 달성 자체가 불가능하다
-  needsBoss?: boolean; // 보스 등장 후에만 출제
+  max?: number; // 스케일 상한
 }
 
 // ponytail: 요청 빈도·보상 knob
@@ -33,51 +31,19 @@ export const REQ_LOSE = 0.85;
 export const REQ_SCALE = 0.5; // 전투력 2배당 목표치 +50% (로그 — 후반 강화에도 목표가 폭주하지 않는다)
 
 // prettier-ignore
+// 2026-08-10: 소환 관련 요청 제거 — 웨이브 편성 시스템으로 바뀌어 특정 몬스터를 원하는 시점에 소환할 수 없음.
+// 보스 관련 요청도 제거 — 보스전에는 소환이 막혀 잡몹이 새로 나오지 않아 "보스만 노려" 같은 미션이 무의미.
+// 2026-08-10 재구성: 극단적으로 단순화 — 처치와 콤보만. 복잡한 조건 전부 제거. 시간 대폭 단축(~40%).
 export const REQUESTS: RequestDef[] = [
-  { text: '슬라임 {n}마리 동시에 풀어봐 ㅋㅋ', dur: 25, need: 6,  now: (c) => c.count('slime'),  needs: ['slime'] },
-  { text: '궁수부대 {n}마리 일제사격 보고싶다', dur: 25, need: 4,   now: (c) => c.count('archer'), needs: ['archer'] },
-  { text: '골렘 {n}마리 동시에 ㄱㄱ',           dur: 25, need: 2,   now: (c) => c.count('golem'),  needs: ['golem'] },
-  { text: '한 화면에 {n}마리 채워봐',           dur: 30, need: 10,  now: (c) => c.total, max: 45 },
-  { text: '{n}마리 잡히는 거 보고싶다',         dur: 25, need: 10,  now: (c) => c.killsSince },
-  { text: '용사 피 30% 밑으로 만들어봐',        dur: 30, need: 0.7, now: (c) => 1 - c.hpRatio, noScale: true },
-  { text: '폭탄 박쥐 {n}마리 터뜨려줘',         dur: 20, need: 3,   now: (c) => c.count('bat'),    needs: ['bat'] },
-  { text: '정예 기사 {n}명 붙여봐',             dur: 25, need: 1,   now: (c) => c.count('knight'), needs: ['knight'] },
-  // 용사를 직접 움직여야 채울 수 있는 요구 — 소환 조작만으로는 못 채운다
-  { text: '노 데미지 20초 가보자',              dur: 28, need: 20,  now: (c) => c.noHitT,       noScale: true },
-  { text: '{n}킬 연속으로 끊지 말고',           dur: 25, need: 4,   now: (c) => c.combo,        max: 12 },
-  { text: '잡몹 말고 보스만 노려! 30% 깎아라',  dur: 25, need: 0.3, now: (c) => c.bossDmgRatio, noScale: true, needsBoss: true },
+  // 처치 미션 — 가장 기본적인 목표
+  { text: '몬스터 {n}마리 잡아줘',       dur: 12, need: 5,  now: (c) => c.killsSince },
+  { text: '{n}마리 처치 가보자',         dur: 15, need: 8,  now: (c) => c.killsSince },
+  { text: '{n}마리 잡아보자',            dur: 18, need: 12, now: (c) => c.killsSince },
+  { text: '{n}마리 잡자',                dur: 20, need: 15, now: (c) => c.killsSince },
 
-  // 소환 연타 — "숫자키 몇 번 더" 식으로 짧은 시간에 몰아 누르게 만드는 게 목적. 리듬게임처럼
-  // 소환 버튼을 연타하는 감각을 주려고 기존 단일 종류 요청보다 dur을 촘촘히 잡는다.
-  { text: '슬라임 {n}마리 순삭 도전! 빠르게!',   dur: 14, need: 12, now: (c) => c.count('slime'),  needs: ['slime'] },
-  { text: '궁수부대 {n}마리 더 뽑아봐',         dur: 20, need: 6,  now: (c) => c.count('archer'), needs: ['archer'] },
-  { text: '사이클롭스 {n}마리로 밀어붙여',       dur: 26, need: 3,  now: (c) => c.count('golem'),  needs: ['golem'] },
-  { text: '폭탄 박쥐 {n}마리 연쇄 폭발 가보자',  dur: 16, need: 5,  now: (c) => c.count('bat'),    needs: ['bat'] },
-  { text: '정예 기사 {n}명은 세워야지',         dur: 24, need: 2,  now: (c) => c.count('knight'), needs: ['knight'] },
-  // 조합형 — 서로 다른 소환 버튼을 번갈아 누르게 만든다
-  { text: '슬라임+궁수 합쳐서 {n}마리 채워봐',   dur: 20, need: 12, now: (c) => c.count('slime') + c.count('archer'), needs: ['slime', 'archer'] },
-  { text: '박쥐랑 기사 동시에 최소 {n}마리씩',   dur: 26, need: 1,  now: (c) => Math.min(c.count('bat'), c.count('knight')), needs: ['bat', 'knight'], max: 4 },
-  { text: '다섯 종류 다 최소 {n}마리씩 세워봐',  dur: 35, need: 1,  now: (c) => Math.min(c.count('slime'), c.count('archer'), c.count('golem'), c.count('bat'), c.count('knight')), needs: ['slime', 'archer', 'golem', 'bat', 'knight'], max: 3 },
-  // 총원 상급 — 기존 "한 화면에 10마리"보다 위 단계
-  { text: '화면 미어터지게 {n}마리 채워봐',      dur: 30, need: 20, now: (c) => c.total, max: 45 },
-  { text: '필드 꽉 채워봐 {n}마리!',            dur: 32, need: 35, now: (c) => c.total, max: 45 },
-  // 처치 상급 · 콤보 상급
-  { text: '{n}마리 순삭 각 보여줘',             dur: 30, need: 20, now: (c) => c.killsSince },
-  { text: '{n}초 안에 8마리는 잡아야지',        dur: 12, need: 8,  now: (c) => c.killsSince },
-  { text: '{n}콤보까지 끊지 말고 가보자',       dur: 25, need: 8,  now: (c) => c.combo, max: 12 },
-  // 생존/보스 상급
-  { text: '노 데미지 35초 가보자, 진짜로',      dur: 40, need: 35, now: (c) => c.noHitT, noScale: true },
-  { text: '보스만 노려! 50% 깎아라',            dur: 30, need: 0.5, now: (c) => c.bossDmgRatio, noScale: true, needsBoss: true },
-
-  // 역할 몬스터 전용 (2026-08-09). 편성해 온 사람에게만 뜬다 — 웨이브 즉시 호출(SPACE)로 물량을
-  // 앞당기거나, 반대로 안 잡고 남겨두는 식으로 대응한다.
-  { text: '분열 슬라임 {n}마리 동시에 터뜨려',   dur: 24, need: 3,  now: (c) => c.count('splitter'), needs: ['splitter'] },
-  { text: '거북이 {n}마리로 벽 세워봐',          dur: 26, need: 2,  now: (c) => c.count('turtle'),   needs: ['turtle'] },
-  { text: '주술사 {n}명 버프 받는 그림 보고싶다', dur: 24, need: 2,  now: (c) => c.count('shaman'),   needs: ['shaman'] },
-  { text: '저격수 {n}명 깔아놓고 버텨봐',        dur: 26, need: 2,  now: (c) => c.count('sniper'),   needs: ['sniper'] },
-  // 조합형 — 벽 뒤에 원거리를 세우는 "진형"을 요구한다
-  { text: '거북이 뒤에 저격수! 각각 {n}마리씩',  dur: 30, need: 1,  now: (c) => Math.min(c.count('turtle'), c.count('sniper')), needs: ['turtle', 'sniper'], max: 4 },
-  { text: '주술사 낀 채로 {n}킬 보여줘',         dur: 26, need: 8,  now: (c) => (c.count('shaman') > 0 ? c.killsSince : 0), needs: ['shaman'] },
+  // 콤보 미션
+  { text: '콤보 {n}개 쌓아봐',           dur: 15, need: 4,  now: (c) => c.combo, max: 12 },
+  { text: '{n}콤보 가보자',              dur: 18, need: 7,  now: (c) => c.combo, max: 12 },
 ];
 
 export interface ActiveRequest {
@@ -107,19 +73,12 @@ export function stepRequest(r: ActiveRequest, c: ReqCtx, dt: number): ReqEvent {
 
 export const reqProgress = (r: ActiveRequest, c: ReqCtx) => Math.min(1, Math.max(0, r.def.now(c) / r.need));
 
-// 출제 가능 여부를 가르는 현재 방송 상태. 인자를 하나로 묶어 플래그가 늘어도 시그니처가 안 자란다.
-export interface ReqPool {
-  /** 이번 방송에 편성한 몬스터 종류(data/waves.lineupMonsters). 해금 목록이 아니라 편성 기준인 이유:
-   *  2026-08-09 개편으로 소환이 자동 웨이브가 되면서, 안 데려온 몬스터를 요구하면 플레이어가
-   *  달성할 방법이 아예 없어졌다. 덕분에 편성 화면의 선택이 방송 중 요청 내용까지 좌우한다. */
-  monsters: readonly MonsterId[];
-  boss: boolean; // 보스가 등장해 살아있는가
-}
+// 출제 가능 여부를 가르는 현재 방송 상태.
+// 2026-08-10: 소환·보스 관련 요청 제거로 단순화 — 모든 요청이 항상 출제 가능.
+export interface ReqPool {}
 
 // 지금 낼 수 있는 요청 중 하나. 직전 요청은 제외 (같은 요구가 연달아 뜨면 티가 난다).
-export function pickRequest(p: ReqPool, rnd: () => number = Math.random, exclude?: RequestDef): RequestDef | null {
-  const pool = REQUESTS.filter(
-    (r) => r !== exclude && (r.needs ?? []).every((m) => p.monsters.includes(m)) && (!r.needsBoss || p.boss),
-  );
+export function pickRequest(_p: ReqPool, rnd: () => number = Math.random, exclude?: RequestDef): RequestDef | null {
+  const pool = REQUESTS.filter((r) => r !== exclude);
   return pool.length ? pool[Math.floor(rnd() * pool.length)] : null;
 }

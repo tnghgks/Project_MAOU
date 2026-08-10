@@ -78,14 +78,16 @@ assert.deepStrictEqual(gameState().records.seenBosses, ['boss_golem']);
 }
 
 // resetRun: 스탯/골드/진행도/스킬/시청자 초기화, 기록 유지 + 세이브에도 반영
+// 2026-08-10: 1화 시작 시 낙뢰·회복의성가 자동 해금
 gameStore.setState({ gold: 9999, episode: 4, hero: { ...gameState().hero, maxHp: 500 }, viewers: 3000 });
 gameState().resetRun();
 assert.strictEqual(gameState().gold, 0);
 assert.strictEqual(gameState().episode, 1);
 assert.strictEqual(gameState().hero.maxHp, BASE_HERO.maxHp);
 assert.strictEqual(gameState().viewers, 0);
-assert.deepStrictEqual(gameState().skills, ['낙뢰']);
-assert.deepStrictEqual(JSON.parse(store['maou.save']).skills, ['낙뢰']); // localStorage에서도 제거
+assert.ok(gameState().skills.includes('낙뢰'), '1화는 낙뢰 포함');
+assert.ok(gameState().skills.includes('회복의성가'), '1화는 회복의성가 포함');
+assert.strictEqual(gameState().skills.length, 2, '1화는 2개 스킬');
 assert.strictEqual(gameState().records.bestViewers, 5000); // 유지
 
 // applyUpgrade: 골드 부족 시 실패, 충분 시 스탯 반영
@@ -147,15 +149,20 @@ assert.strictEqual(gameState().upgradeLevels.hp, 1);
   assert.ok(min2 > min, '레벨이 오르면 하한 기준 가격도 같이 오른다');
 }
 
-// learnSkill: 골드 차감 + 추가. 도감 기록(learnedSkills)에도 남아야 런이 끝나도 해금이 유지된다
+// learnSkill: 2026-08-10 비활성화 — 화수별 자동 해금으로 변경
 gameStore.setState({ gold: 500, skills: ['낙뢰'] });
-assert.strictEqual(gameState().learnSkill('시간정지', 500), true);
-assert.deepStrictEqual(gameState().skills, ['낙뢰', '시간정지']);
-assert.strictEqual(gameState().gold, 0);
-assert.ok(gameState().records.learnedSkills.includes('시간정지'), '배운 스킬은 도감에 기록된다');
-gameState().resetRun();
-assert.deepStrictEqual(gameState().skills, ['낙뢰'], '보유 스킬은 런과 함께 초기화');
-assert.ok(gameState().records.learnedSkills.includes('시간정지'), '도감 기록은 리셋에도 남는다');
+assert.strictEqual(gameState().learnSkill('시간정지', 500), false, '스킬 구매 비활성화');
+assert.strictEqual(gameState().gold, 500, '골드 차감 안 됨');
+
+// nextEpisode: 화수 증가 시 스킬 자동 해금
+gameStore.setState({ episode: 1, skills: ['낙뢰', '회복의성가'] });
+gameState().nextEpisode();
+assert.strictEqual(gameState().episode, 2);
+assert.ok(gameState().skills.includes('낙뢰'), '2화는 낙뢰 포함');
+assert.ok(gameState().skills.includes('회복의성가'), '2화는 회복의성가 포함');
+assert.ok(gameState().skills.includes('화염폭발'), '2화는 화염폭발 해금');
+assert.ok(gameState().skills.includes('시간정지'), '2화는 시간정지 해금');
+assert.strictEqual(gameState().skills.length, 4, '2화는 4개 스킬');
 
 // clearSave: 도감·기록까지 전부 지운다 (옵션 → 데이터 초기화)
 gameState().clearSave();
