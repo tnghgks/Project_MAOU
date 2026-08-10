@@ -68,6 +68,7 @@ export interface BusEvents {
   'dev:shop-layout': ShopLayout; // 상인 위치·크기·어둠을 게임 돌린 채로 맞춘다
   'dev:reroll-stock': null; // 상인 재고를 다시 굴린다 (등급 조합 확인용)
   'dev:spawn-boss': null; // 보스를 강제로 소환한다 (보스 페이즈 테스트용)
+  'dev:kill-boss': null; // 보스를 즉시 처치한다 (보스 페이즈 스킵용)
   'dev:boss-pattern': { pattern: BossPattern }; // 보스 패턴을 강제로 실행한다 (베르하르트 패턴 테스트용)
 }
 

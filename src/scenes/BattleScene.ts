@@ -317,6 +317,12 @@ export default class BattleScene extends Phaser.Scene {
     busBind(this, 'skill:request', ({ index }) => this.castSkill(index));
     // 개발 모드 전용: 보스 강제 소환
     busBind(this, 'dev:spawn-boss', () => this.spawnBoss());
+    // 개발 모드 전용: 보스 즉시 처치
+    busBind(this, 'dev:kill-boss', () => {
+      if (this.boss && this.boss.hp > 0) {
+        this.boss.hp = 0;
+      }
+    });
     // 개발 모드 전용: 보스 패턴 강제 실행
     busBind(this, 'dev:boss-pattern', ({ pattern }) => this.forceBossPattern(pattern));
 

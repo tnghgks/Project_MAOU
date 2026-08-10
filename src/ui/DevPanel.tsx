@@ -169,6 +169,14 @@ export default function DevPanel() {
             >
               보스 소환
             </button>
+            <button
+              onClick={() => {
+                if (gameState().phase !== 'broadcast') goPhase('broadcast');
+                bus.emit('dev:kill-boss', null);
+              }}
+            >
+              💀 보스 즉시 처치
+            </button>
           </div>
 
           <p className="dev-panel-label">보스 패턴 (베르하르트)</p>

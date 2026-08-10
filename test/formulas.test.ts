@@ -32,11 +32,11 @@ assert.strictEqual(hypeTier(0.1).rate, -0.003);
 assert.strictEqual(hypeTier(0.5).rate, 0.05);
 assert.strictEqual(hypeTier(0.9).rate, 0.08);
 
-// 도네 간격: 40 - 6*log10(v), [15,30] 클램프 (2026-08-03 하향)
-assert.strictEqual(donationInterval(10), 30); // 10명 = 상한
-assert.strictEqual(donationInterval(1e6), 15); // 하한
-assert.strictEqual(donationInterval(1e9), 15); // 하한
-assert.strictEqual(donationInterval(0), 30); // log10(0)=-Inf 방어
+// 도네 간격: 35 - 7*log10(v), [10,20] 클램프 (2026-08-10 상향)
+assert.strictEqual(donationInterval(10), 20); // 10명 = 상한
+assert.strictEqual(donationInterval(1e6), 10); // 하한
+assert.strictEqual(donationInterval(1e9), 10); // 하한
+assert.strictEqual(donationInterval(0), 20); // log10(0)=-Inf 방어
 // 시청자가 늘수록 짧아진다 (단조 감소)
 assert.ok(donationInterval(100) > donationInterval(1000) && donationInterval(1000) > donationInterval(5000));
 

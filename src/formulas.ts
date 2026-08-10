@@ -56,9 +56,10 @@ export const goldWithBonus = (gold: number, goldBonusPct: number) => Math.round(
 // 간격은 시청자 수만으로 결정 — 후원마다 게임이 멈추고 카드가 뜨므로 난수 몰아치기는 뺐다.
 // 2026-08-03 하향(피드백: "도네이션이 너무 잦다"): 상한/하한을 25→30초·10→15초로 늘리고
 // 기울기(6)도 완만하게 해 하한 도달 시점을 1만→약 1.5만 명으로 늦췄다.
-// 46명 이하 30초(상한) · 1000명 22초 · 15000명 이상 15초(하한).
+// 2026-08-10 상향(피드백: "밸런스가 어렵다, 도네이션을 더 자주"): 상한/하한을 30→20초·15→10초로 줄여
+// 도네이션이 더 자주 발생하도록 조정. 46명 이하 20초(상한) · 1000명 14초 · 15000명 이상 10초(하한).
 export function donationInterval(viewers: number): number {
-  return clamp(40 - 6 * Math.log10(Math.max(1, viewers)), 15, 30); // ponytail: 40/6 = 후원 빈도 knob
+  return clamp(35 - 7 * Math.log10(Math.max(1, viewers)), 10, 20); // ponytail: 35/7 = 후원 빈도 knob
 }
 
 export const JACKPOT_CHANCE = 0.08; // ponytail: 대박 후원(=리액션 이벤트) 확률·배율 knob
