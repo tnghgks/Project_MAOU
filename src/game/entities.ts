@@ -63,6 +63,10 @@ export interface MonsterEntity {
   kbT?: number; // 공격 넉백 남은 시간(초) — 이 동안 stepMonster가 AI 대신 kbVx/kbVy로만 밀어낸다
   kbVx?: number; // 넉백 속도(px/s)
   kbVy?: number;
+  /** 오라 버프 배율(1 = 버프 없음). battleSim.applyAuras가 매 프레임 통째로 다시 칠한다 —
+   *  누적이 아니라 재계산이라 오라를 두른 몬스터가 죽으면 다음 프레임에 저절로 풀린다. */
+  auraAtk?: number;
+  auraSpd?: number;
   // ── 보스 전용 상태(stepBossGolem/stepBossKnight가 쓴다) — 일반 몬스터는 항상 undefined ──
   bossPhase?: 'windup' | 'active' | 'recover' | 'cooldown';
   bossPattern?: 'rock' | 'stomp' | 'charge' | 'swordbeam' | 'spaceSlash' | 'knightCharge'; // 지금(또는 방금) 진행 중인 패턴

@@ -1,0 +1,717 @@
+/* 웨이브 편성 화면 전용. 공용 토큰·프리미티브는 ui/pixel.css가 소유한다 —
+   여기엔 편성에만 있는 배치(웨이브 행 · 팔레트 · 예산 게이지)만 둔다.
+   title.css와 같은 원칙: 블러 없는 그림자, box-shadow 테두리, steps() 모션. */
+
+/* 화면 전체가 늘어나 스크롤되면 "방송 시작" 버튼이 접힌 아래로 사라진다 — 세로를 grid로 잘라
+   본문(.lineup-main)만 남는 높이를 갖게 하고, 넘치는 건 창 안쪽(.px-window-body)이 스크롤한다.
+   머리말과 버튼 줄은 항상 화면에 남는다. */
+.lineup-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  justify-items: center;
+  gap: clamp(6px, 1.2vh, 14px);
+  padding: clamp(10px, 2.2vh, 26px) 3%;
+  background: #0e0e18;
+  color: #eee;
+  image-rendering: pixelated;
+  overflow: hidden;
+}
+/* 주사선(z-index 1) 위로 올리는 용도. 스탯 쪽지는 빼야 한다 — 여기 걸리면 position이 relative로
+   덮여 fixed가 죽고, 쪽지가 문서 흐름에 남아 화면 높이까지 밀어 올린다(z-index 55라 어차피 위다). */
+.lineup-screen > *:not(.px-scanlines):not(.monster-tip) {
+  position: relative;
+  z-index: 2;
+}
+
+/* ── 머리말 ── */
+.lineup-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+.lineup-title {
+  font-size: clamp(18px, 2.4vw, 32px);
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: #ff4466;
+  /* 로고와 같은 하드 아웃라인 — 블러 대신 오프셋만 */
+  text-shadow:
+    2px 0 0 #2a0410,
+    -2px 0 0 #2a0410,
+    0 -2px 0 #2a0410,
+    0 2px 0 #7a0c26,
+    0 4px 0 #2a0410;
+}
+/* 화 부제 — 뒤이어 재생될 스테이지 컷씬과 같은 제목을 쓴다 */
+.lineup-ep {
+  font-size: clamp(11px, 1.1vw, 16px);
+  letter-spacing: 2px;
+  color: var(--px-gold);
+}
+.lineup-flavor {
+  max-width: 74ch;
+  font-size: clamp(9px, 0.85vw, 13px);
+  line-height: 1.6;
+  letter-spacing: 1px;
+  color: #7a749c;
+}
+
+/* ── 본문 2열: 왼쪽은 상대 정보(용사·규칙), 오른쪽은 실제로 만지는 큐시트 ──
+   좁아지면 한 열로 접는다. */
+.lineup-main {
+  display: grid;
+  grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
+  align-items: stretch;
+  gap: clamp(8px, 1vw, 16px);
+  width: min(1180px, 98%);
+  height: 100%;
+  min-height: 0; /* 없으면 자식이 넘쳐도 grid 칸이 같이 늘어난다 */
+}
+.lineup-side {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: start;
+  gap: clamp(6px, 0.9vh, 12px);
+  min-height: 0;
+  overflow-y: auto;
+}
+/* 2열 안에서는 창이 칸을 그대로 채운다 — pixel.css의 고정 폭·바깥 여백·높이 상한을 여기서만 푼다 */
+.lineup-main .px-window.wide {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+}
+@media (max-width: 900px) {
+  .lineup-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ── 예산: 큐시트 제목줄에 붙인다. 예산은 편성하는 내내 보이는 게 맞고,
+      머리말에 두면 표를 만지는 눈과 멀어진다 ── */
+.budget-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: clamp(9px, 0.85vw, 13px);
+  font-weight: 400;
+  letter-spacing: 1px;
+  color: #cdc6e4;
+}
+.budget-chip b {
+  display: inline-block;
+  color: var(--px-gold);
+  font-size: 1.2em;
+}
+.budget-chip.over b {
+  color: #ff5566;
+  animation: px-shake 0.24s steps(2, end) 2;
+}
+@keyframes px-shake {
+  50% {
+    transform: translateX(3px);
+  }
+}
+.budget-track {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: #0d0b1a;
+  box-shadow: inset 0 0 0 2px var(--px-ink);
+}
+.budget-cell {
+  width: 7px;
+  height: 14px;
+  background: #241f3c;
+}
+.budget-cell.on {
+  background: var(--px-gold);
+  box-shadow:
+    inset 1px 1px 0 #ffe98a,
+    inset -1px -1px 0 #b06a10;
+}
+.budget-cell.over {
+  background: #ff5566;
+}
+
+/* ── 왼쪽 열: 용사 카드 ── */
+.hero-card,
+.guide-card {
+  background: var(--px-face);
+  box-shadow:
+    0 0 0 3px var(--px-ink),
+    0 0 0 6px var(--px-hi),
+    0 0 0 9px var(--px-ink);
+}
+.hero-card-body {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+.hero-portrait {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.hero-id b {
+  display: block;
+  font-size: clamp(12px, 1.15vw, 17px);
+  letter-spacing: 2px;
+  color: #fff;
+}
+.hero-id small {
+  font-size: clamp(8px, 0.72vw, 11px);
+  line-height: 1.4;
+  color: #857ead;
+}
+.hero-power {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  font-size: clamp(10px, 0.9vw, 13px);
+  letter-spacing: 1px;
+  color: #cdc6e4;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 3px 0 0 var(--px-gold);
+}
+.hero-power b {
+  font-size: 1.3em;
+  color: var(--px-gold);
+}
+.hero-power-note {
+  margin-left: auto;
+  font-size: 0.85em;
+  color: #857ead;
+}
+.hero-stats {
+  display: grid;
+  gap: 2px;
+}
+.hero-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 8px;
+  font-size: clamp(9px, 0.8vw, 12px);
+  background: #191533;
+  box-shadow:
+    inset 2px 2px 0 #262048,
+    inset -2px -2px 0 var(--px-ink);
+}
+.hero-stat dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #9a93c4;
+  letter-spacing: 1px;
+}
+.hero-stat-icon {
+  width: 1.1em;
+  text-align: center;
+  color: #6e6796;
+}
+.hero-stat dd {
+  font-weight: 700;
+  color: #eae5f7;
+}
+.hero-stat-lv {
+  margin-left: 5px;
+  font-size: 0.85em;
+  font-weight: 400;
+  color: var(--px-gold);
+}
+
+/* ── 왼쪽 열: 방송 규칙 안내 ── */
+.guide-list {
+  display: grid;
+  gap: 6px;
+  padding: 10px 10px 10px 26px;
+  font-size: clamp(9px, 0.78vw, 12px);
+  line-height: 1.6;
+  color: #9a93c4;
+}
+.guide-list li::marker {
+  color: var(--px-gold);
+}
+.guide-list b {
+  color: #eae5f7;
+}
+
+/* ── 웨이브 타임라인 ──
+   세로 목록이던 걸 눕혔다. 이 화면의 본질은 "무엇을 넣나"가 아니라 "언제 무엇이 나오나"라서,
+   시간이 왼쪽에서 오른쪽으로 흐르는 편이 편성을 읽기 쉽다.
+   칸은 가로로 스크롤한다 — 5칸 + 반복 꼬리 3칸이면 좁은 화면에서 다 안 들어간다. */
+.wave-track {
+  display: flex;
+  gap: 6px;
+  padding-bottom: 6px;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.wave-track::-webkit-scrollbar {
+  height: 8px;
+}
+.wave-track::-webkit-scrollbar-track {
+  background: #0d0b1a;
+}
+.wave-track::-webkit-scrollbar-thumb {
+  background: #46407a;
+  box-shadow:
+    inset 2px 2px 0 #6a63ad,
+    inset -2px -2px 0 #1a1730;
+}
+.wave-track > li {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.wave-card {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto auto;
+  gap: 4px;
+  width: clamp(122px, 12vw, 156px);
+  padding: 6px;
+  text-align: left;
+  color: #cdc6e4;
+  background: #191533;
+  border: none;
+  cursor: pointer;
+  box-shadow:
+    inset 2px 2px 0 #34305c,
+    inset -2px -2px 0 var(--px-ink);
+}
+.wave-card:hover {
+  background: #211c42;
+}
+/* 선택 = 금테. 타이틀 메뉴의 커서와 같은 색이라 따로 배울 게 없다 */
+.wave-card.on {
+  color: #fff;
+  background: #2a2350;
+  box-shadow:
+    inset 2px 2px 0 #4a4287,
+    inset -2px -2px 0 var(--px-ink),
+    0 0 0 3px var(--px-gold);
+}
+/* 반복 사이클 칸 — 편성 대상이 아니라 "이렇게 이어진다"는 예고라 눌리지 않는다 */
+.wave-card.ghost {
+  cursor: default;
+  opacity: 0.5;
+  background: #14112a;
+  box-shadow:
+    inset 2px 2px 0 #241f42,
+    inset -2px -2px 0 var(--px-ink);
+}
+
+/* 시간이 카드의 첫 줄 — 이 목록이 시간표라는 걸 맨 위에서 못박는다 */
+.wave-time {
+  font-size: clamp(10px, 0.95vw, 14px);
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--px-gold);
+}
+.wave-card.ghost .wave-time {
+  color: #6e6796;
+}
+.wave-no {
+  font-size: clamp(8px, 0.72vw, 11px);
+  letter-spacing: 1px;
+  color: #857ead;
+}
+.wave-card.on .wave-no {
+  color: #cdc6e4;
+}
+
+.wave-units {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 4px;
+  min-height: 42px;
+}
+.wave-empty {
+  font-size: clamp(8px, 0.72vw, 11px);
+  letter-spacing: 1px;
+  color: #4e4972;
+}
+/* 이름 없이 스프라이트 + 수량만. 칸이 좁아 이름을 넣으면 두 줄로 접힌다 —
+   무엇인지는 그림으로 알아보고, 자세한 건 호버 쪽지(MonsterTip)가 맡는다. */
+.wave-unit {
+  position: relative;
+  display: block;
+  cursor: pointer;
+}
+.wave-card.ghost .wave-unit {
+  cursor: default;
+}
+.unit-count {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  padding: 0 3px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--px-gold);
+  background: var(--px-ink);
+}
+/* 빼기 표시는 평소엔 숨기고 호버에만 — 작은 칸에 상시로 띄우면 수량과 뒤엉킨다 */
+.unit-minus {
+  position: absolute;
+  right: -2px;
+  top: -2px;
+  width: 13px;
+  height: 13px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 13px;
+  text-align: center;
+  color: #ffd9d0;
+  background: #8c3048;
+  visibility: hidden;
+}
+.wave-unit:hover .unit-minus {
+  visibility: visible;
+}
+
+/* 위협도 — 코스트는 "얼마 썼나"라 무게를 못 말해준다. 편성 안에서의 상대값 막대다. */
+.wave-meter {
+  display: block;
+  height: 6px;
+  background: #0d0b1a;
+  box-shadow: inset 0 0 0 2px var(--px-ink);
+}
+.wave-meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--px-gold);
+}
+.wave-card.ghost .wave-meter-fill {
+  background: #46407a;
+}
+.wave-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: clamp(8px, 0.7vw, 11px);
+  color: #7a749c;
+}
+.wave-threat {
+  color: #9a93c4;
+}
+
+/* ── 선택 웨이브 미리보기 ──
+   "×6"이라는 숫자보다 스프라이트 여섯 개가 밀도를 빨리 알려준다. */
+.wave-preview {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  min-height: 40px;
+  padding: 6px;
+  background: #0d0b1a;
+  box-shadow: inset 0 0 0 2px var(--px-ink);
+}
+.preview-more {
+  margin-left: 4px;
+  font-size: clamp(9px, 0.8vw, 12px);
+  font-weight: 700;
+  color: var(--px-gold);
+}
+
+/* ── 팔레트 ── */
+/* 칸 크기를 두 축 모두 고정한다. 예전엔 이름이 긴 몬스터(고블린 주술사·저격 고블린)가 두 줄로
+   넘어가면서 카드 높이가 56px과 70px로 갈렸다 —
+     · grid-auto-rows: 1fr — 행이 달라도 모든 카드가 같은 높이
+     · 최소 폭 상향 + 코스트를 이름 줄에서 빼냄(.pool-cost) — 7자 이름이 한 줄에 들어간다 */
+.pool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(150px, 15vw, 190px), 1fr));
+  grid-auto-rows: 1fr;
+  gap: 6px;
+  list-style: none;
+}
+.pool-grid > li {
+  display: flex; /* 카드가 격자 칸을 세로로 꽉 채우게 — li가 중간에 끼어 높이를 흘린다 */
+}
+.pool-card {
+  position: relative; /* .pool-cost 배지의 기준 */
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr); /* minmax(0,·)이라야 긴 이름이 칸을 밀지 않는다 */
+  grid-template-areas:
+    'thumb name'
+    'thumb role';
+  align-items: center;
+  gap: 2px 8px;
+  width: 100%;
+  padding: 6px;
+  text-align: left;
+  color: #cdc6e4;
+  background: #191533;
+  border: none;
+  cursor: pointer;
+  box-shadow:
+    inset 2px 2px 0 #34305c,
+    inset -2px -2px 0 var(--px-ink);
+}
+.pool-card:hover:not(:disabled) {
+  background: #211c42;
+  box-shadow:
+    inset 2px 2px 0 #4a4287,
+    inset -2px -2px 0 var(--px-ink),
+    0 0 0 2px var(--px-gold);
+}
+.pool-card:disabled {
+  cursor: not-allowed;
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+/* 키보드 커서 — 마우스 hover와 구분되는 실선 테두리. 방향키로만 도는 사람에게 지금 어디인지 알린다 */
+.pool-card.cursor {
+  box-shadow:
+    inset 2px 2px 0 #4a4287,
+    inset -2px -2px 0 var(--px-ink),
+    0 0 0 3px #7fd4ff;
+}
+/* 초상화 호버 히트박스. 스프라이트를 한 겹 감싸므로 격자 칸은 이 래퍼가 차지한다. */
+.art-hit {
+  display: block;
+  line-height: 0;
+}
+.pool-card .art-hit {
+  grid-area: thumb;
+}
+.pool-card:hover:not(:disabled) .px-thumb,
+.wave-unit:hover .px-thumb {
+  box-shadow: inset 0 0 0 2px var(--px-gold);
+}
+/* 이름은 무조건 한 줄. 코스트를 같은 줄에 두면 "고블린 주술사"(7자)가 밀려 두 줄이 됐다 —
+   letter-spacing도 0으로 둔다(7자면 그것만으로 7px을 더 먹는다). */
+.pool-name {
+  grid-area: name;
+  min-width: 0;
+  padding-right: 2.4em; /* 우상단 코스트 배지 자리 */
+  font-size: clamp(10px, 0.95vw, 14px);
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 역할 배지 — 아홉 장을 나란히 비교할 때 산문 설명보다 이게 먼저 눈에 걸린다.
+   설명 줄 맨 앞에 인라인으로 붙는다(이름 줄에 두면 폭을 다투다 긴 이름이 잘린다). */
+.role-badge {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+  vertical-align: 1px;
+  color: #16122a;
+  background: #8f88bb;
+}
+/* 이름 흐름에서 빼내 카드 모서리에 고정 — 이름이 길든 짧든 자리가 안 바뀐다 */
+.pool-cost {
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  font-size: clamp(9px, 0.8vw, 12px);
+  font-weight: 700;
+  color: var(--px-gold);
+}
+.pool-card:disabled .pool-cost {
+  color: #ff8a8a;
+}
+/* 설명이 한 줄이든 두 줄이든 같은 높이 — 이게 없으면 카드 키가 다시 들쭉날쭉해진다 */
+.pool-role {
+  grid-area: role;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.7em; /* line-height 1.35 × 2줄 */
+  font-size: clamp(8px, 0.72vw, 11px);
+  line-height: 1.35;
+  color: #857ead;
+}
+
+/* ── 하단 조작 ── */
+.lineup-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* 세 버튼의 높이를 하나로 묶는다. 폰트 크기가 달라 padding만으로는 28px과 33px로 갈렸다.
+   폭은 역할에 따라 다른 게 맞지만(주 동작이 커야 한다), 보조 둘은 서로 같아야 한다. */
+.lineup-btn,
+.lineup-go {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+}
+.lineup-btn {
+  /* 가장 긴 라벨("자동 편성")이 최대 폰트(14px)에서 차지하는 105px보다 넉넉하게 —
+     이보다 좁으면 라벨 길이에 따라 두 보조 버튼의 폭이 갈린다 */
+  min-width: 112px;
+  padding: 0 16px;
+  font-size: clamp(10px, 0.95vw, 14px);
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #cfc7e4;
+  background: #241f3c;
+  border: none;
+  cursor: pointer;
+  box-shadow:
+    inset 2px 2px 0 #3b3466,
+    inset -2px -2px 0 var(--px-ink);
+}
+.lineup-btn:hover {
+  background: #322a52;
+  color: #fff;
+}
+.lineup-btn:active {
+  box-shadow:
+    inset -2px -2px 0 #3b3466,
+    inset 2px 2px 0 var(--px-ink);
+}
+.lineup-go {
+  padding: 0 26px;
+  font-size: clamp(12px, 1.2vw, 18px);
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #2a1800;
+  background: var(--px-gold);
+  border: none;
+  cursor: pointer;
+  box-shadow:
+    inset 2px 2px 0 #ffe98a,
+    inset -2px -2px 0 #b06a10;
+}
+.lineup-go:hover:not(:disabled) {
+  background: #ffe062;
+}
+.lineup-go:active:not(:disabled) {
+  box-shadow:
+    inset -2px -2px 0 #ffe98a,
+    inset 2px 2px 0 #b06a10;
+}
+.lineup-go:disabled {
+  cursor: not-allowed;
+  color: #4e4972;
+  background: #2b2450;
+  box-shadow:
+    inset 2px 2px 0 #3b3466,
+    inset -2px -2px 0 var(--px-ink);
+}
+.lineup-error {
+  font-size: clamp(9px, 0.85vw, 13px);
+  letter-spacing: 1px;
+  color: var(--px-warn);
+}
+
+/* ── 몬스터 스탯 쪽지 (초상화 호버) ──
+   창 안이 아니라 화면에 고정으로 띄운다 — .px-window-body가 overflow: auto라 안에 그리면 잘린다.
+   width는 MonsterTip.tsx의 TIP_W와 같아야 가장자리 물림 계산이 맞는다. */
+.monster-tip {
+  position: fixed;
+  z-index: 55;
+  width: 244px;
+  padding: 8px 10px;
+  pointer-events: none; /* 쪽지가 마우스를 가로채면 호버가 깜빡인다 */
+  font-size: 11px;
+  line-height: 1.5;
+  color: #cdc6e4;
+  background: var(--px-face);
+  box-shadow:
+    0 0 0 2px var(--px-ink),
+    0 0 0 4px var(--px-hi),
+    0 0 0 6px var(--px-ink);
+}
+.tip-name {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+  padding-bottom: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #fff;
+  box-shadow: inset 0 -2px 0 #2b2450;
+}
+.tip-cost {
+  margin-left: auto;
+  font-size: 0.85em;
+  color: var(--px-gold);
+}
+/* 쪽지 안에서는 배지가 이름 바로 옆에 붙는다 — 코스트가 auto 여백으로 오른쪽 끝에 밀린다 */
+.tip-name .role-badge {
+  background: #6a63ad;
+  color: #0d0b1a;
+}
+
+/* 조작 힌트 — 방향키로 돌 수 있다는 걸 모르면 아무도 안 쓴다 */
+.lineup-keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+  font-size: clamp(8px, 0.72vw, 11px);
+  letter-spacing: 1px;
+  color: #5f5987;
+}
+.lineup-keys b {
+  color: #9a93c4;
+}
+.tip-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px 10px;
+}
+.tip-stats > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+}
+.tip-stats dt {
+  color: #857ead;
+}
+.tip-stats dd {
+  font-weight: 700;
+  color: #eae5f7;
+}
+/* 특성은 숫자보다 이게 편성을 가른다 — 금색 띠로 눈에 먼저 걸리게 한다 */
+.tip-traits {
+  display: grid;
+  gap: 3px;
+  margin-top: 6px;
+  list-style: none;
+}
+.tip-traits li {
+  padding: 3px 7px;
+  font-size: 10px;
+  color: #e0d8f5;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: inset 3px 0 0 var(--px-gold);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .budget-chip.over b {
+    animation: none;
+  }
+}

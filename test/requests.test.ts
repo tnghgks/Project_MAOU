@@ -23,9 +23,9 @@ const ctx = (p: Partial<ReqCtx> & { alive?: Partial<Record<MonsterId, number>> }
   noHitT: p.noHitT ?? 0,
   bossDmgRatio: p.bossDmgRatio ?? 0,
 });
-// 출제 게이트용 방송 상태 — 기본은 "보스 없음"
+// 출제 게이트용 방송 상태 — 기본은 "편성 없음 · 보스 없음"
 const pool = (p: Partial<ReqPool> = {}): ReqPool => ({
-  unlocked: p.unlocked ?? [],
+  monsters: p.monsters ?? [],
   boss: p.boss ?? false,
 });
 const def: RequestDef = { text: '슬라임 {n}', dur: 10, need: 3, now: (c) => c.count('slime') };
@@ -105,16 +105,27 @@ const active = (d = def): ActiveRequest => startRequest(d, 1, 0); // 전투력 1
 }
 
 // ── 출제 게이트 ──
-// 1화(슬라임/궁수/골렘만 해금)에선 박쥐·기사 요청이 안 나온다
+// 편성 기준(2026-08-09): 슬라임/궁수/사이클롭스만 데려간 방송에선 박쥐·기사 요청이 안 나온다.
+// 해금 여부가 아니라 "이번에 데려왔나"가 기준이라 편성이 요청 내용을 좌우한다.
 {
-  const ep1: MonsterId[] = ['slime', 'archer', 'golem'];
-  const ok = REQUESTS.filter((r) => (r.needs ?? []).every((m) => ep1.includes(m)) && !r.needsBoss);
+  const brought: MonsterId[] = ['slime', 'archer', 'golem'];
+  const ok = REQUESTS.filter((r) => (r.needs ?? []).every((m) => brought.includes(m)) && !r.needsBoss);
   assert.ok(ok.length > 0);
+  assert.ok(!ok.some((r) => (r.needs ?? []).some((m) => !brought.includes(m))), '안 데려온 몬스터 요청은 제외돼야 함');
+  for (let i = 0; i < 200; i++) assert.ok(ok.includes(pickRequest(pool({ monsters: brought }))!));
+}
+
+// 편성한 몬스터의 전용 요청은 실제로 뽑힌다 — 안 그러면 역할 몬스터를 데려갈 이유가 준다
+{
+  const brought: MonsterId[] = ['turtle', 'sniper'];
+  const own = REQUESTS.filter((r) => (r.needs ?? []).some((m) => brought.includes(m)));
+  assert.ok(own.length > 0, '거북이·저격수 전용 요청이 있어야 함');
+  const seen = new Set<RequestDef>();
+  for (let i = 0; i < 4000; i++) seen.add(pickRequest(pool({ monsters: brought }))!);
   assert.ok(
-    !ok.some((r) => (r.needs ?? []).some((m) => m === 'bat' || m === 'knight')),
-    '미해금 몬스터 요청은 제외돼야 함',
+    own.every((r) => (r.needs ?? []).every((m) => brought.includes(m)) === seen.has(r)),
+    '편성한 몬스터로 달성 가능한 요청만 출제돼야 한다',
   );
-  for (let i = 0; i < 200; i++) assert.ok(ok.includes(pickRequest(pool({ unlocked: ep1 }))!));
 }
 
 // 직전 요청은 다시 안 나온다

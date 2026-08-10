@@ -19,7 +19,7 @@ export interface RequestDef {
   dur: number; // 제한시간(초)
   need: number; // 전투력 1.00 기준값 — 실제 목표는 startRequest가 스케일한다
   now(c: ReqCtx): number;
-  needs?: MonsterId[]; // 이 몬스터가 해금돼야 출제
+  needs?: MonsterId[]; // 이 몬스터를 이번 방송에 편성했어야 출제 (해금이 아니라 편성 기준 — ReqPool 참고)
   noScale?: boolean; // 비율 목표(HP 등) — 전투력으로 늘리면 말이 안 된다
   max?: number; // 스케일 상한. 동시 생존 상한(BattleScene.MAX_ALIVE=60)을 넘기면 달성 자체가 불가능하다
   needsBoss?: boolean; // 보스 등장 후에만 출제
@@ -68,6 +68,16 @@ export const REQUESTS: RequestDef[] = [
   // 생존/보스 상급
   { text: '노 데미지 35초 가보자, 진짜로',      dur: 40, need: 35, now: (c) => c.noHitT, noScale: true },
   { text: '보스만 노려! 50% 깎아라',            dur: 30, need: 0.5, now: (c) => c.bossDmgRatio, noScale: true, needsBoss: true },
+
+  // 역할 몬스터 전용 (2026-08-09). 편성해 온 사람에게만 뜬다 — 웨이브 즉시 호출(SPACE)로 물량을
+  // 앞당기거나, 반대로 안 잡고 남겨두는 식으로 대응한다.
+  { text: '분열 슬라임 {n}마리 동시에 터뜨려',   dur: 24, need: 3,  now: (c) => c.count('splitter'), needs: ['splitter'] },
+  { text: '거북이 {n}마리로 벽 세워봐',          dur: 26, need: 2,  now: (c) => c.count('turtle'),   needs: ['turtle'] },
+  { text: '주술사 {n}명 버프 받는 그림 보고싶다', dur: 24, need: 2,  now: (c) => c.count('shaman'),   needs: ['shaman'] },
+  { text: '저격수 {n}명 깔아놓고 버텨봐',        dur: 26, need: 2,  now: (c) => c.count('sniper'),   needs: ['sniper'] },
+  // 조합형 — 벽 뒤에 원거리를 세우는 "진형"을 요구한다
+  { text: '거북이 뒤에 저격수! 각각 {n}마리씩',  dur: 30, need: 1,  now: (c) => Math.min(c.count('turtle'), c.count('sniper')), needs: ['turtle', 'sniper'], max: 4 },
+  { text: '주술사 낀 채로 {n}킬 보여줘',         dur: 26, need: 8,  now: (c) => (c.count('shaman') > 0 ? c.killsSince : 0), needs: ['shaman'] },
 ];
 
 export interface ActiveRequest {
@@ -99,14 +109,17 @@ export const reqProgress = (r: ActiveRequest, c: ReqCtx) => Math.min(1, Math.max
 
 // 출제 가능 여부를 가르는 현재 방송 상태. 인자를 하나로 묶어 플래그가 늘어도 시그니처가 안 자란다.
 export interface ReqPool {
-  unlocked: readonly MonsterId[];
+  /** 이번 방송에 편성한 몬스터 종류(data/waves.lineupMonsters). 해금 목록이 아니라 편성 기준인 이유:
+   *  2026-08-09 개편으로 소환이 자동 웨이브가 되면서, 안 데려온 몬스터를 요구하면 플레이어가
+   *  달성할 방법이 아예 없어졌다. 덕분에 편성 화면의 선택이 방송 중 요청 내용까지 좌우한다. */
+  monsters: readonly MonsterId[];
   boss: boolean; // 보스가 등장해 살아있는가
 }
 
 // 지금 낼 수 있는 요청 중 하나. 직전 요청은 제외 (같은 요구가 연달아 뜨면 티가 난다).
 export function pickRequest(p: ReqPool, rnd: () => number = Math.random, exclude?: RequestDef): RequestDef | null {
   const pool = REQUESTS.filter(
-    (r) => r !== exclude && (r.needs ?? []).every((m) => p.unlocked.includes(m)) && (!r.needsBoss || p.boss),
+    (r) => r !== exclude && (r.needs ?? []).every((m) => p.monsters.includes(m)) && (!r.needsBoss || p.boss),
   );
   return pool.length ? pool[Math.floor(rnd() * pool.length)] : null;
 }

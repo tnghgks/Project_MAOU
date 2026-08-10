@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { useStore } from 'zustand';
 import { gameStore, gameState } from '../../game/store.ts';
 import { playSfx } from '../../game/sfx.ts';
-import { stageCut } from '../../data/cutscenes.ts';
 import PixelWindow from './PixelWindow.tsx';
 import UnlockPanel from './UnlockPanel.tsx';
 import OptionsPanel from './OptionsPanel.tsx';
@@ -39,10 +38,12 @@ export default function TitleView() {
   const [sel, setSel] = useState(0);
   const items = useRef<(HTMLButtonElement | null)[]>([]);
 
-  // 프롤로그 → 1화 진입 컷씬이 끝나면 방송 시작
+  // 프롤로그가 끝나면 웨이브 편성 화면. 1화 진입 컷씬(stage-1)은 여기서 안 튼다 —
+  // 편성을 마친 뒤 LineupView가 이어서 재생한다. 즉 순서는 intro → 편성 → stage-1 → 방송.
+  // 컷씬이 "이제 방송 들어간다"는 신호라, 편성보다 뒤에 와야 그 신호가 실제 시작과 맞는다.
   const start = () => {
     gameState().resetRun();
-    gameState().playCuts(['intro', stageCut(1)], () => gameState().setPhase('broadcast'));
+    gameState().playCuts(['intro'], () => gameState().setPhase('lineup'));
   };
 
   // 커서 이동음은 자리가 실제로 바뀔 때만 — 이미 그 항목에 있는데 마우스가 다시 들어와도 울리면

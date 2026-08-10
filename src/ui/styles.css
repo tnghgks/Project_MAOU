@@ -1535,3 +1535,25 @@ button {
 .dev-panel-row button:hover {
   background: #3a3a5c;
 }
+
+/* ── 방송 중 웨이브 칸 (SummonPanel) ── */
+/* 호출 버튼은 다른 타일과 구분돼야 한다 — 소환 타일이 사라진 자리에 유일하게 남은 "판을 키우는" 버튼이다. */
+.tile.wave-tile {
+  border-color: var(--brand);
+}
+.wave-next {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+  min-width: clamp(120px, 14vw, 200px);
+}
+.wave-next-label {
+  font-size: clamp(9px, 0.75vw, 12px);
+  color: #8888aa;
+}
+.wave-next-list {
+  font-size: clamp(10px, 0.85vw, 13px);
+  color: #ccd;
+  line-height: 1.4;
+}

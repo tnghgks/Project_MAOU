@@ -1,6 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 import { UPGRADES, upgradeCost, type UpgradeKey } from '../data/upgrades.ts';
 import { stageViewerFloor } from '../data/progression.ts';
+import { defaultLineup, type Lineup } from '../data/waves.ts';
 import type { Card } from '../data/cards.ts';
 import { resolveMods } from '../data/cardStats.ts';
 import { SKILLS, type SkillId } from '../data/skills.ts';
@@ -27,7 +28,9 @@ export interface HeroStats {
   regenFlat: number; // 비전투 회복 시 5초마다 추가로 회복하는 고정 체력량
   goldBonus: number; // 처치 골드 보너스(%)
 }
-export type Phase = 'boot' | 'title' | 'broadcast' | 'result' | 'upgrade' | 'ending';
+// lineup = 방송 전 웨이브 편성 화면. 방송(broadcast) 직전에 반드시 한 번 거친다 —
+// 소환이 자동 웨이브가 된 뒤로 "이번 방송에 뭘 데려가나"가 유일한 사전 결정이라 페이즈를 따로 뒀다.
+export type Phase = 'boot' | 'title' | 'lineup' | 'broadcast' | 'result' | 'upgrade' | 'ending';
 // clear = 목표 후원 달성 · death = 용사 사망 · abandoned = 시청자 이탈로 방송 종료
 export type RunOutcome = 'clear' | 'death' | 'abandoned';
 export interface RunSummary {
@@ -54,6 +57,10 @@ export interface GameState {
   episode: number;
   hero: HeroStats;
   upgradeLevels: Record<UpgradeKey, number>;
+  /** 이번 방송에 데려갈 웨이브 편성 (data/waves.ts). 런 한정 — 세이브에 안 남는다.
+   *  화가 바뀌어도 초기화하지 않는다: 지난 화 편성을 그대로 들고 편성 화면에 들어가 손보는 게
+   *  매번 백지에서 다시 짜는 것보다 낫다 (예산은 커지기만 하므로 이월된 편성은 늘 유효하다). */
+  lineup: Lineup;
   skills: SkillId[]; // 해금으로 누적 (영구)
   skillUses: Partial<Record<SkillId, number>>; // 현재 스테이지에서 각 스킬의 사용 횟수 (스테이지마다 리셋)
   traits: TraitId[]; // 도네 카드로만 획득, 런 한정 (세이브에 안 남는다)
@@ -86,6 +93,7 @@ export interface GameState {
   clearSave: () => void;
   playCuts: (ids: string | string[], after?: () => void) => void;
   advanceCut: () => void;
+  setLineup: (lineup: Lineup) => void;
   setViewers: (viewers: number) => void;
   addGold: (n: number) => void;
   nextEpisode: () => void;
@@ -152,6 +160,7 @@ const freshRun = () => ({
   gold: 0,
   episode: 1,
   hero: { ...BASE_HERO },
+  lineup: defaultLineup(1), // 새 런은 1화 자동 편성에서 시작 — 편성 화면에서 곧바로 손볼 수 있다
   upgradeLevels: { hp: 0, atk: 0, atkSpd: 0, speed: 0, range: 0 },
   skills: ['낙뢰'] as SkillId[], // 스킬은 런 한정 — 사망/타이틀 복귀 시 세이브에서도 지워진다
   skillUses: {} as Partial<Record<SkillId, number>>, // 스테이지마다 리셋
@@ -221,6 +230,7 @@ export const gameStore = createStore<GameState>()((set, get) => ({
     afterCuts = null;
     f?.();
   },
+  setLineup: (lineup) => set({ lineup }),
   setViewers: (viewers) => set({ viewers }),
   addGold: (n) => set({ gold: get().gold + n }),
   // 다음 화는 지난 화 최고 시청자수의 절반을 이어받는다 — 단, 다음 화 목표 골드가 요구하는

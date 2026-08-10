@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import type { DonationTier, SkillOutcome, ViewerAlert } from '../formulas.ts';
 import type { Card } from '../data/cards.ts';
-import type { MonsterId } from '../data/monsters.ts';
+import type { WaveEntry } from '../data/waves.ts';
 import type { SkillId } from '../data/skills.ts';
 import type { ShopLayout } from '../data/merchant.ts';
 import type { BossPattern } from './battleSim.ts';
@@ -39,6 +39,9 @@ export interface HudTick {
   stageGold: number;
   target: number;
   req: { label: string; pct: number; t: number } | null;
+  /** 웨이브 진행 상황. null = 웨이브가 안 도는 구간(보스전·최종화) — SummonPanel이 칸을 통째로 숨긴다.
+   *  index는 지금까지 투입한 웨이브 수, t는 다음 투입까지 남은 초, next는 그때 나올 구성이다. */
+  wave: { index: number; t: number; next: WaveEntry[] } | null;
   skillCd: Partial<Record<SkillId, number>>; // QWER 쿨타임 잔여 — React SummonPanel이 스킬 칸에 표시
   dashCd: number; // Shift 대시 쿨타임 잔여 — 위와 같은 이유로 SummonPanel이 표시
 }
@@ -55,7 +58,10 @@ export interface BusEvents {
   'battle:resume': null;
   'hud:tick': HudTick;
   'pause:toggle': null; // React(ESC/일시정지 버튼) → BattleScene: scene.pause()/resume() 토글 요청
-  'summon:request': { type: MonsterId }; // React(SummonPanel 버튼) → BattleScene.summonRandom
+  // 다음 웨이브 즉시 호출. React(SummonPanel 버튼) 또는 SPACE 키 → BattleScene.callWaveNow.
+  // 2026-08-09 웨이브 편성 개편으로 'summon:request'(몬스터 한 마리 직접 소환)를 대체했다 —
+  // 방송 중 소환 관련 조작은 이제 이 하나뿐이다.
+  'wave:call': null;
   'skill:request': { index: number }; // React(SummonPanel 버튼) 또는 QWER 키 → BattleScene.castSkill
   // 개발 리모콘(ui/DevPanel.tsx) 전용. 프로덕션 빌드에선 패널이 통째로 빠져 아무도 emit하지 않는다 —
   // 받는 쪽은 그대로 둬도 죽은 코드일 뿐이라 import.meta.env.DEV 가드를 씬에만 건다.

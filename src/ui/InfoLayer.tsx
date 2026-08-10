@@ -32,6 +32,7 @@ const INIT_TICK: HudTick = {
   skillCd: {},
   dashCd: 0,
   req: null,
+  wave: null, // 웨이브 표시는 SummonPanel 담당 — 여기선 타입을 맞추는 초기값일 뿐이다
 };
 
 export default function InfoLayer() {
@@ -52,10 +53,7 @@ export default function InfoLayer() {
         <div className="info-hype">
           <span>🔥</span>
           <div className="info-hype-track">
-            <div
-              className="info-hype-fill"
-              style={{ width: `${clamp(tick.D, 0, 1) * 100}%`, background: tierColor }}
-            />
+            <div className="info-hype-fill" style={{ width: `${clamp(tick.D, 0, 1) * 100}%`, background: tierColor }} />
           </div>
           <span className="info-hype-label">{tick.tierLabel}</span>
         </div>
