@@ -35,6 +35,8 @@ const MONSTER_ICON: Partial<Record<MonsterId, string>> = {
   turtle: '🐢',
   shaman: '🔮',
   sniper: '🎯',
+  imp: '😈',
+  zombie: '🧟',
 };
 const SKILL_ICON: Record<SkillId, string> = {
   화염폭발: '🔥',
