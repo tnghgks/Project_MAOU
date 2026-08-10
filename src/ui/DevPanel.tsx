@@ -199,6 +199,42 @@ export default function DevPanel() {
             </button>
           </div>
 
+          <p className="dev-panel-label">보스 패턴 (그림하르트)</p>
+          <div className="dev-panel-row">
+            <button
+              onClick={() => {
+                if (gameState().phase !== 'broadcast') goPhase('broadcast');
+                bus.emit('dev:boss-pattern', { pattern: 'energyBall' });
+              }}
+            >
+              🔮 에너지볼
+            </button>
+            <button
+              onClick={() => {
+                if (gameState().phase !== 'broadcast') goPhase('broadcast');
+                bus.emit('dev:boss-pattern', { pattern: 'lightRain' });
+              }}
+            >
+              ☄️ 빛의 심판
+            </button>
+            <button
+              onClick={() => {
+                if (gameState().phase !== 'broadcast') goPhase('broadcast');
+                bus.emit('dev:boss-pattern', { pattern: 'meteor' });
+              }}
+            >
+              ☄️ 메테오
+            </button>
+            <button
+              onClick={() => {
+                if (gameState().phase !== 'broadcast') goPhase('broadcast');
+                bus.emit('dev:boss-pattern', { pattern: 'warp' });
+              }}
+            >
+              🌌 워프(회복+소환)
+            </button>
+          </div>
+
           <p className="dev-panel-label">스킬 발동</p>
           <div className="dev-panel-row">
             {ALL_SKILL_IDS.map((skillId) => (

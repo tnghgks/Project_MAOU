@@ -63,14 +63,21 @@ export interface MonsterEntity {
   kbT?: number; // 공격 넉백 남은 시간(초) — 이 동안 stepMonster가 AI 대신 kbVx/kbVy로만 밀어낸다
   kbVx?: number; // 넉백 속도(px/s)
   kbVy?: number;
-  // ── 보스 전용 상태(stepBossGolem/stepBossKnight가 쓴다) — 일반 몬스터는 항상 undefined ──
+  // ── 보스 전용 상태(stepBossGolem/stepBossKnight/stepBossMaou가 쓴다) — 일반 몬스터는 항상 undefined ──
   bossPhase?: 'windup' | 'active' | 'recover' | 'cooldown';
-  bossPattern?: 'rock' | 'stomp' | 'charge' | 'swordbeam' | 'spaceSlash' | 'knightCharge'; // 지금(또는 방금) 진행 중인 패턴
+  bossPattern?:
+    | 'rock' | 'stomp' | 'charge'
+    | 'swordbeam' | 'spaceSlash' | 'knightCharge'
+    | 'energyBall' | 'lightRain' | 'meteor' | 'warp'; // 지금(또는 방금) 진행 중인 패턴
   bossT?: number; // 현재 phase 잔여 시간(초)
-  chargeTx?: number; // 돌진 목표 좌표(윈드업 종료 시점에 고정 — 추적하지 않는다)
+  chargeTx?: number; // 돌진 목표 좌표(윈드업 시작 시점에 고정 — 추적하지 않는다). 그림하르트 워프 재등장 좌표로도 재사용.
   chargeTy?: number;
-  // 베르하르트 전용
-  spaceSlashDamageTaken?: number; // 공간 가르기 중 받은 누적 데미지
+  // 채널링-저지형 패턴 공용(베르하르트 공간 가르기 · 그림하르트 메테오) — 해당 패턴의 윈드업 동안
+  // 이 보스가 받은 누적 데미지. 임계값을 넘기면 저지, 못 넘기면 패턴이 그대로 발동한다.
+  channelDamageTaken?: number;
+  // 그림하르트 전용
+  areaPoints?: { x: number; y: number }[]; // 빛의 심판/메테오 낙뢰 예고 지점(윈드업 시작 시점에 고정)
+  warpPhase?: number; // 지금까지 발동한 워프 임계값 개수(0~MAOU_WARP_HP_THRESHOLDS.length) — 같은 임계값 재발동 방지
 }
 
 export interface Arrow {

@@ -33,6 +33,7 @@ import {
   stepMonster,
   stepBossGolem,
   stepBossKnight,
+  stepBossMaou,
   stepArrow,
   stepViewers,
   bumpCombo,
@@ -49,6 +50,16 @@ import {
   KNIGHT_SPACESLASH_THRESHOLD,
   KNIGHT_SPACESLASH_WINDUP,
   KNIGHT_SPACESLASH_RANGE,
+  MAOU_PATTERN_CD,
+  MAOU_ENERGYBALL_SPEED,
+  MAOU_ENERGYBALL_WINDUP,
+  MAOU_LIGHTRAIN_WINDUP,
+  MAOU_LIGHTRAIN_COUNT,
+  MAOU_LIGHTRAIN_RADIUS,
+  MAOU_LIGHTRAIN_SCATTER_MIN,
+  MAOU_LIGHTRAIN_SCATTER_MAX,
+  MAOU_METEOR_WINDUP,
+  MAOU_WARP_WINDUP,
   type HeroInput,
   type Facing,
   type BossPattern,
@@ -370,6 +381,10 @@ export default class BattleScene extends Phaser.Scene {
     } else if (t === 'boss_knight') {
       this.boss.bossPhase = 'cooldown';
       this.boss.bossT = KNIGHT_PATTERN_CD * 0.5;
+    } else if (t === 'boss_maou') {
+      this.boss.bossPhase = 'cooldown';
+      this.boss.bossT = MAOU_PATTERN_CD * 0.5;
+      this.boss.warpPhase = 0;
     }
     gameState().setBossUp(true); // BGM 전환(useBgm) — 아래 playCuts와 같은 렌더에 묶여 컷씬 뒤 보스 곡으로 이어진다
     gameState().recordBossSeen(t); // 해금 도감 — 등장을 본 순간이 기준이다 (잡았는지는 안 따진다)
@@ -407,9 +422,17 @@ export default class BattleScene extends Phaser.Scene {
     }
 
     const boss = this.boss;
-    // 베르하르트 보스만 지원
-    if (boss.type !== 'boss_knight') {
-      console.warn('[DEV] 현재 보스는 베르하르트가 아닙니다:', boss.type);
+    // 베르하르트/그림하르트만 지원(사르가스는 거리 기반 랜덤 선택이라 강제 실행할 필요가 적었다)
+    if (boss.type !== 'boss_knight' && boss.type !== 'boss_maou') {
+      console.warn('[DEV] 현재 보스는 패턴 강제 실행을 지원하지 않습니다:', boss.type);
+      return;
+    }
+    if (boss.type === 'boss_knight' && !['swordbeam', 'knightCharge', 'spaceSlash'].includes(pattern)) {
+      console.warn('[DEV] 베르하르트 패턴이 아닙니다:', pattern);
+      return;
+    }
+    if (boss.type === 'boss_maou' && !['energyBall', 'lightRain', 'meteor', 'warp'].includes(pattern)) {
+      console.warn('[DEV] 그림하르트 패턴이 아닙니다:', pattern);
       return;
     }
 
@@ -417,17 +440,49 @@ export default class BattleScene extends Phaser.Scene {
     boss.bossPattern = pattern;
     boss.bossPhase = 'windup';
 
-    // 윈드업 시간 설정
+    // 윈드업 시간 설정(+ 패턴별 사전 세팅) — 실제 stepBossKnight/stepBossMaou의 cooldown 분기가
+    // 하는 일을 그대로 여기서 한 번만 흉내 낸다.
     if (pattern === 'swordbeam') {
       boss.bossT = KNIGHT_SWORDBEAM_WINDUP;
     } else if (pattern === 'knightCharge') {
       boss.bossT = KNIGHT_CHARGE_WINDUP;
-      // 돌진 목표 설정
       boss.chargeTx = this.hero.x;
       boss.chargeTy = this.hero.y;
     } else if (pattern === 'spaceSlash') {
       boss.bossT = KNIGHT_SPACESLASH_WINDUP;
-      boss.spaceSlashDamageTaken = 0;
+      boss.channelDamageTaken = 0;
+    } else if (pattern === 'energyBall') {
+      boss.bossT = MAOU_ENERGYBALL_WINDUP;
+    } else if (pattern === 'lightRain') {
+      boss.bossT = MAOU_LIGHTRAIN_WINDUP;
+      const H = this.hero;
+      const points = [{ x: H.x, y: H.y }];
+      for (let i = 1; i < MAOU_LIGHTRAIN_COUNT; i++) {
+        const ang = Phaser.Math.FloatBetween(0, Math.PI * 2);
+        const r = Phaser.Math.Between(MAOU_LIGHTRAIN_SCATTER_MIN, MAOU_LIGHTRAIN_SCATTER_MAX);
+        points.push({ x: H.x + Math.cos(ang) * r, y: H.y + Math.sin(ang) * r });
+      }
+      boss.areaPoints = points;
+    } else if (pattern === 'meteor') {
+      boss.bossT = MAOU_METEOR_WINDUP;
+      boss.channelDamageTaken = 0;
+    } else if (pattern === 'warp') {
+      boss.bossT = MAOU_WARP_WINDUP;
+    }
+
+    // 강제 실행은 stepBossKnight/stepBossMaou의 cooldown→windup 전환 프레임을 건너뛰므로, 그 프레임이
+    // 원래 걸었을 텔레그래프 연출(경고 원·낙하 효과·채널링 오라 등)도 여기서 직접 걸어야 한다 — 안 그러면
+    // 예고 없이 바로 발동만 보인다(피드백: "dev 모드에서 어디에 떨어질지 안 보인다·낙하 효과도 없다").
+    if (pattern === 'spaceSlash') {
+      // 공간 가르기는 bossTelegraphFx가 아니라 별도 오라 연출을 쓴다(case 'bossSpaceSlashCharge'와 동일)
+      const aura = this.add.circle(boss.x, boss.y, 60, 0x8844ff, 0.3).setDepth(1);
+      this.tweens.add({ targets: aura, scale: 1.2, alpha: 0.1, duration: 500, yoyo: true, repeat: -1 });
+      this.time.delayedCall(KNIGHT_SPACESLASH_WINDUP * 1000, () => aura.destroy());
+    } else if (pattern === 'meteor') {
+      // 메테오도 위치가 아니라 채널링-저지형이라 전용 오라를 쓴다(case 'bossMeteorCharge'와 동일)
+      this.meteorChannelFx(boss, MAOU_METEOR_WINDUP);
+    } else {
+      this.bossTelegraphFx(boss, pattern, boss.bossT!, boss.chargeTx, boss.chargeTy, boss.areaPoints);
     }
 
     this.floatText(boss.x, boss.y - 40, `[DEV] ${pattern}`, '#ffaa44');
@@ -739,9 +794,9 @@ export default class BattleScene extends Phaser.Scene {
   // 데미지 숫자도 프레임마다 스팸이 된다(아래 damageText도 같이 건너뛴다).
   damageMonster(m: MonsterEntity, dmg: number, silent = false) {
     m.hp -= dmg;
-    // 베르하르트 공간 가르기 패턴 중이면 데미지 추적
-    if (m.bossPattern === 'spaceSlash' && m.bossPhase === 'windup') {
-      m.spaceSlashDamageTaken = (m.spaceSlashDamageTaken ?? 0) + dmg;
+    // 채널링-저지형 패턴(베르하르트 공간 가르기 · 그림하르트 메테오) 중이면 데미지 추적
+    if ((m.bossPattern === 'spaceSlash' || m.bossPattern === 'meteor') && m.bossPhase === 'windup') {
+      m.channelDamageTaken = (m.channelDamageTaken ?? 0) + dmg;
     }
     if (!silent) this.damageText(m.x, m.y - 20, dmg);
     m.spr.setAlpha(0.5);
@@ -1173,7 +1228,9 @@ export default class BattleScene extends Phaser.Scene {
           ? stepBossGolem(m, H, dt)
           : m.type === 'boss_knight'
             ? stepBossKnight(m, H, dt)
-            : stepMonster(m, H, dt);
+            : m.type === 'boss_maou'
+              ? stepBossMaou(m, H, dt)
+              : stepMonster(m, H, dt);
       const dir = this.faceMonster(m, intent.facing);
       switch (intent.kind) {
         case 'move': {
@@ -1225,7 +1282,7 @@ export default class BattleScene extends Phaser.Scene {
           const windupAnim = BOSS_WINDUP_ANIM[intent.pattern];
           if (windupAnim) playOnce(m.spr, m.char, windupAnim, dir);
           else playAnim(m.spr, m.char, 'idle', dir);
-          this.bossTelegraphFx(m, intent.pattern, intent.windup, intent.chargeTx, intent.chargeTy);
+          this.bossTelegraphFx(m, intent.pattern, intent.windup, intent.chargeTx, intent.chargeTy, intent.areaPoints);
           break;
         }
         // 던지기 발동 = throwing 마지막 프레임(돌을 머리 위로 든 자세). 모션은 이미 그 자세라 그대로 두고
@@ -1394,43 +1451,21 @@ export default class BattleScene extends Phaser.Scene {
           playSfx('enemyShot'); // 검기 3개가 한 번에 나가지만 소리는 한 번 — 발사는 한 동작이다
           for (const beam of intent.beams) {
             const angle = Math.atan2(beam.ty - intent.y, beam.tx - intent.x);
+            const spr = this.swordbeamSprite();
+            spr.setPosition(intent.x, intent.y).setRotation(angle);
 
-            // 부채꼴 모양의 검기 생성
-            const spr = this.add.graphics();
-            spr.setPosition(intent.x, intent.y);
-            spr.setDepth(2);
-
-            // 부채꼴 그리기 (30도 각도)
-            const fanAngle = Math.PI / 6; // 30도
-            const radius = 50;
-
-            spr.fillStyle(0xffffff, 0.8);
-            spr.beginPath();
-            spr.moveTo(0, 0);
-            spr.arc(0, 0, radius, -fanAngle / 2, fanAngle / 2, false);
-            spr.closePath();
-            spr.fillPath();
-
-            // 외곽선
-            spr.lineStyle(2, 0xffffff, 1);
-            spr.strokePath();
-
-            // 방향 설정
-            spr.setRotation(angle);
-
-            // arrows 배열에 추가 (speed 지정, 비행 중 충돌 체크)
             this.arrows.push({
               x: intent.x,
               y: intent.y,
               tx: beam.tx,
               ty: beam.ty,
-              spr: spr as any,
+              spr: spr as unknown as Phaser.GameObjects.Image,
               dmg: intent.dmg,
               speed: KNIGHT_SWORDBEAM_SPEED,
               checkMidair: true, // 비행 중에도 용사와 충돌 체크
             });
           }
-          this.floatText(m.x, m.y - m.def.size, '⚔️ 검기!', '#ffffff');
+          this.floatText(m.x, m.y - m.def.size, '⚔️ 검기!', '#ddeeff');
           break;
         }
         // 공간 가르기 시작 (윈드업 — 기를 모으는 단계, 칼 휘두르기는 발동 시)
@@ -1542,13 +1577,114 @@ export default class BattleScene extends Phaser.Scene {
           this.floatText(H.x, H.y - 50, '💢 충돌!', '#ff6666');
           break;
         }
+        // ── 그림하르트(최종보스) 전용 패턴 ──
+        // 에너지볼 부채꼴 발사 — 검기(swordbeam)와 같은 arrows 파이프라인, 색·개수만 다르다
+        case 'bossEnergyBall': {
+          playSfx('enemyShot');
+          for (const beam of intent.beams) {
+            const orb = this.energyBallSprite();
+            orb.setPosition(intent.x, intent.y);
+            this.arrows.push({
+              x: intent.x,
+              y: intent.y,
+              tx: beam.tx,
+              ty: beam.ty,
+              spr: orb as unknown as Phaser.GameObjects.Image,
+              dmg: intent.dmg,
+              speed: MAOU_ENERGYBALL_SPEED,
+              checkMidair: true, // 5발이 부채꼴로 동시에 날아가므로 검기와 같은 방식으로 판정
+            });
+          }
+          this.floatText(m.x, m.y - m.def.size, '🔮 에너지볼!', '#cc66ff');
+          break;
+        }
+        // 빛의 심판 — 예고된 지점(bossTelegraph에서 이미 표시)에 전부 동시 타격. hurtHero의
+        // 피격 무적(HIT_INVULN_DUR)이 겹치는 지점 중복 피해를 자동으로 막아준다. 타격 시점엔 하늘에서
+        // 빛기둥이 내리꽂히는 연출(lightPillarFx)로 "심판"다운 무게감을 준다.
+        case 'bossLightRain': {
+          this.shakeCam(260, 0.014);
+          for (const p of intent.points) {
+            this.lightPillarFx(p.x, p.y);
+            this.impactFx(p.x, p.y, intent.radius * 0.4);
+            if (Phaser.Math.Distance.Between(p.x, p.y, H.x, H.y) <= intent.radius) this.hurtHero(intent.dmg);
+          }
+          this.floatText(m.x, m.y - m.def.size, '☄️ 빛의 심판!', '#ffee88');
+          break;
+        }
+        // 메테오 채널링 시작 — 공간 가르기와 같은 저지형이라 여기선 예고만 하고 판정은 없다.
+        case 'bossMeteorCharge': {
+          this.floatText(m.x, m.y - m.def.size, `☄️ 메테오 낙하 중... (${intent.threshold} 피해로 저지)`, '#ff8822');
+          this.meteorChannelFx(m, MAOU_METEOR_WINDUP);
+          break;
+        }
+        // 메테오 저지 실패 — 위치·반경 판정이 없다(2026-08-07 재설계: 피하는 게 아니라 화력으로 끊는
+        // 패턴). 폭발은 fallingMeteorFx가 떨어뜨린 자리(화면 중앙 고정)에서 터뜨려 낙하 연출과
+        // 이어지게 하고, 피해는 그 위치와 무관하게 용사에게 그대로 들어간다.
+        case 'bossMeteor': {
+          const ix = CX;
+          const iy = (ARENA.y + SUMMON_Y) / 2;
+          this.shakeCam(420, 0.026);
+          this.cameras.main.flash(220, 255, 140, 60);
+          const blast = this.add.circle(ix, iy, 40, 0xff8822, 0.6).setDepth(2);
+          this.tweens.add({
+            targets: blast,
+            radius: 180,
+            alpha: 0,
+            duration: 400,
+            ease: 'Cubic.Out',
+            onComplete: () => blast.destroy(),
+          });
+          this.impactFx(ix, iy, 100);
+          this.hurtHero(intent.dmg);
+          this.floatText(m.x, m.y - m.def.size, '☄️ 메테오 작렬!', '#ff8822');
+          break;
+        }
+        // 워프 시작 — 회복 + 몬스터 소환 + 화면 밖으로 이동(별도 무적 플래그 없이 거리로 공격을 차단).
+        case 'bossWarpStart': {
+          m.hp = Math.min(m.def.hp, m.hp + m.def.hp * intent.healRatio);
+          this.pushChat('시스템', `🌌 ${m.def.name}가 차원의 틈으로 사라졌다! HP를 회복하고 몬스터를 부른다`, '#cc66ff');
+          this.floatText(m.x, m.y - m.def.size - 10, `🌌 회복 +${Math.round(intent.healRatio * 100)}%`, '#88ffaa');
+          for (let i = 0; i < intent.summonCount; i++) {
+            const t = this.available[Phaser.Math.Between(0, this.available.length - 1)];
+            const ang = Phaser.Math.FloatBetween(0, Math.PI * 2);
+            const r = Phaser.Math.Between(80, 220);
+            const sx = clamp(m.x + Math.cos(ang) * r, arenaBounds.minX, arenaBounds.maxX);
+            const sy = clamp(m.y + Math.sin(ang) * r, arenaBounds.minY, arenaBounds.maxY);
+            this.doSummon(t, sx, sy);
+          }
+          m.x = -9999;
+          m.y = -9999;
+          m.spr.setVisible(false);
+          this.cameras.main.flash(400, 140, 60, 255);
+          this.shakeCam(300, 0.01);
+          break;
+        }
+        // 워프 종료 — 재등장 좌표는 아레나 경계로 클램프해서 받는다(순수 로직은 경계를 모른다).
+        case 'bossWarpEnd': {
+          const rx = clamp(intent.x, arenaBounds.minX, arenaBounds.maxX);
+          const ry = clamp(intent.y, arenaBounds.minY, arenaBounds.maxY);
+          m.x = rx;
+          m.y = ry;
+          m.spr.setPosition(rx, ry).setVisible(true);
+          this.cameras.main.flash(400, 140, 60, 255);
+          this.floatText(rx, ry - m.def.size - 10, '👹 귀환!', '#ff66ff');
+          this.pushChat('시스템', `👹 ${m.def.name}가 돌아왔다!`, '#ff66ff');
+          break;
+        }
       }
     }
   }
 
   // 윈드업 시작 프레임에 한 번만 호출 — 이후 windup초 동안은 매 프레임 'idle'만 오므로
   // 여기서 만든 트윈이 스스로 재생되며 "곧 온다"를 알린다. 패턴별로 다른 예고를 준다.
-  bossTelegraphFx(m: MonsterEntity, pattern: BossPattern, windup: number, chargeTx?: number, chargeTy?: number) {
+  bossTelegraphFx(
+    m: MonsterEntity,
+    pattern: BossPattern,
+    windup: number,
+    chargeTx?: number,
+    chargeTy?: number,
+    areaPoints?: Array<{ x: number; y: number }>,
+  ) {
     const ms = windup * 1000;
     m.spr.setTint(0xff5555);
     this.time.delayedCall(ms, () => {
@@ -1592,7 +1728,28 @@ export default class BattleScene extends Phaser.Scene {
         duration: ms / 2,
         yoyo: true,
       });
+    } else if (pattern === 'energyBall') {
+      // 에너지볼 채널링 — 보스 앞에 보라색 구슬이 커지며 응축된다
+      const orb = this.add.circle(m.x, m.y - m.def.size * 0.4, 6, 0xaa55ff, 0.7).setDepth(2);
+      this.tweens.add({ targets: orb, radius: 16, alpha: 0.15, duration: ms, onComplete: () => orb.destroy() });
+    } else if (pattern === 'lightRain') {
+      // 빛의 심판: 예고 지점마다 커지는 노란 경고 원 — 하나는 반드시 용사 현재 위치와 겹친다
+      for (const p of areaPoints ?? []) {
+        const ring = this.add.circle(p.x, p.y, 10, 0xffee88, 0.25).setStrokeStyle(3, 0xffee88, 0.85).setDepth(1);
+        this.tweens.add({
+          targets: ring,
+          radius: MAOU_LIGHTRAIN_RADIUS,
+          alpha: 0.05,
+          duration: ms,
+          onComplete: () => ring.destroy(),
+        });
+      }
+    } else if (pattern === 'warp') {
+      // 워프: 사라지기 직전 서서히 투명해진다 — 원복은 bossWarpEnd(재등장)에서
+      this.tweens.add({ targets: m.spr, alpha: 0.25, duration: ms });
     }
+    // meteor/spaceSlash는 여기까지 안 온다 — 각자 전용 intent(bossMeteorCharge/bossSpaceSlashCharge)로
+    // 갈라져서 별도 채널링 연출(meteorChannelFx 등)을 쓴다.
     const icon =
       pattern === 'rock'
         ? '🪨'
@@ -1600,10 +1757,147 @@ export default class BattleScene extends Phaser.Scene {
           ? '💥'
           : pattern === 'swordbeam'
             ? '⚔️'
-            : pattern === 'spaceSlash'
-              ? '🌀'
-              : '⚡';
+            : pattern === 'energyBall'
+              ? '🔮'
+              : pattern === 'lightRain'
+                ? '☄️'
+                : pattern === 'warp'
+                  ? '🌌'
+                  : '⚡';
     this.floatText(m.x, m.y - m.def.size - 20, icon, '#ff6666');
+  }
+
+  // 빛의 심판 타격 지점마다 호출 — 하늘 위에서 빛기둥이 내리꽂히는 연출(글로우 2겹 + 흰 코어,
+  // 위쪽 기준점에서 아래로 스케일이 자라나 "떨어진다"는 느낌을 준다). impactFx(땅 스파크)와 같이
+  // 써서 기둥이 꽂히는 순간 바닥에서도 반응이 보이게 한다.
+  lightPillarFx(x: number, y: number) {
+    const topY = y - 420;
+    const h = y - topY;
+    const mk = (w: number, color: number, alpha: number) =>
+      this.add.rectangle(x, topY, w, h, color, alpha).setOrigin(0.5, 0).setDepth(2);
+    const group = [mk(90, 0xfff2b0, 0.18), mk(50, 0xfff2b0, 0.35), mk(18, 0xffffff, 0.95)];
+    group.forEach((r) => r.setScale(1, 0));
+    this.tweens.add({ targets: group, scaleY: 1, duration: 150, ease: 'Cubic.In' });
+    this.tweens.add({
+      targets: group,
+      alpha: 0,
+      delay: 180,
+      duration: 220,
+      onComplete: () => group.forEach((r) => r.destroy()),
+    });
+  }
+
+  // 검기 — 양 끝이 뾰족한 렌즈(eye) 모양. "느낌 좋다"는 피드백을 받은 디자인으로 되돌렸다(초승달은
+  // "완전 이상하다"로 폐기). tip이 로컬 +X를 향하도록 그려서 setRotation(진행각)만 걸면 칼끝이
+  // 그대로 진행 방향을 가리킨다. 발 수는 대신 늘렸다(피드백: "eye 모양으로 되돌리고 수를 늘려달라"
+  // — KNIGHT_SWORDBEAM_COUNT 3→5, battleSim.ts 참고). 바깥 글로우 → 몸통 → 코어 하이라이트 3겹.
+  // Phaser Graphics엔 곡선 API가 없어(moveTo/lineTo/arc뿐) 곡선을 여러 점의 다각형으로 근사한다.
+  swordbeamSprite(): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics().setDepth(2);
+    const lens = (len: number, w: number) => {
+      // 위쪽 절반: 코끝(len,0) → 중앙(-len*0.55,0)까지 5점으로 곡선 근사, 아래쪽은 y 반전해 대칭.
+      const upper: [number, number][] = [
+        [len, 0],
+        [len * 0.7, -w * 0.55],
+        [len * 0.35, -w * 0.9],
+        [0, -w],
+        [-len * 0.3, -w * 0.5],
+        [-len * 0.55, 0],
+      ];
+      const pts = [...upper, ...upper.slice(1, -1).reverse().map(([x, y]) => [x, -y] as [number, number])];
+      g.beginPath();
+      g.moveTo(pts[0][0], pts[0][1]);
+      for (const [x, y] of pts.slice(1)) g.lineTo(x, y);
+      g.closePath();
+    };
+    g.fillStyle(0xaaddff, 0.28);
+    lens(50, 16);
+    g.fillPath();
+    g.fillStyle(0xeaf6ff, 0.85);
+    lens(40, 9);
+    g.fillPath();
+    g.fillStyle(0xffffff, 0.95);
+    lens(30, 4);
+    g.fillPath();
+    return g;
+  }
+
+  // 에너지볼 — 동심원 5겹(바깥 아우라 → 어두운 테두리 → 보라 몸통 → 밝은 안쪽 → 흰 코어)에 좌상단
+  // 오프셋 하이라이트 점 하나를 더해 "빛나는 구체"처럼 보이게 한다. 2026-08-10 정교화(피드백:
+  // "지금 나쁘지 않으니 좀 더 구체화" — 레이어를 늘리고 하이라이트로 곡면 느낌을 살렸다).
+  energyBallSprite(): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics().setDepth(2);
+    g.fillStyle(0x8844ff, 0.15).fillCircle(0, 0, 20);
+    g.fillStyle(0x220044, 0.5).fillCircle(0, 0, 14);
+    g.fillStyle(0x8844ff, 0.85).fillCircle(0, 0, 10);
+    g.fillStyle(0xb377ff, 0.9).fillCircle(0, 0, 6);
+    g.fillStyle(0xddaaff, 0.95).fillCircle(0, 0, 3);
+    g.fillStyle(0xffffff, 0.85).fillCircle(-3, -3, 1.6); // 좌상단 하이라이트 — 구형 곡면 느낌
+    g.lineStyle(1, 0xddaaff, 0.4).strokeCircle(0, 0, 14);
+    return g;
+  }
+
+  // 메테오 채널링 연출 — 시전자(보스) 몸에는 오라만 걸고, 실제로 떨어지는 운석은 보스 머리 위가
+  // 아니라 화면(아레나) 중앙 고정 좌표로 보낸다(2026-08-07: "그림하르트 위에 떨어져서 이상하다"
+  // 피드백 — 캐스터와 착탄 지점을 분리했다). 낙하 시간을 windup 전체로 맞춰서 저지 실패 시(=
+  // bossMeteor 발동 프레임) 정확히 도착한 것처럼 보인다.
+  meteorChannelFx(boss: MonsterEntity, windup: number) {
+    const ms = windup * 1000;
+    const aura = this.add.circle(boss.x, boss.y, 50, 0xff5522, 0.28).setStrokeStyle(4, 0xff5522, 0.9).setDepth(1);
+    this.tweens.add({ targets: aura, scale: 1.25, alpha: 0.12, duration: 450, yoyo: true, repeat: -1 });
+    this.time.delayedCall(ms, () => aura.destroy());
+    this.fallingMeteorFx(CX, (ARENA.y + SUMMON_Y) / 2, ms);
+  }
+
+  // 실제로 화면을 가로질러 떨어지는 운석. 2026-08-07 재작업(피드백: "묘사가 부자연스럽다, 더
+  // 운석같이") — 각진 다각형 대신 크레이터 있는 둥근 소행성으로 바꾸고, 멀리서 작게 시작해 떨어질수록
+  // 커지는 원근감(scale 0.4→1.5)을 줘서 "카메라 쪽으로 다가온다"는 느낌을 살렸다. 회전도 900ms마다
+  // 팽이처럼 도는 대신 낙하 내내 한 바퀴 남짓만 천천히 돌아 무거운 바위처럼 보이게 했다.
+  // 2026-08-10: 불꼬리·잔불 파편은 뺐다(피드백: "꼬리는 너무 이상해") — 글로우 + 바위 본체만 남긴다.
+  fallingMeteorFx(x: number, y: number, fallMs: number) {
+    const container = this.add.container(x, y - 760).setDepth(5).setScale(0.4);
+
+    // 대기권 진입 글로우 — 가장 바깥, 낙하 내내 은은하게 맥동
+    const glow = this.add.circle(0, 0, 46, 0xff7722, 0.22).setDepth(-2);
+    container.add(glow);
+    this.tweens.add({ targets: glow, alpha: 0.4, scale: 1.15, duration: 500, yoyo: true, repeat: -1 });
+
+    // 운석 본체 — 완전한 원이 아니라 반지름을 점마다 흔든 다각형 실루엣(피드백: "너무 동그래,
+    // 울퉁불퉁하게"). Phaser Graphics엔 곡선 API가 없어 다각형으로 그리는데, 어차피 소행성은
+    // 매끈한 곡선보다 이런 각진 실루엣이 더 그럴듯하다.
+    const rock = this.add.graphics();
+    const JAG = [1, 0.78, 1.15, 0.7, 1.1, 0.8, 1.2, 0.72, 1.08, 0.85, 1.12, 0.76]; // 반지름 배율 — 울퉁불퉁 패턴
+    const blob = (baseR: number) => {
+      rock.beginPath();
+      JAG.forEach((mult, i) => {
+        const a = (i / JAG.length) * Math.PI * 2;
+        const x = Math.cos(a) * baseR * mult;
+        const y = Math.sin(a) * baseR * mult;
+        if (i === 0) rock.moveTo(x, y);
+        else rock.lineTo(x, y);
+      });
+      rock.closePath();
+    };
+    rock.fillStyle(0x3a2418, 1);
+    blob(20);
+    rock.fillPath();
+    rock.fillStyle(0x2a1710, 1).fillCircle(-6, 7, 8).fillCircle(9, -4, 5); // 어두운 크레이터
+    rock.fillStyle(0xff9a44, 0.85).fillCircle(-9, -8, 7).fillCircle(7, 6, 4); // 달아오른 균열
+    rock.fillStyle(0xffe1a8, 0.9).fillCircle(-7, -9, 2.6);
+    rock.lineStyle(2, 0x140b06, 0.85);
+    blob(20);
+    rock.strokePath();
+    container.add(rock);
+
+    this.tweens.add({ targets: container, angle: 200, duration: fallMs, ease: 'Linear' }); // 낙하 내내 한 바퀴 남짓 천천히 자전
+    this.tweens.add({
+      targets: container,
+      y,
+      scale: 1.5, // 다가올수록 커 보이는 원근감
+      duration: fallMs,
+      ease: 'Cubic.In',
+      onComplete: () => container.destroy(),
+    });
   }
 
   // 돌진 충돌 시 용사를 보스 반대 방향으로 밀어낸다 — knockbackProc(방패 밀치기)과 같은 즉시 이동 패턴,

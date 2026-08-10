@@ -3,6 +3,7 @@ import {
   stepHero,
   stepMonster,
   stepBossGolem,
+  stepBossMaou,
   stepArrow,
   stepViewers,
   bumpCombo,
@@ -14,6 +15,16 @@ import {
   GOLEM_ROCK_WINDUP,
   GOLEM_CHARGE_HIT_RADIUS,
   GOLEM_CHARGE_MAX_T,
+  MAOU_ENERGYBALL_COUNT,
+  MAOU_LIGHTRAIN_COUNT,
+  MAOU_METEOR_WINDUP,
+  MAOU_METEOR_THRESHOLD,
+  MAOU_METEOR_DMG,
+  MAOU_WARP_WINDUP,
+  MAOU_WARP_DURATION,
+  MAOU_WARP_HEAL_RATIO,
+  MAOU_WARP_SUMMON_COUNT,
+  MAOU_WARP_REAPPEAR_DIST,
   type MonsterIntent,
 } from '../src/game/battleSim.ts';
 import { ATTACK_RELEASE_SEC } from '../src/game/anims.ts';
@@ -365,6 +376,155 @@ const still = { dx: 0, dy: 0, dash: false };
   const c = stepBossGolem(boss, hero, 0.1);
   assert.strictEqual(c.kind, 'move', '쿨다운 중엔 패턴 없이 접근만');
   assert.ok(boss.x !== before);
+}
+
+// ── stepBossMaou: HP 임계값(warp)이 무작위 패턴 뽑기보다 우선한다 ──
+{
+  const hero = spawnHero(stats, HOME);
+  const boss = mon('boss_maou', HOME.x + 200, HOME.y);
+  boss.hp = MONSTERS.boss_maou.hp * 0.5; // 60% 임계값 아래 — warpPhase 아직 0
+  boss.bossPhase = 'cooldown';
+  boss.bossT = 0.05;
+  const rnd0 = () => 0; // rnd < 0.5면 원래 energyBall이 나왔을 값 — 그래도 warp가 이겨야 한다
+  const i = stepBossMaou(boss, hero, 0.1, rnd0);
+  assert.strictEqual(i.kind, 'bossTelegraph');
+  if (i.kind === 'bossTelegraph') assert.strictEqual(i.pattern, 'warp');
+  assert.strictEqual(boss.warpPhase, 1, '60% 임계값(index 0) 소모');
+  assert.strictEqual(boss.bossT, MAOU_WARP_WINDUP);
+}
+
+// ── stepBossMaou: 같은 임계값은 재발동하지 않지만 더 낮은 임계값은 발동한다 ──
+{
+  const hero = spawnHero(stats, HOME);
+  const boss = mon('boss_maou', HOME.x + 200, HOME.y);
+  boss.warpPhase = 1; // 60% 임계값은 이미 썼다
+  boss.hp = MONSTERS.boss_maou.hp * 0.5; // 여전히 60% 아래(30% 위) — 재발동 안 해야
+  boss.bossPhase = 'cooldown';
+  boss.bossT = 0.05;
+  const rnd0 = () => 0;
+  const i1 = stepBossMaou(boss, hero, 0.1, rnd0);
+  if (i1.kind === 'bossTelegraph') assert.notStrictEqual(i1.pattern, 'warp', '60%는 이미 썼으니 다시 안 나온다');
+
+  boss.bossPhase = 'cooldown';
+  boss.bossT = 0.05;
+  boss.hp = MONSTERS.boss_maou.hp * 0.2; // 30% 아래로 더 떨어짐 — 두 번째 임계값 발동해야
+  const i2 = stepBossMaou(boss, hero, 0.1, rnd0);
+  if (i2.kind === 'bossTelegraph') assert.strictEqual(i2.pattern, 'warp', '30% 임계값은 아직 안 썼다');
+  assert.strictEqual(boss.warpPhase, 2);
+}
+
+// ── stepBossMaou: 에너지볼은 부채꼴로 MAOU_ENERGYBALL_COUNT발, 가운데 발은 용사를 정조준 ──
+{
+  const hero = spawnHero(stats, HOME);
+  const boss = mon('boss_maou', HOME.x + 300, HOME.y);
+  boss.bossPhase = 'windup';
+  boss.bossPattern = 'energyBall';
+  boss.bossT = 0.01;
+  const i = stepBossMaou(boss, hero, 0.1);
+  assert.strictEqual(i.kind, 'bossEnergyBall');
+  if (i.kind === 'bossEnergyBall') {
+    assert.strictEqual(i.beams.length, MAOU_ENERGYBALL_COUNT);
+    const mid = i.beams[(MAOU_ENERGYBALL_COUNT - 1) / 2];
+    assert.ok(Math.abs(mid.ty - hero.y) < 1, '가운데 발은 용사 쪽으로(서쪽, y 일치)');
+  }
+  assert.strictEqual(boss.bossPhase, 'recover');
+}
+
+// ── stepBossMaou: 빛의 심판 — 지점은 윈드업 "시작"에 고정, 그중 하나는 반드시 용사 현재 위치 ──
+// 가중 랜덤: energyBall [0, .45) · lightRain [.45, .75) · meteor [.75, 1) — 0.6은 lightRain 구간.
+{
+  const hero = spawnHero(stats, HOME);
+  const boss = mon('boss_maou', HOME.x + 200, HOME.y);
+  boss.bossPhase = 'cooldown';
+  boss.bossT = 0.05;
+  const rndLightRain = () => 0.6;
+  const tele = stepBossMaou(boss, hero, 0.1, rndLightRain);
+  assert.strictEqual(tele.kind, 'bossTelegraph');
+  if (tele.kind === 'bossTelegraph') {
+    assert.strictEqual(tele.pattern, 'lightRain');
+    assert.strictEqual(tele.areaPoints?.length, MAOU_LIGHTRAIN_COUNT);
+    assert.ok(tele.areaPoints!.some((p) => p.x === hero.x && p.y === hero.y), '용사 현재 위치가 예고 지점에 포함된다');
+  }
+  assert.deepStrictEqual(boss.areaPoints, tele.kind === 'bossTelegraph' ? tele.areaPoints : undefined);
+
+  boss.bossT = 0.01;
+  const fire = stepBossMaou(boss, hero, 0.1);
+  assert.strictEqual(fire.kind, 'bossLightRain');
+  if (fire.kind === 'bossLightRain') assert.strictEqual(fire.points.length, MAOU_LIGHTRAIN_COUNT);
+}
+
+// ── stepBossMaou: 메테오 채널링 시작 — 가중 랜덤 [.75, 1) 구간, 공간 가르기와 같은 전용 intent
+// (bossTelegraph가 아니라 bossMeteorCharge) — 2026-08-07 재설계: 위치가 아니라 데미지로 저지한다 ──
+{
+  const hero = spawnHero(stats, HOME);
+  const boss = mon('boss_maou', HOME.x + 200, HOME.y);
+  boss.bossPhase = 'cooldown';
+  boss.bossT = 0.05;
+  const rndMeteor = () => 0.99;
+  const charge = stepBossMaou(boss, hero, 0.1, rndMeteor);
+  assert.strictEqual(charge.kind, 'bossMeteorCharge');
+  if (charge.kind === 'bossMeteorCharge') assert.strictEqual(charge.threshold, MAOU_METEOR_THRESHOLD);
+  assert.strictEqual(boss.bossPattern, 'meteor');
+  assert.strictEqual(boss.bossPhase, 'windup');
+  assert.strictEqual(boss.bossT, MAOU_METEOR_WINDUP);
+  assert.strictEqual(boss.channelDamageTaken, 0, '채널링 시작 시 데미지 카운터 초기화');
+}
+
+// ── stepBossMaou: 메테오 저지 실패 — 임계값을 못 채우면 위치·반경 무관 고정 피해가 들어간다 ──
+{
+  const hero = spawnHero(stats, HOME);
+  const boss = mon('boss_maou', HOME.x + 200, HOME.y);
+  boss.bossPhase = 'windup';
+  boss.bossPattern = 'meteor';
+  boss.bossT = 0.01;
+  boss.channelDamageTaken = MAOU_METEOR_THRESHOLD - 1; // 딱 모자람
+  const fire = stepBossMaou(boss, hero, 0.1);
+  assert.strictEqual(fire.kind, 'bossMeteor');
+  if (fire.kind === 'bossMeteor') assert.strictEqual(fire.dmg, MAOU_METEOR_DMG);
+  assert.strictEqual(boss.bossPhase, 'recover');
+  assert.strictEqual(boss.channelDamageTaken, 0, '판정 후 리셋');
+}
+
+// ── stepBossMaou: 메테오 저지 성공 — 임계값을 채우면 피해 없이 조용히 무산된다 ──
+{
+  const hero = spawnHero(stats, HOME);
+  const boss = mon('boss_maou', HOME.x + 200, HOME.y);
+  boss.bossPhase = 'windup';
+  boss.bossPattern = 'meteor';
+  boss.bossT = 0.01;
+  boss.channelDamageTaken = MAOU_METEOR_THRESHOLD;
+  const result = stepBossMaou(boss, hero, 0.1);
+  assert.strictEqual(result.kind, 'idle', '저지 성공 — 발동 없이 idle');
+  assert.strictEqual(boss.bossPhase, 'recover');
+}
+
+// ── stepBossMaou: 워프 — 시작(회복+소환 수치) → active 유지 → 종료(재등장 좌표는 용사 기준 REAPPEAR_DIST) ──
+{
+  const hero = spawnHero(stats, HOME);
+  const boss = mon('boss_maou', HOME.x + 150, HOME.y);
+  boss.bossPhase = 'windup';
+  boss.bossPattern = 'warp';
+  boss.bossT = 0.01;
+  const start = stepBossMaou(boss, hero, 0.1);
+  assert.strictEqual(start.kind, 'bossWarpStart');
+  if (start.kind === 'bossWarpStart') {
+    assert.strictEqual(start.healRatio, MAOU_WARP_HEAL_RATIO);
+    assert.strictEqual(start.summonCount, MAOU_WARP_SUMMON_COUNT);
+  }
+  assert.strictEqual(boss.bossPhase, 'active');
+  assert.strictEqual(boss.bossT, MAOU_WARP_DURATION);
+
+  // 지속 시간 동안은 매 프레임 idle
+  const mid = stepBossMaou(boss, hero, MAOU_WARP_DURATION / 2);
+  assert.strictEqual(mid.kind, 'idle');
+
+  const end = stepBossMaou(boss, hero, MAOU_WARP_DURATION / 2 + 0.01);
+  assert.strictEqual(end.kind, 'bossWarpEnd');
+  if (end.kind === 'bossWarpEnd') {
+    const d = Math.hypot(end.x - hero.x, end.y - hero.y);
+    assert.ok(Math.abs(d - MAOU_WARP_REAPPEAR_DIST) < 1, '재등장 지점은 용사로부터 REAPPEAR_DIST만큼');
+  }
+  assert.strictEqual(boss.bossPhase, 'recover');
 }
 
 // ── stepArrow: 이동 → 명중 → 빗나감 ──

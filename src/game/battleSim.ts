@@ -153,7 +153,9 @@ export type BossPattern =
   // 사르가스 (boss_golem)
   | 'rock' | 'stomp' | 'charge'
   // 베르하르트 (boss_knight)
-  | 'swordbeam' | 'spaceSlash' | 'knightCharge';
+  | 'swordbeam' | 'spaceSlash' | 'knightCharge'
+  // 그림하르트 (boss_maou, 최종보스)
+  | 'energyBall' | 'lightRain' | 'meteor' | 'warp';
 export type MonsterIntent =
   | { kind: 'move'; facing: Facing }
   | { kind: 'melee'; facing: Facing; dmg: number; suicide: boolean }
@@ -163,6 +165,9 @@ export type MonsterIntent =
   // ── 보스(사이클롭스/사르가스) 전용 — stepBossGolem만 반환한다 ──
   // charge는 돌진 목표를 윈드업 "시작" 시점에 고정하고 여기 실어 보낸다 — 씬이 그 좌표로
   // 조준선을 그려야 플레이어가 "어디까지/어느 쪽으로" 돌진하는지 미리 보고 피할 수 있다.
+  // areaPoints: 빛의 심판(그림하르트) 낙뢰 예고 지점 — charge와 같은 이유로 윈드업 "시작"
+  // 시점에 확정해 여기 실어 보낸다. 씬이 이 좌표들에 경고 원을 그려야 플레이어가 미리 피한다.
+  // (메테오는 위치 기반이 아니라 bossMeteorCharge의 채널링-저지 방식이라 여긴 안 쓴다.)
   | {
       kind: 'bossTelegraph';
       facing: Facing;
@@ -170,6 +175,7 @@ export type MonsterIntent =
       windup: number;
       chargeTx?: number;
       chargeTy?: number;
+      areaPoints?: Array<{ x: number; y: number }>;
     } // 패턴 결정 프레임(윈드업 시작, 1회)
   | { kind: 'bossRock'; facing: Facing; x: number; y: number; tx: number; ty: number; dmg: number } // 돌 던지기 발사 프레임
   | { kind: 'bossStomp'; facing: Facing; x: number; y: number; radius: number; dmg: number } // 스톰핑 판정 프레임
@@ -180,7 +186,14 @@ export type MonsterIntent =
   | { kind: 'bossSpaceSlashCharge'; facing: Facing; x: number; y: number; threshold: number } // 공간 가르기 시작 (threshold: 저지에 필요한 데미지)
   | { kind: 'bossSpaceSlashFail'; facing: Facing; x: number; y: number; radius: number; dmg: number } // 공간 가르기 저지 실패 → 광역 공격
   | { kind: 'bossKnightChargeMove'; facing: Facing } // 베르하르트 돌진 이동 중
-  | { kind: 'bossKnightChargeHit'; facing: Facing; dmg: number }; // 베르하르트 돌진 충돌
+  | { kind: 'bossKnightChargeHit'; facing: Facing; dmg: number } // 베르하르트 돌진 충돌
+  // ── 그림하르트(최종보스) 전용 ──
+  | { kind: 'bossEnergyBall'; facing: Facing; x: number; y: number; beams: Array<{ tx: number; ty: number }>; dmg: number } // 에너지볼 부채꼴 발사
+  | { kind: 'bossLightRain'; facing: Facing; points: Array<{ x: number; y: number }>; radius: number; dmg: number } // 빛의 심판 낙뢰 판정
+  | { kind: 'bossMeteorCharge'; facing: Facing; x: number; y: number; threshold: number } // 메테오 채널링 시작 (threshold: 저지에 필요한 데미지)
+  | { kind: 'bossMeteor'; facing: Facing; dmg: number } // 메테오 저지 실패 — 위치 무관 고정 피해
+  | { kind: 'bossWarpStart'; facing: Facing; healRatio: number; summonCount: number } // 워프 시작 — 사라짐+회복+소환
+  | { kind: 'bossWarpEnd'; facing: Facing; x: number; y: number }; // 워프 종료 — 재등장 좌표
 
 // 기절/공격 넉백 처리 — stepMonster·stepBossGolem이 공유한다. null이면 AI 계속 진행.
 // 넉백이 기절보다 먼저인 이유는 stepMonster 원본 순서 그대로: 넉백 슬라이드 중엔 경직 여부와
@@ -272,10 +285,12 @@ export const GOLEM_RECOVER_T = 1.2; // 0.8 → 1.2: 패턴 종료 후 무방비 
 export const KNIGHT_PATTERN_CD = 2.0; // 패턴 간 대기 시간
 export const KNIGHT_RECOVER_T = 1.0; // 패턴 종료 후 무방비 시간
 
-// 검기 발산: 3개의 검기를 날린다 (가장 빈번한 패턴)
+// 검기 발산 (가장 빈번한 패턴). 2026-08-10 상향(피드백: "수를 늘려달라") 3발 → 5발.
 export const KNIGHT_SWORDBEAM_WINDUP = 0.7; // 검기 발사 전 윈드업
 export const KNIGHT_SWORDBEAM_DMG = 20; // 검기 1개당 피해
 export const KNIGHT_SWORDBEAM_SPEED = 320; // 검기 속도
+export const KNIGHT_SWORDBEAM_COUNT = 5; // 3 → 5
+export const KNIGHT_SWORDBEAM_SPREAD = Math.PI / 9; // 발 사이 20도(총 80도 부채꼴)
 
 // 공간 가르기: 일정 데미지를 넣지 않으면 광역 공격
 export const KNIGHT_SPACESLASH_WINDUP = 3.5; // 공간 가르기 준비 시간 (2.5 → 3.5: 저지할 시간 증가)
@@ -408,18 +423,18 @@ export function stepBossKnight(
     }
     if (pattern === 'spaceSlash') {
       // 공간 가르기 저지 여부 확인
-      const damageTaken = m.spaceSlashDamageTaken ?? 0;
+      const damageTaken = m.channelDamageTaken ?? 0;
       if (damageTaken >= KNIGHT_SPACESLASH_THRESHOLD) {
         // 저지 성공 - 그냥 무방비로
         m.bossPhase = 'recover';
         m.bossT = KNIGHT_RECOVER_T;
-        m.spaceSlashDamageTaken = 0;
+        m.channelDamageTaken = 0;
         return { kind: 'idle', facing: lookHero() };
       }
       // 저지 실패 - 광역 공격
       m.bossPhase = 'recover';
       m.bossT = KNIGHT_RECOVER_T;
-      m.spaceSlashDamageTaken = 0;
+      m.channelDamageTaken = 0;
       return {
         kind: 'bossSpaceSlashFail',
         facing: lookHero(),
@@ -429,17 +444,15 @@ export function stepBossKnight(
         dmg: KNIGHT_SPACESLASH_DMG,
       };
     }
-    // swordbeam: 검기 3개 발사
+    // swordbeam: 검기 KNIGHT_SWORDBEAM_COUNT개 부채꼴 발사(그림하르트 에너지볼과 같은 구성)
     m.bossPhase = 'recover';
     m.bossT = KNIGHT_RECOVER_T;
-    // 용사 방향 + 좌우 30도씩 3개 발사
     const angle = Math.atan2(H.y - m.y, H.x - m.x);
-    const spread = Math.PI / 6; // 30도
-    const beams = [
-      { tx: m.x + Math.cos(angle) * 600, ty: m.y + Math.sin(angle) * 600 },
-      { tx: m.x + Math.cos(angle - spread) * 600, ty: m.y + Math.sin(angle - spread) * 600 },
-      { tx: m.x + Math.cos(angle + spread) * 600, ty: m.y + Math.sin(angle + spread) * 600 },
-    ];
+    const half = (KNIGHT_SWORDBEAM_COUNT - 1) / 2;
+    const beams = Array.from({ length: KNIGHT_SWORDBEAM_COUNT }, (_, i) => {
+      const a = angle + (i - half) * KNIGHT_SWORDBEAM_SPREAD;
+      return { tx: m.x + Math.cos(a) * 600, ty: m.y + Math.sin(a) * 600 };
+    });
     return { kind: 'bossSwordbeam', facing: lookHero(), x: m.x, y: m.y, beams, dmg: KNIGHT_SWORDBEAM_DMG };
   }
 
@@ -536,8 +549,191 @@ export function stepBossKnight(
     return { kind: 'bossTelegraph', facing: lookHero(), pattern, windup, chargeTx: H.x, chargeTy: H.y };
   }
   if (pattern === 'spaceSlash') {
-    m.spaceSlashDamageTaken = 0; // 초기화
+    m.channelDamageTaken = 0; // 초기화
     return { kind: 'bossSpaceSlashCharge', facing: lookHero(), x: m.x, y: m.y, threshold: KNIGHT_SPACESLASH_THRESHOLD };
+  }
+  return { kind: 'bossTelegraph', facing: lookHero(), pattern, windup };
+}
+
+// ── 그림하르트(최종보스, boss_maou) 패턴 상수 ──
+// 최종보스답게 텀이 셋 중 가장 짧다(MAOU_PATTERN_CD) — 대신 개별 타격 피해는 앞선 두 보스와
+// 비슷한 수준으로 맞췄다. "쉴 틈이 없다"는 golem/knight 하향 때 잡은 방향을 그대로 잇는다.
+export const MAOU_PATTERN_CD = 1.6;
+export const MAOU_RECOVER_T = 1.0;
+
+// 에너지볼: 기본 견제기 — 부채꼴 5연발(검기 3연발보다 넓고 촘촘하게, 그림하르트가 마법사형이라는 인상을 준다).
+// 사거리 안에서 한 줄로 맞을 때만 각 발이 명중하므로 개별 피해는 낮게 잡는다.
+export const MAOU_ENERGYBALL_WINDUP = 0.75;
+export const MAOU_ENERGYBALL_DMG = 18;
+export const MAOU_ENERGYBALL_SPEED = 260;
+export const MAOU_ENERGYBALL_COUNT = 5;
+// 2026-08-07 하향(피드백: "더 촘촘해야 할 것 같다"): 5발이 중심축 기준 ±2칸씩 벌어지므로 총 span은
+// 이 값의 4배다 — 애초에 "발 사이 25도(총 100도)"를 노렸는데 실제로는 50도(총 200도)로 계산돼 있어
+// 부채꼴이 절반 화면을 덮을 만큼 헐렁했다. 15도 간격(총 60도)으로 확 좁혀 진짜 촘촘한 탄막으로.
+export const MAOU_ENERGYBALL_SPREAD = Math.PI / 12; // 15도 × 4칸 = 총 60도
+
+// 빛의 심판: 무작위 지점 + 용사 현재 위치, 총 MAOU_LIGHTRAIN_COUNT곳에 낙뢰 예고 → 윈드업 끝나면 전부 동시 타격.
+// 지점은 윈드업 "시작" 시점(패턴 선택 프레임)에 고정 — charge류와 같은 원칙으로, 씬이 그 좌표에
+// 경고 원을 그려야 회피가 성립한다. 용사가 그 자리에 그대로 있으면 최소 1곳(현재 위치)은 반드시 맞는다.
+export const MAOU_LIGHTRAIN_WINDUP = 1.4;
+export const MAOU_LIGHTRAIN_COUNT = 4;
+export const MAOU_LIGHTRAIN_RADIUS = 70;
+export const MAOU_LIGHTRAIN_DMG = 24;
+export const MAOU_LIGHTRAIN_SCATTER_MIN = 80; // 용사 위치 기준 나머지 낙뢰 지점을 흩뿌리는 반경
+export const MAOU_LIGHTRAIN_SCATTER_MAX = 340;
+
+// 메테오: 위치로 피하는 패턴이 아니라 베르하르트의 공간 가르기와 같은 "채널링-저지" 패턴이다
+// (2026-08-07 재설계, 피드백: "범위 지정하지 말고 전체 데미지로, 용사가 데미지를 먹이면 멈추는
+// 형태가 맞을 거 같다"). 윈드업 동안 보스에게 MAOU_METEOR_THRESHOLD 이상 피해를 넣으면 저지되고,
+// 못 넣으면 회피 불가 고정 피해가 들어간다 — 자리를 옮겨서 피하는 게 아니라 화력으로 끊어야 한다.
+// 2026-08-07 상향(피드백: "실행 시간이 너무 빠르다"): 2.0초는 화면을 가로질러 떨어지는 운석 연출을
+// 담기엔 너무 촉박했다 — 공간 가르기(3.5초)에 가깝게 늘려 낙하가 실제로 무겁게 보일 시간을 준다.
+export const MAOU_METEOR_WINDUP = 3.2;
+export const MAOU_METEOR_THRESHOLD = 150; // 이 데미지 이상 넣어야 저지된다
+export const MAOU_METEOR_DMG = 45; // 저지 실패 시 고정 피해 — 위치 무관, 막지 못하면 그대로 맞는다
+
+// 워프: HP가 임계값 아래로 떨어지면(한 임계값당 1회) 사라져서 몬스터를 불러내고 스스로 회복한다.
+// 사르가스/베르하르트에는 없는 "체력 관문형" 패턴 — 무작위 순환(energyBall/lightRain)과 달리
+// HP만 보고 확정 발동하므로 cooldown 분기에서 무작위 뽑기보다 먼저 확인한다.
+export const MAOU_WARP_HP_THRESHOLDS = [0.6, 0.3] as const; // 60%, 30% — 두 번의 재정비 구간
+export const MAOU_WARP_WINDUP = 0.7; // 사라지기 직전 짧은 채널링 — "곧 사라진다"를 예고
+export const MAOU_WARP_DURATION = 3.2; // 사라져 있는 시간(초) — 이 동안 몸통은 화면 밖, 공격이 안 닿는다
+export const MAOU_WARP_HEAL_RATIO = 0.15; // 최대체력의 15%를 사라지는 순간 즉시 회복
+export const MAOU_WARP_SUMMON_COUNT = 4;
+export const MAOU_WARP_REAPPEAR_DIST = 260; // 재등장 시 용사로부터 이만큼 떨어진 곳에 나타난다
+
+export function stepBossMaou(
+  m: MonsterEntity,
+  hero: HeroEntity,
+  dt: number,
+  rnd: () => number = Math.random,
+): MonsterIntent {
+  const H = hero;
+  m.atkCd = Math.max(0, m.atkCd - dt);
+  const stunOrKb = stepStunOrKb(m, H, dt);
+  if (stunOrKb) return stunOrKb;
+  const lookHero = () => facingOf(H.x - m.x, H.y - m.y) ?? 'south';
+
+  if (m.bossPhase === 'windup') {
+    m.bossT = (m.bossT ?? 0) - dt;
+    if (m.bossT > 0) return { kind: 'idle', facing: lookHero() };
+    const pattern = m.bossPattern!;
+    if (pattern === 'warp') {
+      m.bossPhase = 'active';
+      m.bossT = MAOU_WARP_DURATION;
+      return { kind: 'bossWarpStart', facing: lookHero(), healRatio: MAOU_WARP_HEAL_RATIO, summonCount: MAOU_WARP_SUMMON_COUNT };
+    }
+    if (pattern === 'meteor') {
+      // 공간 가르기와 같은 저지 판정 — 위치가 아니라 이 윈드업 동안 넣은 피해량으로 갈린다.
+      m.bossPhase = 'recover';
+      m.bossT = MAOU_RECOVER_T;
+      const dmgTaken = m.channelDamageTaken ?? 0;
+      m.channelDamageTaken = 0;
+      if (dmgTaken >= MAOU_METEOR_THRESHOLD) return { kind: 'idle', facing: lookHero() }; // 저지 성공
+      return { kind: 'bossMeteor', facing: lookHero(), dmg: MAOU_METEOR_DMG };
+    }
+    m.bossPhase = 'recover';
+    m.bossT = MAOU_RECOVER_T;
+    if (pattern === 'energyBall') {
+      const angle = Math.atan2(H.y - m.y, H.x - m.x);
+      const half = (MAOU_ENERGYBALL_COUNT - 1) / 2;
+      const beams = Array.from({ length: MAOU_ENERGYBALL_COUNT }, (_, i) => {
+        const a = angle + (i - half) * MAOU_ENERGYBALL_SPREAD;
+        return { tx: m.x + Math.cos(a) * 700, ty: m.y + Math.sin(a) * 700 };
+      });
+      return { kind: 'bossEnergyBall', facing: lookHero(), x: m.x, y: m.y, beams, dmg: MAOU_ENERGYBALL_DMG };
+    }
+    // lightRain: 지점은 이미 윈드업 시작 시점(cooldown 분기)에 m.areaPoints로 고정돼 있다.
+    return {
+      kind: 'bossLightRain',
+      facing: lookHero(),
+      points: m.areaPoints ?? [{ x: H.x, y: H.y }],
+      radius: MAOU_LIGHTRAIN_RADIUS,
+      dmg: MAOU_LIGHTRAIN_DMG,
+    };
+  }
+
+  // active: 워프 중 — 몸통은 화면 밖(씬이 이미 옮겼다), 시간만 흘려보낸다.
+  if (m.bossPhase === 'active') {
+    m.bossT = (m.bossT ?? 0) - dt;
+    if (m.bossT > 0) return { kind: 'idle', facing: lookHero() };
+    m.bossPhase = 'recover';
+    m.bossT = MAOU_RECOVER_T;
+    // 재등장 좌표 — 용사 기준 무작위 방향으로 MAOU_WARP_REAPPEAR_DIST만큼. 아레나 경계는 씬이 클램프한다.
+    const ang = rnd() * Math.PI * 2;
+    const rx = H.x + Math.cos(ang) * MAOU_WARP_REAPPEAR_DIST;
+    const ry = H.y + Math.sin(ang) * MAOU_WARP_REAPPEAR_DIST;
+    return { kind: 'bossWarpEnd', facing: lookHero(), x: rx, y: ry };
+  }
+
+  if (m.bossPhase === 'recover') {
+    m.bossT = (m.bossT ?? 0) - dt;
+    if (m.bossT > 0) return { kind: 'idle', facing: lookHero() };
+    m.bossPhase = 'cooldown';
+    m.bossT = MAOU_PATTERN_CD;
+    return { kind: 'idle', facing: lookHero() };
+  }
+
+  // cooldown(+ 최초 미초기화 상태) — 다음 패턴을 기다리며 적당한 거리를 유지한다.
+  m.bossT = (m.bossT ?? 0) - dt;
+  const d = Math.hypot(H.x - m.x, H.y - m.y);
+  if (m.bossT > 0) {
+    const idealDist = 220;
+    if (Math.abs(d - idealDist) > 50) {
+      const vx = ((H.x - m.x) / d) * m.def.speed * (d < idealDist ? -0.5 : 1);
+      const vy = ((H.y - m.y) / d) * m.def.speed * (d < idealDist ? -0.5 : 1);
+      m.x += vx * dt;
+      m.y += vy * dt;
+      return { kind: 'move', facing: facingOf(vx, vy) ?? 'south' };
+    }
+    return { kind: 'idle', facing: lookHero() };
+  }
+
+  // HP 관문 확인 — 무작위 패턴 뽑기보다 우선한다. 임계값 하나당 딱 한 번만 발동(warpPhase로 추적).
+  // 내림차순 배열이라 낮은 HP일수록 여러 임계값을 동시에 만족한다(예: 20%면 60%·30% 둘 다) — "몇 개나
+  // 넘었는가"(crossedCount)를 warpPhase와 비교해야 한다. findIndex는 항상 첫(가장 관대한) 항목만
+  // 찾아서 이미 60%를 쓴 뒤 30%까지 떨어져도 재발동을 못 잡는 버그가 났었다.
+  const hpRatio = m.hp / m.def.hp;
+  const crossedCount = MAOU_WARP_HP_THRESHOLDS.filter((t) => hpRatio <= t).length;
+  let pattern: BossPattern;
+  if (crossedCount > (m.warpPhase ?? 0)) {
+    pattern = 'warp';
+    m.warpPhase = crossedCount; // 한 프레임에 여러 임계값을 한꺼번에 넘어도 이번엔 1회만(가장 깊은 단계로 점프)
+  } else {
+    // energyBall 45% · lightRain 30% · meteor 25% — 메테오는 셋 중 가장 아프고 느려서(윈드업 2초)
+    // "가끔 나오는 대형기" 정도 비중으로 낮춰뒀다. 매번 나오면 위협감이 무뎌진다.
+    const r = rnd();
+    pattern = r < 0.45 ? 'energyBall' : r < 0.75 ? 'lightRain' : 'meteor';
+  }
+  const windup =
+    pattern === 'energyBall'
+      ? MAOU_ENERGYBALL_WINDUP
+      : pattern === 'lightRain'
+        ? MAOU_LIGHTRAIN_WINDUP
+        : pattern === 'meteor'
+          ? MAOU_METEOR_WINDUP
+          : MAOU_WARP_WINDUP;
+  m.bossPattern = pattern;
+  m.bossPhase = 'windup';
+  m.bossT = windup;
+
+  if (pattern === 'meteor') {
+    // 공간 가르기(spaceSlash)와 같은 이유로 일반 bossTelegraph 대신 전용 intent를 쓴다 — 씬이
+    // "저지 데미지 얼마나 필요한지"까지 보여줘야 해서 pattern/windup만으로는 정보가 부족하다.
+    m.channelDamageTaken = 0;
+    return { kind: 'bossMeteorCharge', facing: lookHero(), x: m.x, y: m.y, threshold: MAOU_METEOR_THRESHOLD };
+  }
+
+  if (pattern === 'lightRain') {
+    // 지점을 지금(윈드업 시작) 고정 — 하나는 반드시 용사 현재 위치, 나머지는 그 주변에 흩뿌린다.
+    const points = [{ x: H.x, y: H.y }];
+    for (let i = 1; i < MAOU_LIGHTRAIN_COUNT; i++) {
+      const ang = rnd() * Math.PI * 2;
+      const r2 = MAOU_LIGHTRAIN_SCATTER_MIN + rnd() * (MAOU_LIGHTRAIN_SCATTER_MAX - MAOU_LIGHTRAIN_SCATTER_MIN);
+      points.push({ x: H.x + Math.cos(ang) * r2, y: H.y + Math.sin(ang) * r2 });
+    }
+    m.areaPoints = points;
+    return { kind: 'bossTelegraph', facing: lookHero(), pattern, windup, areaPoints: points };
   }
   return { kind: 'bossTelegraph', facing: lookHero(), pattern, windup };
 }
