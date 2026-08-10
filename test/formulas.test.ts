@@ -40,10 +40,10 @@ assert.strictEqual(donationInterval(0), 20); // log10(0)=-Inf 방어
 // 시청자가 늘수록 짧아진다 (단조 감소)
 assert.ok(donationInterval(100) > donationInterval(1000) && donationInterval(1000) > donationInterval(5000));
 
-// 도네 금액: 12명 × rnd=0.5 → 10*12^0.6*1.1 ≈ 49G (대박 미발동)
+// 도네 금액: 12명 × rnd=0.5 → 15*12^0.6*1.1 ≈ 73G (대박 미발동, 2026-08-10 계수 10→15 상향)
 const roll = rollDonation(12, () => 0.5);
 assert.strictEqual(roll.jackpot, false);
-assert.ok(roll.amount > 30 && roll.amount < 60, `amount=${roll.amount}`);
+assert.ok(roll.amount > 45 && roll.amount < 110, `amount=${roll.amount}`);
 // 대박: 두 번째 rnd가 임계 아래면 5배 + jackpot 플래그 (반올림은 곱한 뒤라 ±1 오차 허용)
 {
   const seq = [0.5, 0.01];

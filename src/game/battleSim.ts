@@ -312,7 +312,8 @@ export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): Mon
 // 2026-08-07: 보스전 중엔 도네이션·소환·미션을 전부 막아 순수 실력전으로 만들었다(BattleScene) —
 // 그만큼 난이도를 hp(monsters.ts)와 패턴 쉴 틈(GOLEM_PATTERN_CD)으로 올렸다. 개별 타격 피해량은
 // 안 건드렸다(방금 낮춘 값 그대로) — "한 대에 훅 간다"가 아니라 "쉴 틈이 없다"로 어려워야 한다.
-export const GOLEM_PATTERN_CD = 2.4; // 3.2 → 2.4: recover 종료 후 다음 패턴까지 대기(초) — 텀이 짧아졌다
+// 2026-08-10 밸런스 하향: 2.4 → 3.2초로 증가 (패턴 간 간격 확대로 난이도 완화)
+export const GOLEM_PATTERN_CD = 3.2; // 3.2 → 2.4 → 3.2: recover 종료 후 다음 패턴까지 대기(초)
 // 던지기·스톰핑 윈드업은 아트가 정한다 — 사르가스엔 그 패턴 전용 모션이 있고(돌을 줍고 들어 올리는
 // throwing · 뛰어올라 내려찍는 attack) 윈드업이 곧 그 모션이 도는 시간이다. 텔레그래프 길이를 여기서
 // 따로 정하면 돌을 아직 줍는 중인데 돌이 날아가는 식으로 그림과 판정이 어긋난다. 조절은 anims.ts에서.
@@ -338,7 +339,8 @@ export const GOLEM_CHARGE_HIT_RADIUS = 62; // 46 → 62: 덩치(scale 1.35)에 �
 export const GOLEM_RECOVER_T = 1.2; // 0.8 → 1.2: 패턴 종료 후 무방비 — 플레이어에게 반격 타이밍을 더 준다
 
 // ── 베르하르트(2탄 보스, boss_knight) 패턴 상수 ──
-export const KNIGHT_PATTERN_CD = 2.0; // 패턴 간 대기 시간
+// 2026-08-10 밸런스 하향: 패턴 간 대기 시간 증가 (2.0 → 2.6초)
+export const KNIGHT_PATTERN_CD = 2.6; // 패턴 간 대기 시간
 export const KNIGHT_RECOVER_T = 1.0; // 패턴 종료 후 무방비 시간
 
 // 검기 발산 (가장 빈번한 패턴). 2026-08-10 상향(피드백: "수를 늘려달라") 3발 → 5발.
@@ -632,7 +634,8 @@ export function stepBossKnight(
 // ── 그림하르트(최종보스, boss_maou) 패턴 상수 ──
 // 최종보스답게 텀이 셋 중 가장 짧다(MAOU_PATTERN_CD) — 대신 개별 타격 피해는 앞선 두 보스와
 // 비슷한 수준으로 맞췄다. "쉴 틈이 없다"는 golem/knight 하향 때 잡은 방향을 그대로 잇는다.
-export const MAOU_PATTERN_CD = 1.6;
+// 2026-08-10 밸런스 하향: 패턴 간 대기 시간 증가 (1.6 → 2.2초)
+export const MAOU_PATTERN_CD = 2.2;
 export const MAOU_RECOVER_T = 1.0;
 
 // 에너지볼: 기본 견제기 — 부채꼴 5연발(검기 3연발보다 넓고 촘촘하게, 그림하르트가 마법사형이라는 인상을 준다).

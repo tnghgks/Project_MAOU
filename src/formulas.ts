@@ -68,8 +68,9 @@ export interface DonationRoll {
   amount: number;
   jackpot: boolean; // 리액션 이벤트(춤 + 리듬 + 고등급 카드) 발동 여부
 }
+// 2026-08-10 상향: 기본 계수 10 → 15 (도네이션 금액 50% 증가)
 export function rollDonation(viewers: number, rnd: () => number = Math.random): DonationRoll {
-  const base = 10 * Math.pow(viewers, 0.6) * (0.5 + rnd() * 1.2); // 0.5x~1.7x
+  const base = 15 * Math.pow(viewers, 0.6) * (0.5 + rnd() * 1.2); // 0.5x~1.7x
   const jackpot = rnd() < JACKPOT_CHANCE;
   return { amount: Math.round(base * (jackpot ? JACKPOT_MULT : 1)), jackpot };
 }
