@@ -1765,7 +1765,7 @@ export default class BattleScene extends Phaser.Scene {
           this.pushChat('시스템', `🌌 ${m.def.name}가 차원의 틈으로 사라졌다! HP를 회복하고 몬스터를 부른다`, '#cc66ff');
           this.floatText(m.x, m.y - m.def.size - 10, `🌌 회복 +${Math.round(intent.healRatio * 100)}%`, '#88ffaa');
           for (let i = 0; i < intent.summonCount; i++) {
-            const t = this.available[Phaser.Math.Between(0, this.available.length - 1)];
+            const t = this.lineupTypes[Phaser.Math.Between(0, this.lineupTypes.length - 1)];
             const ang = Phaser.Math.FloatBetween(0, Math.PI * 2);
             const r = Phaser.Math.Between(80, 220);
             const sx = clamp(m.x + Math.cos(ang) * r, arenaBounds.minX, arenaBounds.maxX);
