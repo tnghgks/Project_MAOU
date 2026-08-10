@@ -62,13 +62,6 @@ const active = (d = def): ActiveRequest => startRequest(d, 1, 0); // 전투력 1
   assert.strictEqual(reqProgress(r, ctx({ killsSince: 15 })), 1);
 }
 
-// HP 요청: 체력이 낮을수록 진행률이 오른다 (need 0.7 = HP 30% 이하)
-{
-  const hp = REQUESTS.find((r) => r.need === 0.7)!;
-  assert.ok(hp.now(ctx({ hpRatio: 1 })) < hp.need);
-  assert.ok(hp.now(ctx({ hpRatio: 0.3 })) >= hp.need, 'HP 30%면 달성');
-}
-
 // ── 전투력 스케일 (startRequest) ──
 {
   // 전투력 1.00 = 기준값 그대로, {n}은 확정된 목표로 치환
@@ -83,20 +76,15 @@ const active = (d = def): ActiveRequest => startRequest(d, 1, 0); // 전투력 1
   // 로그라 후반 강화에도 목표가 폭주하지 않는다
   assert.ok(startRequest({ ...def, need: 12 }, 64, 0).need <= 48, '전투력 64배에도 4배 이내');
 
-  // max가 있으면 거기서 물린다 — 동시 생존 상한을 넘는 목표는 달성 자체가 불가능하다
+  // max가 있으면 거기서 물린다 — 콤보는 화면에 동시 존재할 수 있는 수에 물리적 상한이 있다
   assert.strictEqual(startRequest({ ...def, need: 25, max: 45 }, 1000, 0).need, 45);
   const capped = REQUESTS.filter((r) => r.max);
-  assert.ok(capped.length > 0, '동시 생존 요청 중 상한이 걸린 게 있어야 함');
+  assert.ok(capped.length > 0, '콤보 요청은 상한이 있어야 함');
   for (const r of capped) assert.ok(startRequest(r, 1e6, 0).need <= r.max!, `${r.text}가 상한을 넘음`);
 
   // 전투력이 기준 미만이어도 목표가 기준값 밑으로 안 내려간다 (log2(Math.max(1, power))가 0 이하를 방지)
   assert.strictEqual(startRequest(def, 0.2, 0).need, def.need, '전투력 < 1이어도 기준값 유지');
   assert.ok(startRequest({ ...def, need: 1 }, 0.01, 0).need >= 1);
-
-  // 비율 목표는 스케일 대상이 아니다 (HP 30%는 용사가 세져도 30%)
-  const hp = REQUESTS.find((r) => r.noScale)!;
-  assert.strictEqual(startRequest(hp, 8, 0).need, hp.need);
-  assert.ok(!startRequest(hp, 8, 0).label.includes('{n}'), '{n} 없는 문구는 그대로');
 
   // kills0은 출제 시점 스냅샷
   assert.strictEqual(startRequest(def, 1, 42).kills0, 42);
@@ -121,19 +109,20 @@ const active = (d = def): ActiveRequest => startRequest(d, 1, 0); // 전투력 1
 // 뽑을 게 없으면 null (씬은 출제를 건너뛴다) — 현재는 항상 요청이 있으므로 null이 안 나옴
 assert.strictEqual(pickRequest(pool(), () => 0) !== null, true, '요청이 항상 남는다');
 
-// 용사 요청 판정: 노 데미지 / 콤보는 각자 자기 ctx 필드만 본다
+// 콤보 요청 판정: combo ctx 필드만 본다
 {
-  const noHit = REQUESTS.find((r) => r.now(ctx({ noHitT: 99 })) === 99)!;
-  assert.ok(noHit, '노 데미지 요청이 있어야 함');
-  assert.strictEqual(reqProgress(startRequest(noHit, 1, 0), ctx({ noHitT: noHit.need / 2 })), 0.5);
+  const combo = REQUESTS.find((r) => r.now(ctx({ combo: 10 })) === 10)!;
+  assert.ok(combo, '콤보 요청이 있어야 함');
+  assert.strictEqual(reqProgress(startRequest(combo, 1, 0), ctx({ combo: combo.need / 2 })), 0.5);
 }
 
 // 모든 요청이 빈 상황에서도 숫자를 낸다 (now 오타 방지)
-// 개수 목표는 문구에 {n}이 있어야 한다 — 없으면 스케일된 목표와 표시가 어긋난다
+// 2026-08-10: 단순화된 미션은 전부 스케일 대상이고 {n}을 가진다
 for (const r of REQUESTS) {
   assert.strictEqual(typeof r.now(ctx()), 'number', `${r.text}의 now가 숫자가 아님`);
   assert.ok(r.need > 0 && r.dur > 0, `${r.text}의 need/dur가 유효하지 않음`);
-  assert.strictEqual(r.text.includes('{n}'), !r.noScale, `${r.text}의 {n} 유무가 noScale과 안 맞음`);
+  assert.ok(r.text.includes('{n}'), `${r.text}에 {n}이 없음 — 스케일된 목표와 표시가 어긋난다`);
+  assert.ok(!r.noScale, `${r.text}가 noScale을 가짐 — 단순화된 미션은 전부 스케일 대상`);
 }
 
 console.log('requests OK');

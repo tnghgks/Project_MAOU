@@ -2115,8 +2115,18 @@ export default class BattleScene extends Phaser.Scene {
     this.viewers = Math.max(MIN_VIEWERS, this.viewers * (ok ? REQ_WIN : REQ_LOSE));
     if (ok) {
       playSfx('questClear');
-      this.pushChat('시스템', '📢 요청 달성! 시청자가 몰려온다', '#66ddff');
-      this.floatText(this.hero.x, this.hero.y - 60, '📢 요청 달성!', '#66ddff');
+      // 2026-08-10: 미션 달성 시 랜덤 능력치 상승 (업그레이드 1레벨의 약 1/10)
+      const statBonus = [
+        { stat: 'maxHp' as const, value: 8, label: '체력 +8' },
+        { stat: 'atk' as const, value: 1, label: '공격력 +1' },
+        { stat: 'atkSpd' as const, value: 0.02, label: '공속 +0.02' },
+        { stat: 'speed' as const, value: 1, label: '이속 +1' },
+        { stat: 'range' as const, value: 1, label: '사거리 +1' },
+      ];
+      const bonus = Phaser.Utils.Array.GetRandom(statBonus);
+      gameState().applyStatMods([{ stat: bonus.stat, mode: 'flat', value: bonus.value }]);
+      this.pushChat('시스템', `📢 요청 달성! 시청자가 몰려온다 (${bonus.label})`, '#66ddff');
+      this.floatText(this.hero.x, this.hero.y - 60, `📢 요청 달성! ${bonus.label}`, '#66ddff');
       const who = this.randomViewer();
       if (who) this.pushChat(who, Phaser.Utils.Array.GetRandom(CHAT_POOLS.allperfect as string[]), '#66ddff');
     } else {

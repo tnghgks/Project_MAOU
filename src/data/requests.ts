@@ -33,34 +33,17 @@ export const REQ_SCALE = 0.5; // 전투력 2배당 목표치 +50% (로그 — �
 // prettier-ignore
 // 2026-08-10: 소환 관련 요청 제거 — 웨이브 편성 시스템으로 바뀌어 특정 몬스터를 원하는 시점에 소환할 수 없음.
 // 보스 관련 요청도 제거 — 보스전에는 소환이 막혀 잡몹이 새로 나오지 않아 "보스만 노려" 같은 미션이 무의미.
-// 전투/생존/처치 중심 미션으로 재구성.
+// 2026-08-10 재구성: 극단적으로 단순화 — 처치와 콤보만. 복잡한 조건 전부 제거.
 export const REQUESTS: RequestDef[] = [
-  // 처치 미션 — 기본
-  { text: '{n}마리 잡히는 거 보고싶다',         dur: 25, need: 8,  now: (c) => c.killsSince },
-  { text: '{n}마리 순삭 각 보여줘',             dur: 30, need: 12, now: (c) => c.killsSince },
-  { text: '{n}초 안에 10마리는 잡아야지',       dur: 15, need: 10, now: (c) => c.killsSince },
-  { text: '20초 안에 {n}마리 처치 가보자',      dur: 20, need: 15, now: (c) => c.killsSince },
-  { text: '30초 안에 {n}마리 몰살 도전',        dur: 30, need: 20, now: (c) => c.killsSince },
+  // 처치 미션 — 가장 기본적인 목표
+  { text: '몬스터 {n}마리 잡아줘',       dur: 20, need: 5,  now: (c) => c.killsSince },
+  { text: '{n}마리 처치 가보자',         dur: 25, need: 8,  now: (c) => c.killsSince },
+  { text: '{n}마리 잡아보자',            dur: 30, need: 12, now: (c) => c.killsSince },
+  { text: '{n}마리 잡자',                dur: 35, need: 15, now: (c) => c.killsSince },
 
   // 콤보 미션
-  { text: '{n}킬 연속으로 끊지 말고',           dur: 25, need: 4,   now: (c) => c.combo, max: 12 },
-  { text: '{n}콤보까지 끊지 말고 가보자',       dur: 30, need: 7,   now: (c) => c.combo, max: 12 },
-  { text: '콤보 {n}개 쌓아봐',                  dur: 28, need: 10,  now: (c) => c.combo, max: 12 },
-
-  // 생존 미션 — HP 관리
-  { text: '용사 피 30% 밑으로 만들어봐',        dur: 30, need: 0.7, now: (c) => 1 - c.hpRatio, noScale: true },
-  { text: '피 반피 이하로 버텨봐',              dur: 25, need: 0.5, now: (c) => 1 - c.hpRatio, noScale: true },
-
-  // 노 데미지 미션
-  { text: '노 데미지 15초 가보자',              dur: 20, need: 15,  now: (c) => c.noHitT, noScale: true },
-  { text: '노 데미지 25초 가보자',              dur: 30, need: 25,  now: (c) => c.noHitT, noScale: true },
-  { text: '노 데미지 35초 가보자, 진짜로',      dur: 40, need: 35,  now: (c) => c.noHitT, noScale: true },
-
-  // 처치 + 생존 복합
-  { text: '노 데미지 상태로 {n}마리 처치',      dur: 25, need: 5,   now: (c) => c.noHitT >= 10 ? c.killsSince : 0 },
-  { text: '콤보 유지하면서 {n}마리 처치',       dur: 28, need: 8,   now: (c) => c.combo >= 3 ? c.killsSince : 0 },
-  { text: '피 30% 유지하면서 {n}마리 처치',     dur: 30, need: 10, now: (c) => c.hpRatio >= 0.7 ? c.killsSince : 0 },
-  { text: '노 데미지로 콤보 {n}개 쌓기',        dur: 35, need: 6,  now: (c) => c.noHitT >= 15 ? c.combo : 0, max: 12 },
+  { text: '콤보 {n}개 쌓아봐',           dur: 25, need: 4,  now: (c) => c.combo, max: 12 },
+  { text: '{n}콤보 가보자',              dur: 30, need: 7,  now: (c) => c.combo, max: 12 },
 ];
 
 export interface ActiveRequest {
