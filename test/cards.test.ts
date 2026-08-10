@@ -1,5 +1,5 @@
 import assert from 'node:assert';
-import { rollRarity, drawCards, reactionCard, statCard, traitCard } from '../src/data/cards.ts';
+import { rollRarity, drawCards, reactionCard, statCard, traitCard, NEGATIVE_CARD_CHANCE } from '../src/data/cards.ts';
 import { TRAIT_IDS } from '../src/data/traits.ts';
 
 // 가중 추첨 경계 (2026-08-03: common 850 / uncommon 100 / magic 40 / epic 8 / legend 2, 총 1000)
@@ -37,6 +37,22 @@ assert.strictEqual(drawCards(3).length, 3);
 for (let i = 0; i < 200; i++) {
   assert.notStrictEqual(reactionCard(false).rarity, 'common');
   assert.ok(['epic', 'legend'].includes(reactionCard(true).rarity));
+}
+
+// 나쁜 카드(저주 스탯 + 기습 소환)는 NEGATIVE_CARD_CHANCE(9%) 아래로 고정된다.
+// 등급 가중치만 쓰던 시절엔 common 통 구성 때문에 40% 가까이 나왔다.
+{
+  let seed = 12345;
+  const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const N = 20000;
+  let bad = 0;
+  for (let i = 0; i < N; i++) {
+    const c = drawCards(1, [], rnd)[0];
+    if (c.curse || c.summonCurse) bad++;
+  }
+  assert.ok(bad / N <= 0.1, `나쁜 카드 비율이 10%를 넘었다: ${((bad / N) * 100).toFixed(1)}%`);
+  assert.ok(bad > 0, '나쁜 카드가 아예 안 나오면 그것도 버그다');
+  assert.ok(NEGATIVE_CARD_CHANCE < 0.1);
 }
 
 // statCard/traitCard 헬퍼: rarity가 각 카탈로그(cardStats.ts/traits.ts)와 일치

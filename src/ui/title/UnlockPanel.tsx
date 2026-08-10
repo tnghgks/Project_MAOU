@@ -1,17 +1,16 @@
 import { useStore } from 'zustand';
 import { gameStore } from '../../game/store.ts';
-import { MONSTERS, type MonsterId } from '../../data/monsters.ts';
+import { MONSTERS, type MonsterId, type MonsterDef } from '../../data/monsters.ts';
 import { SKILLS, type SkillId } from '../../data/skills.ts';
 import { EPISODES, FINAL_EP } from '../../data/progression.ts';
-import { useSpriteThumb, type SpriteThumb } from './useSpriteThumb.ts';
+import { useSpriteThumb } from '../useSpriteThumb.ts';
+import { SpriteFrame, THUMB_BOX } from '../SpriteBox.tsx';
 
 // 해금 도감. 해금 여부는 "지금 런"이 아니라 세이브에 남는 기록(records)만 본다 —
 // 런이 끝나 스킬이 초기화돼도 한 번 본 건 계속 보여야 도감이다.
 //   몬스터: records.bestEpisode (도달한 최고 화 = 소환할 수 있게 된 시점)
 //   보스:   records.seenBosses (실제로 등장을 본 보스 — 화수로 풀면 1화 보스가 처음부터 까발려진다)
 //   스킬:   records.learnedSkills (한 번이라도 배운 스킬)
-
-const THUMB_BOX = 72; // 카드 썸네일 한 변(px). 원본 프레임(32~220px)을 이 상자에 맞춰 축소한다
 
 // 보스 카드의 해금 조건 문구용 — 몇 화 보스인지는 진행 표(EPISODES)만 안다.
 const bossEpisode = new Map<MonsterId, number>(
@@ -26,6 +25,9 @@ interface Entry {
   unlocked: boolean;
   char?: string;
   sheet?: number;
+  /** 아틀라스를 재활용하는 몬스터의 색. 이게 없으면 분열 슬라임이 슬라임과 똑같이 보인다 */
+  tint?: number;
+  scale?: number;
   /** 스프라이트가 없는 항목(스킬)의 대체 문양 */
   glyph?: string;
 }
@@ -34,7 +36,10 @@ function monsterEntries(bestEpisode: number): Entry[] {
   return (Object.keys(MONSTERS) as MonsterId[])
     .filter((id) => MONSTERS[id].unlock < 99)
     .map((id) => {
-      const def = MONSTERS[id];
+      // MonsterDef로 한 번 좁혀 받는다 — MONSTERS는 satisfies라 각 줄의 리터럴 타입이 유니온으로
+      // 남고, 선택적 필드(char 등)를 안 가진 몬스터가 하나라도 생기면 유니온 접근이 막힌다
+      // (BootScene도 같은 이유로 `as MonsterDef[]`를 쓴다).
+      const def: MonsterDef = MONSTERS[id];
       return {
         key: id,
         name: def.name,
@@ -42,6 +47,8 @@ function monsterEntries(bestEpisode: number): Entry[] {
         unlocked: bestEpisode >= def.unlock,
         char: def.char,
         sheet: 'sheet' in def ? def.sheet : undefined,
+        tint: def.tint,
+        scale: def.scale,
       };
     });
 }
@@ -50,7 +57,10 @@ function bossEntries(seen: readonly MonsterId[]): Entry[] {
   return (Object.keys(MONSTERS) as MonsterId[])
     .filter((id) => MONSTERS[id].unlock >= 99)
     .map((id) => {
-      const def = MONSTERS[id];
+      // MonsterDef로 한 번 좁혀 받는다 — MONSTERS는 satisfies라 각 줄의 리터럴 타입이 유니온으로
+      // 남고, 선택적 필드(char 등)를 안 가진 몬스터가 하나라도 생기면 유니온 접근이 막힌다
+      // (BootScene도 같은 이유로 `as MonsterDef[]`를 쓴다).
+      const def: MonsterDef = MONSTERS[id];
       const ep = bossEpisode.get(id) ?? FINAL_EP;
       return {
         key: id,
@@ -59,6 +69,8 @@ function bossEntries(seen: readonly MonsterId[]): Entry[] {
         unlocked: seen.includes(id),
         char: def.char,
         sheet: 'sheet' in def ? def.sheet : undefined,
+        tint: def.tint,
+        scale: def.scale,
       };
     });
 }
@@ -71,33 +83,6 @@ function skillEntries(learned: readonly SkillId[]): Entry[] {
     unlocked: learned.includes(id),
     glyph: SKILLS[id].name.slice(0, 1),
   }));
-}
-
-// 원본 프레임을 상자 안에 통째로 넣는 배율. 시트 좌표를 그대로 쓰려면 background-size를 못 건드리므로
-// (원본 이미지 전체 크기를 모른다) 안쪽 요소를 1:1로 깔고 transform으로 줄인다.
-function SpriteBox({ thumb, glyph }: { thumb: SpriteThumb | null; glyph?: string }) {
-  if (!thumb) {
-    return (
-      <span className="px-thumb">
-        <span className="px-thumb-glyph">{glyph ?? '?'}</span>
-      </span>
-    );
-  }
-  const scale = Math.round((THUMB_BOX / Math.max(thumb.w, thumb.h)) * 100) / 100;
-  return (
-    <span className="px-thumb">
-      <span
-        className="px-thumb-in"
-        style={{
-          width: thumb.w,
-          height: thumb.h,
-          backgroundImage: `url(${thumb.url})`,
-          backgroundPosition: `${-thumb.x}px ${-thumb.y}px`,
-          transform: `translate(-50%, -50%) scale(${scale})`,
-        }}
-      />
-    </span>
-  );
 }
 
 function EntryCard({ entry }: { entry: Entry }) {
@@ -116,7 +101,7 @@ function EntryCard({ entry }: { entry: Entry }) {
   }
   return (
     <div className="px-card">
-      <SpriteBox thumb={thumb} glyph={entry.glyph} />
+      <SpriteFrame thumb={thumb} glyph={entry.glyph} tint={entry.tint} scale={entry.scale} box={THUMB_BOX} />
       <b>{entry.name}</b>
       <small>{entry.need}</small>
     </div>

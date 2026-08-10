@@ -66,6 +66,9 @@ export function summonCurseCard(id: SummonCurseId): Card {
 
 const isStatCard = (id: StatCardId | TraitId | SummonCurseId): id is StatCardId => id in STAT_CARDS;
 const isSummonCurse = (id: StatCardId | TraitId | SummonCurseId): id is SummonCurseId => id in SUMMON_CURSES;
+// 나쁜 카드 = 스탯이 깎이는 저주 카드 + 기습 소환 카드. 아래 확률 상한이 이 둘을 한 덩어리로 본다.
+const isNegative = (id: StatCardId | TraitId | SummonCurseId): boolean =>
+  isSummonCurse(id) || (isStatCard(id) && !!(STAT_CARDS[id] as StatCardDef).curse);
 const idToCard = (id: StatCardId | TraitId | SummonCurseId): Card =>
   isStatCard(id) ? statCard(id) : isSummonCurse(id) ? summonCurseCard(id) : traitCard(id);
 
@@ -106,6 +109,22 @@ function drawUnique<T>(pool: readonly T[], used: Set<T>, rnd: () => number): T {
   return picked;
 }
 
+// 나쁜 카드 당첨 상한 (2026-08-10). 등급 가중치만으로 뽑으면 common 통 18장 중 8장이 나쁜 카드라
+// 체감 40%에 달했다 — 후원이 반쯤 도박이 돼서 룰렛이 반갑지 않았다. 등급을 굴리기 전에 "이번 장이
+// 나쁜 카드인가"를 먼저 정해 확률을 고정한다. 해당 등급에 나쁜 카드가 없으면(uncommon 위쪽 대부분)
+// 그냥 좋은 카드로 떨어지므로 실제 확률은 늘 이 값 이하다.
+// ponytail: 도네이션 체감 knob — 10% 아래로만 유지하면 된다
+export const NEGATIVE_CARD_CHANCE = 0.09;
+
+// 이번 뽑기에 쓸 통. 나쁜 카드 차례면 나쁜 것만, 아니면 좋은 것만 — 한쪽이 비면 통째로 되돌린다.
+function sideOf(
+  bucket: readonly (StatCardId | TraitId | SummonCurseId)[],
+  negative: boolean,
+): readonly (StatCardId | TraitId | SummonCurseId)[] {
+  const side = bucket.filter((id) => isNegative(id) === negative);
+  return side.length ? side : bucket;
+}
+
 // 일반 도네: 카드 n장 노출 → 그중 1장이 랜덤 당첨.
 // ownedTraits = 이미 보유한 특성(호출부가 계산) — 그만큼 특성 풀에서 빠진다.
 // #19: 등급별로 독립된 used-Set을 둔다 — 한 Set을 공유하면 한 등급 풀이 바닥나 리필될 때
@@ -121,9 +140,10 @@ export function drawCards(
   if (!rarityPool.length) return []; // 이론상 도달 안 함(공용 카드 10종은 항상 common에 있다)
   const used: Partial<Record<Rarity, Set<StatCardId | TraitId | SummonCurseId>>> = {};
   return Array.from({ length: n }, () => {
+    const negative = rnd() < NEGATIVE_CARD_CHANCE;
     const r = rollRarity(rnd, rarityPool);
     const set = used[r] ?? (used[r] = new Set());
-    return idToCard(drawUnique(buckets[r], set, rnd));
+    return idToCard(drawUnique(sideOf(buckets[r], negative), set, rnd));
   });
 }
 

@@ -1,0 +1,223 @@
+/* 16-bit 픽셀 UI 공용 자산. 원래 title.css 안에만 있었는데 웨이브 편성 화면(LineupView)이
+   같은 창틀·카드·썸네일을 쓰게 되면서 꺼냈다 — 두 화면이 각자 흉내내면 반드시 어긋난다.
+
+   title.css가 세운 원칙 세 가지를 그대로 따른다:
+     1) 블러 없는 그림자만 쓴다. 흐릿한 glow 하나면 16-bit 룩이 통째로 무너진다.
+     2) 테두리는 이미지가 아니라 겹친 box-shadow. 어느 해상도에서도 계단이 그대로 산다.
+     3) 움직임은 steps()로만. 부드러운 ease는 도트와 안 어울린다.
+
+   타이틀 전용(로고·메뉴 커서·옵션 행·제작진 목록)은 title.css에 그대로 남겨뒀다. */
+
+:root {
+  --px-ink: #0a0a14; /* 가장 어두운 외곽선 */
+  --px-hi: #4a4a78; /* 베벨 하이라이트 */
+  --px-face: #16122a; /* 창 바탕 */
+  --px-gold: #ffcf3a;
+  --px-warn: #ff8a5c;
+}
+
+/* ── 스크롤바: 전역으로 한 벌만 ──
+   창 안(.px-window-body)·타임라인(.wave-track)·소환 패널이 각자 규칙을 갖고 있었고 그중 하나는
+   border-radius까지 달려 있었다 — 화면마다 스크롤바가 다르게 생기면 도트 룩이 제일 먼저 깨진다.
+   여기 한 벌로 통일하고 각 화면의 중복 규칙은 지웠다. 트랙/썸 모두 각지게, 베벨은 box-shadow로. */
+* {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: #46407a #0d0b1a;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: #0d0b1a;
+  box-shadow: inset 0 0 0 2px var(--px-ink);
+}
+*::-webkit-scrollbar-thumb {
+  background: #46407a;
+  border-radius: 0; /* 다른 규칙이 둥글려 놓는 걸 막는다 */
+  box-shadow:
+    inset 2px 2px 0 #6a63ad,
+    inset -2px -2px 0 #1a1730;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #5a5396;
+}
+*::-webkit-scrollbar-thumb:active {
+  background: var(--px-gold);
+  box-shadow:
+    inset 2px 2px 0 #ffe98a,
+    inset -2px -2px 0 #b06a10;
+}
+
+/* 선택 커서(▶) 깜빡임. 타이틀 메뉴와 편성 화면이 같은 커서 관례를 쓰므로 공용이다 —
+   title.css에만 두면 타이틀이 마운트되지 않은 화면에선 깜빡임이 죽는다. */
+@keyframes px-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* 주사선 — 브라운관 흉내. 배경 도트를 죽이지 않을 만큼만 얇고 옅게. */
+.px-scanlines {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgba(0, 0, 0, 0.26) 0 2px, rgba(0, 0, 0, 0) 2px 4px);
+}
+
+/* ── 창틀: 3겹 테두리 ── */
+.px-window {
+  width: min(700px, 92%);
+  max-height: min(58vh, 480px);
+  display: flex;
+  flex-direction: column;
+  margin: 12px 0 4px;
+  background: var(--px-face);
+  box-shadow:
+    0 0 0 3px var(--px-ink),
+    0 0 0 6px var(--px-hi),
+    0 0 0 9px var(--px-ink);
+  text-align: left;
+}
+/* 편성 화면처럼 표가 넓은 창 — 타이틀 패널의 좁은 폭·낮은 높이로는 5웨이브가 안 들어간다 */
+.px-window.wide {
+  width: min(1040px, 96%);
+  max-height: none;
+}
+.px-window-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 10px;
+  background: #2b2450;
+  color: var(--px-gold);
+  letter-spacing: 2px;
+  font-size: clamp(12px, 1.2vw, 17px);
+  font-weight: 700;
+  box-shadow: inset 0 -3px 0 var(--px-ink);
+}
+.px-window-close {
+  padding: 2px 9px;
+  color: #ffd9d0;
+  background: #6a2438;
+  border: none;
+  cursor: pointer;
+  box-shadow:
+    inset 2px 2px 0 #a84a60,
+    inset -2px -2px 0 #2a0a14;
+}
+.px-window-close:hover {
+  background: #8c3048;
+}
+.px-window-body {
+  display: grid;
+  gap: 16px;
+  padding: 14px;
+  overflow-y: auto;
+  font-size: clamp(11px, 1.05vw, 15px);
+  line-height: 1.7;
+}
+
+/* ── 창 안 구획 ── */
+.px-section {
+  display: grid;
+  gap: 8px;
+}
+.px-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: clamp(12px, 1.15vw, 16px);
+  color: var(--px-gold);
+  letter-spacing: 2px;
+  padding-bottom: 4px;
+  box-shadow: inset 0 -3px 0 #2b2450;
+}
+.px-count {
+  color: #8f88bb;
+  font-weight: 400;
+}
+.px-note {
+  color: #857ead;
+  font-size: 0.86em;
+}
+.px-note.warn {
+  color: var(--px-warn);
+}
+
+/* ── 카드 격자 (해금 도감 · 편성 팔레트) ── */
+.px-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+}
+.px-card {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 8px 6px;
+  text-align: center;
+  background: #191533;
+  box-shadow:
+    inset 2px 2px 0 #34305c,
+    inset -2px -2px 0 var(--px-ink);
+}
+.px-card b {
+  color: #fff;
+  font-size: 0.95em;
+}
+.px-card small {
+  color: #857ead;
+  font-size: 0.78em;
+  line-height: 1.4;
+}
+.px-card.locked b {
+  color: #5f5987;
+  letter-spacing: 2px;
+}
+
+/* ── 스프라이트 썸네일 ──
+   원본 시트를 좌표로 잘라 상자 안에 넣는다. isolation은 틴트 레이어의 mix-blend-mode가
+   상자 밖(창 바탕)까지 번지지 않게 막는 용도다. */
+.px-thumb {
+  position: relative;
+  display: block;
+  width: 72px;
+  height: 72px;
+  overflow: hidden;
+  isolation: isolate;
+  background: #0d0b1a;
+  box-shadow: inset 0 0 0 2px var(--px-ink);
+}
+.px-thumb-in {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+/* 틴트: monsters.ts의 tint를 인게임과 같은 곱연산으로 재현한다(Phaser setTint = multiply).
+   스프라이트 알파를 마스크로 써서 색이 투명 영역까지 번지지 않게 한다 — background-color에
+   blend-mode만 걸면 상자 전체가 색칠된 사각형이 된다. */
+.px-thumb-tint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center;
+  mix-blend-mode: multiply;
+  pointer-events: none;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+.px-thumb-glyph {
+  display: block;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 72px;
+  color: #3f3a63;
+}

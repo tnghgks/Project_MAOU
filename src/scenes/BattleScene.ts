@@ -39,6 +39,8 @@ import {
   bumpCombo,
   countNear,
   facingOf,
+  applyAuras,
+  armorReduce,
   SUMMON_MIN_RADIUS,
   HIT_INVULN_DUR,
   GOLEM_PATTERN_CD,
@@ -123,10 +125,26 @@ import {
   type RequestDef,
 } from '../data/requests.ts';
 import { FINAL_EP, targetGold, bossOf, START_VIEWERS, viewerCap } from '../data/progression.ts';
+import {
+  waveAt,
+  stepWave,
+  filledWaves,
+  lineupMonsters,
+  defaultLineup,
+  validateLineup,
+  WAVE_INTERVAL,
+  type Lineup,
+  type WaveEntry,
+} from '../data/waves.ts';
 import { bossCut } from '../data/cutscenes.ts';
 import type { RunOutcome } from '../game/store.ts';
 
 const MAX_ALIVE = 60; // 동시 생존 상한 — 넘으면 소환 스킵 (프레임 보호)
+// 첫 웨이브까지의 유예. 방송 시작 직후 몇 초는 화면이 비어야 "이제 시작한다"가 읽히지만,
+// 길면 예전처럼 무목표 구간이 된다 — WAVE_INTERVAL보다 훨씬 짧게 잡는다.
+const WAVE_FIRST_DELAY = 2.5;
+// 즉시 호출(SPACE)로 웨이브를 앞당겼을 때 붙는 보상. 위험을 먼저 감수한 대가로 시청자가 붙는다.
+const WAVE_CALL_VIEWER_BONUS = 1.06;
 
 const HP_BAR_W = 48; // ponytail: 체력바 크기 knob
 const HP_BAR_H = 8;
@@ -179,7 +197,13 @@ export default class BattleScene extends Phaser.Scene {
   D!: number;
   tier!: HypeTier; // React InfoLayer가 hud:tick으로 읽음
   over!: boolean;
-  available!: MonsterId[];
+  // ── 웨이브 편성 (2026-08-09) — 소환은 더 이상 방송 중 조작이 아니다 ──
+  // 방송 전 편성 화면에서 짠 lineup이 여기 복사돼 오고, waveT가 0이 될 때마다 다음 웨이브가 투입된다.
+  // 씬이 store를 매 프레임 다시 읽지 않도록 create에서 한 번만 스냅샷한다 — 방송 중엔 편성이 안 바뀐다.
+  lineup!: Lineup;
+  lineupTypes!: MonsterId[]; // 편성에 들어간 몬스터 종류 — 시청자 요청 출제 풀
+  waveIndex!: number; // 지금까지 투입한 웨이브 수 (다음에 나갈 웨이브의 인덱스)
+  waveT!: number; // 다음 웨이브까지 남은 시간(초). SPACE 즉시 호출이 이 값을 0으로 만든다
   keys!: Record<string, Phaser.Input.Keyboard.Key>; // 용사 이동/대시 (폴링)
   skillCd: Partial<Record<SkillId, number>> = {}; // QWER 스킬 시전 쿨타임 (castSkill 재사용 가능 판정용)
   heroSpr!: Phaser.GameObjects.Sprite;
@@ -244,7 +268,12 @@ export default class BattleScene extends Phaser.Scene {
     this.reqT = REQ_FIRST;
     this.lastReq = null;
 
-    this.available = (Object.keys(MONSTERS) as MonsterId[]).filter((k) => MONSTERS[k].unlock <= S.episode);
+    // 편성 스냅샷. 편성 화면을 건너뛰고 들어온 경우(개발 리모콘·세이브 복구)에도 방송이 굴러가야 하므로
+    // 유효하지 않으면 자동 편성으로 대체한다 — "아무것도 안 나오는 방송"이 제일 나쁘다.
+    this.lineup = validateLineup(S.lineup, S.episode) ? defaultLineup(S.episode) : S.lineup;
+    this.lineupTypes = lineupMonsters(this.lineup);
+    this.waveIndex = 0;
+    this.waveT = WAVE_FIRST_DELAY;
     this.skillCd = {};
     S.resetSkillUses(); // 스테이지 시작 시 스킬 사용 횟수 초기화
 
@@ -283,27 +312,29 @@ export default class BattleScene extends Phaser.Scene {
     });
     busBind(this, 'donation:end', ({ card }) => this.endDonation(card));
     busBind(this, 'pause:toggle', () => this.toggleUserPause());
-    // React SummonPanel 버튼 클릭 → 즉시 1마리 소환. 최종화 여부는 React가 직접 판단해 버튼을 안 그린다.
-    busBind(this, 'summon:request', ({ type }) => this.summonRandom(type));
+    // React SummonPanel의 "웨이브 즉시 호출" 버튼 → SPACE와 같은 경로.
+    busBind(this, 'wave:call', () => this.callWaveNow());
     busBind(this, 'skill:request', ({ index }) => this.castSkill(index));
     // 개발 모드 전용: 보스 강제 소환
     busBind(this, 'dev:spawn-boss', () => this.spawnBoss());
     // 개발 모드 전용: 보스 패턴 강제 실행
     busBind(this, 'dev:boss-pattern', ({ pattern }) => this.forceBossPattern(pattern));
 
-    // 용사 이동/대시는 폴링 (매 프레임 눌림 상태를 읽어야 한다). 방향키만 — WASD를 겹쳐 쓰면
-    // W가 스킬(Q/W/E/R)과 부딪힌다.
-    this.keys = this.input.keyboard!.addKeys('UP,DOWN,LEFT,RIGHT,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
-    // 숫자키 1~4 = 즉시 소환, Q/W/E/R = 스킬 1~4 시전 — 둘 다 상시 동작한다(더 이상 모드 구분 없음).
+    // 용사 이동/대시는 폴링 (매 프레임 눌림 상태를 읽어야 한다). 2026-08-10: 방향키 → WASD.
+    // 예전엔 W가 스킬(Q/W/E/R)과 부딪혀 방향키를 썼지만, 스킬이 숫자키로 내려가면서 자리가 비었다.
+    this.keys = this.input.keyboard!.addKeys('W,A,S,D,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
+    // SPACE = 다음 웨이브 즉시 호출, 1/2/3/4 = 스킬 1~4 시전.
+    // 숫자키 소환은 없어졌다(2026-08-09 웨이브 편성 개편) — 그래서 비어 있던 숫자열을 스킬이 가져갔다.
     // 도네이션 중엔 이 씬이 pause라 QWER(RhythmLane 리듬 판정)와 동시 발화하지 않는다.
-    // 숫자키·QWER 모두 summonRandom/castSkill을 직접 부르지 않고 이벤트로 emit한다 — React
-    // SummonPanel 버튼 클릭과 같은 경로를 타야 그쪽의 클릭 피드백(팝 애니메이션)이 키 입력에도 걸린다.
+    // 둘 다 메서드를 직접 부르지 않고 이벤트로 emit한다 — React SummonPanel 버튼 클릭과 같은 경로를
+    // 타야 그쪽의 클릭 피드백(팝 애니메이션)이 키 입력에도 걸린다.
     this.input.keyboard!.on('keydown', (e: KeyboardEvent) => {
-      const digit = parseInt(e.key, 10);
-      if (digit >= 1 && digit <= this.available.length)
-        return bus.emit('summon:request', { type: this.available[digit - 1] });
-      const qwer = ['q', 'w', 'e', 'r'].indexOf(e.key.toLowerCase());
-      if (qwer >= 0) bus.emit('skill:request', { index: qwer });
+      if (e.code === 'Space') {
+        e.preventDefault(); // 스페이스는 브라우저 기본 스크롤이 붙는다
+        return bus.emit('wave:call', null);
+      }
+      const slot = ['1', '2', '3', '4'].indexOf(e.key);
+      if (slot >= 0) bus.emit('skill:request', { index: slot });
     });
 
     this.pushChat(
@@ -311,7 +342,14 @@ export default class BattleScene extends Phaser.Scene {
       this.isFinal ? '최종화 — 마왕이 직접 나선다!' : `${S.episode}화 방송이 시작되었습니다.`,
       '#888888',
     );
-    if (!this.isFinal) this.summonRandom(this.available[0]); // 시작하자마자 한 마리는 있어야 방송이 굴러간다
+    // 시작 소환은 없다 — WAVE_FIRST_DELAY 뒤 첫 웨이브가 통째로 들어온다.
+    if (!this.isFinal) {
+      this.pushChat(
+        '시스템',
+        `📋 ${filledWaves(this.lineup)}개 웨이브 편성 완료 · SPACE = 다음 웨이브 즉시 호출`,
+        '#88ddaa',
+      );
+    }
   }
 
   // 스킬 시전 (QWER키). 쿨타임 + 스테이지당 사용 횟수 제한을 함께 검사한다.
@@ -355,6 +393,60 @@ export default class BattleScene extends Phaser.Scene {
         return this.doSummon(t, x, y);
       }
     }
+  }
+
+  // ── 웨이브 ──
+  // 방송 중 몬스터가 나오는 유일한 경로(저주 카드의 기습 소환만 예외). 편성한 칸을 순서대로 돌고,
+  // 다 돌면 처음으로 돌아가되 물량이 불어난다(waves.waveAt).
+  spawnWave() {
+    if (this.over || this.bossActive() || this.isFinal) return;
+    const entries = waveAt(this.lineup, this.waveIndex);
+    if (!entries.length) return; // 편성이 비어 있으면 조용히 넘긴다 (create가 막지만 방어적으로)
+    this.waveIndex++;
+    for (const e of entries) for (let i = 0; i < e.count; i++) this.summonRandom(e.type);
+
+    const label = entries.map((e) => `${MONSTERS[e.type].name}×${e.count}`).join(' · ');
+    this.pushChat('시스템', `🌊 웨이브 ${this.waveIndex} — ${label}`, '#88ddaa');
+    this.floatText(CX, ARENA.y + 40, `🌊 WAVE ${this.waveIndex}`, '#88ddaa');
+    playSfx('questClear');
+  }
+
+  // SPACE(또는 React 버튼) — 다음 웨이브를 기다리지 않고 지금 부른다.
+  // 앞 웨이브가 아직 살아있는 채로 겹쳐 밀려오므로 위험하지만, 그만큼 판이 커져 시청자가 붙는다.
+  // 이게 방송 중 남은 유일한 소환 조작이자 "슬라임 N마리 세워봐" 류 시청자 요청의 대응 수단이다.
+  callWaveNow() {
+    if (this.over || this.bossActive() || this.isFinal) return;
+    // 씬이 멈춰 있는 동안엔 무시한다. 버스 구독은 scene.pause()와 무관하게 계속 살아 있어서,
+    // 도네이션 리듬·컷씬·일시정지 중에 SPACE를 누르면 멈춘 화면에 몬스터가 쏟아졌다
+    // (컷씬 스킵 버튼도 SPACE라 특히 겹치기 쉽다).
+    if (!this.scene.isActive()) return;
+    if (this.monsters.length >= MAX_ALIVE) {
+      this.floatText(this.hero.x, this.hero.y - 40, '❌ 화면이 꽉 찼다', '#ff6666');
+      return;
+    }
+    this.spawnWave();
+    this.waveT = WAVE_INTERVAL; // 타이머는 그대로 리셋 — 연타해도 간격 이득은 없다
+    this.viewers *= WAVE_CALL_VIEWER_BONUS;
+    this.pushChat(this.randomViewer() ?? '시청자', '오 미친 벌써 다음 웨이브 부름 ㅋㅋㅋ', '#ffcc66');
+  }
+
+  // 분열 몬스터 처치 처리. 분열체는 split을 지운 def로 넣어 1세대에서 끊는다 —
+  // 안 그러면 분열체가 또 분열해 무한 증식한다.
+  splitProc(m: MonsterEntity) {
+    const s = m.def.split;
+    if (!s || this.monsters.length >= MAX_ALIVE) return;
+    // split.into는 타입 순환을 피하려고 string이다(monsters.ts 주석 참고) — 실재하는 id인지 여기서 확인한다.
+    // 오타 자체는 test/waves.test.ts가 전수 검사로 먼저 잡는다.
+    const into = s.into as MonsterId;
+    const base: MonsterDef | undefined = MONSTERS[into];
+    if (!base) return;
+    const { split: _drop, ...childDef } = base; // 분열체는 split을 뗀 def로 — 1세대에서 끊는다
+    for (let i = 0; i < s.count; i++) {
+      const x = clamp(m.x + Phaser.Math.Between(-28, 28), arenaBounds.minX, arenaBounds.maxX);
+      const y = clamp(m.y + Phaser.Math.Between(-28, 28), arenaBounds.minY, arenaBounds.maxY);
+      this.doSummon(into, x, y).def = childDef;
+    }
+    this.floatText(m.x, m.y - 30, '분열!', '#ffaa66');
   }
 
   doSummon(t: MonsterId, x: number, y: number): MonsterEntity {
@@ -793,6 +885,9 @@ export default class BattleScene extends Phaser.Scene {
   // silent = 도트(화상/출혈) 틱 전용 — 매 프레임 발생해 콤보에 끼면 실력 지표가 왜곡되고,
   // 데미지 숫자도 프레임마다 스팸이 된다(아래 damageText도 같이 건너뛴다).
   damageMonster(m: MonsterEntity, dmg: number, silent = false) {
+    // 방어력(바위 거북)은 실타격에만 먹인다. 도트에 걸면 armorReduce의 최소 피해(ARMOR_MIN_DMG)가
+    // 프레임마다 적용돼 오히려 도트가 세지는 역전이 난다 — 틱 피해는 원래도 소수점이라 감산이 무의미하다.
+    if (!silent) dmg = armorReduce(dmg, m.def.armor);
     m.hp -= dmg;
     // 채널링-저지형 패턴(베르하르트 공간 가르기 · 그림하르트 메테오) 중이면 데미지 추적
     if ((m.bossPattern === 'spaceSlash' || m.bossPattern === 'meteor') && m.bossPhase === 'windup') {
@@ -819,6 +914,7 @@ export default class BattleScene extends Phaser.Scene {
       this.kills++;
       const H = this.hero;
       H.hp = Math.min(H.maxHp, H.hp + warriorBloodHeal(gameState().traits, H.maxHp));
+      this.splitProc(m); // 분열 슬라임 — 죽어야 진짜 물량이 나온다
       m.spr.destroy();
     }
   }
@@ -891,6 +987,10 @@ export default class BattleScene extends Phaser.Scene {
       }
     }
 
+    // 웨이브 자동 투입 — 보스전·최종화엔 안 돈다(소환이 통째로 막히는 구간이라 spawnWave도 자체 가드).
+    // this는 { waveT } 필드를 가져 WaveTimer로 그대로 넘긴다 (stepCritical과 같은 관용구).
+    if (!this.isFinal && !this.bossActive() && stepWave(this, dt)) this.spawnWave();
+
     for (const id of Object.keys(this.skillCd) as SkillId[]) this.skillCd[id] = Math.max(0, this.skillCd[id]! - dt);
     this.noHitT += dt; // hurtHero가 0으로 되돌린다
 
@@ -920,6 +1020,15 @@ export default class BattleScene extends Phaser.Scene {
         stageGold: this.stageGold,
         target: this.target,
         req: this.req ? { label: this.req.label, pct: this.reqPct, t: Math.max(0, this.req.t) } : null,
+        // 보스전·최종화엔 웨이브가 안 돌므로 null — SummonPanel이 웨이브 칸을 통째로 숨긴다
+        wave:
+          this.isFinal || this.bossActive()
+            ? null
+            : {
+                index: this.waveIndex,
+                t: Math.max(0, this.waveT),
+                next: waveAt(this.lineup, this.waveIndex),
+              },
         skillCd: this.skillCd,
         dashCd: this.hero.dashCd,
       });
@@ -961,12 +1070,12 @@ export default class BattleScene extends Phaser.Scene {
     }
   }
 
-  // 방향키 입력 벡터 — 상시 수동 조작이라 항상 값을 만든다(자동 AI 없음).
+  // WASD 입력 벡터 — 상시 수동 조작이라 항상 값을 만든다(자동 AI 없음).
   heroInput(): HeroInput {
     const k = this.keys;
     return {
-      dx: (k.RIGHT.isDown ? 1 : 0) - (k.LEFT.isDown ? 1 : 0),
-      dy: (k.DOWN.isDown ? 1 : 0) - (k.UP.isDown ? 1 : 0),
+      dx: (k.D.isDown ? 1 : 0) - (k.A.isDown ? 1 : 0),
+      dy: (k.S.isDown ? 1 : 0) - (k.W.isDown ? 1 : 0),
       dash: k.SHIFT.isDown,
     };
   }
@@ -1214,6 +1323,7 @@ export default class BattleScene extends Phaser.Scene {
     const H = this.hero;
     this.monsters = this.monsters.filter((m) => !m.dead);
     if (this.time.now < this.freezeUntil) return; // 시간 정지 — 도트도 같이 멈춘다(시공간 베기 연출 일관성)
+    applyAuras(this.monsters); // 주술사 오라 — AI가 배율을 읽기 전에 매 프레임 다시 칠한다
     for (const m of this.monsters) {
       // 화상/출혈 도트 — 콤보에 안 끼게 silent로 처리
       if (m.dotT && m.dotT > 0) {
@@ -1225,7 +1335,7 @@ export default class BattleScene extends Phaser.Scene {
       // 보스들은 전용 AI 사용
       const intent =
         m.type === 'boss_golem'
-          ? stepBossGolem(m, H, dt)
+          ? stepBossGolem(m, H, dt, Math.random, arenaBounds) // 돌진이 맵 끝에 처박히는 판정을 위해 경계를 넘긴다
           : m.type === 'boss_knight'
             ? stepBossKnight(m, H, dt)
             : m.type === 'boss_maou'
@@ -1442,6 +1552,16 @@ export default class BattleScene extends Phaser.Scene {
           this.shakeCam(260, 0.016);
           if (this.hurtHero(intent.dmg)) this.chargeKnockHero(m);
           this.floatText(H.x, H.y - 50, '💢 충돌!', '#ff5555');
+          break;
+        }
+        // 돌진하다 벽에 처박힘 — 시뮬이 이미 stunT를 걸어놨다. 여기선 "지금이 반격 타이밍"이라는
+        // 신호만 크게 준다(별을 띄우고 화면을 흔든다). 다음 프레임부터는 stepStunOrKb가 idle을 준다.
+        case 'bossChargeWall': {
+          playSfx('heroHurt');
+          this.shakeCam(400, 0.02);
+          this.impactFx(m.x, m.y, 40);
+          this.floatText(m.x, m.y - m.def.size, `💫 벽에 처박혔다! ${intent.stun}초 기절`, '#ffdd44');
+          this.pushChat('시스템', '💫 사르가스가 벽에 처박혔다 — 지금이 기회!', '#ffdd44');
           break;
         }
         // ── 베르하르트(기사) 전용 패턴 ──
@@ -1709,6 +1829,13 @@ export default class BattleScene extends Phaser.Scene {
         duration: ms / 2,
         yoyo: true,
       });
+      // 돌진은 이제 용사 앞에서 멈추지 않고 정해진 길이를 끝까지 달린다 — 그 선을 실제로 그려줘야
+      // "옆으로 비키면 지나간다"가 읽힌다. 조준선 없이는 새 패턴이 그냥 불합리하게 느껴진다.
+      if (chargeTx !== undefined && chargeTy !== undefined) {
+        const line = this.add.graphics().setDepth(1);
+        line.lineStyle(6, 0xff3333, 0.35).beginPath().moveTo(m.x, m.y).lineTo(chargeTx, chargeTy).strokePath();
+        this.tweens.add({ targets: line, alpha: 0, duration: ms, onComplete: () => line.destroy() });
+      }
     } else if (pattern === 'spaceSlash') {
       // 공간 가르기: 커지는 보라색 원
       const ring = this.add.circle(m.x, m.y, 20, 0x8844ff, 0.3).setStrokeStyle(4, 0x8844ff, 0.9).setDepth(1);
@@ -1950,7 +2077,9 @@ export default class BattleScene extends Phaser.Scene {
     this.reqT -= dt;
     if (this.reqT > 0) return;
     const boss = this.boss && !this.boss.dead ? this.boss : null;
-    const def = pickRequest({ unlocked: this.available, boss: !!boss }, Math.random, this.lastReq ?? undefined);
+    // 출제 풀은 "해금된 몬스터"가 아니라 "이번 방송에 편성한 몬스터"다 — 안 데려온 몬스터를 요구하면
+    // 달성할 방법이 아예 없다(소환이 자동 웨이브가 됐으므로). 덕분에 편성이 요청 내용까지 좌우한다.
+    const def = pickRequest({ monsters: this.lineupTypes, boss: !!boss }, Math.random, this.lastReq ?? undefined);
     if (!def) return;
     // 목표치는 출제 시점의 용사 전투력으로 확정 — 용사가 셀수록 시청자 요구도 커진다
     this.req = startRequest(def, heroPower(gameState().hero), this.kills, boss?.hp ?? 0);

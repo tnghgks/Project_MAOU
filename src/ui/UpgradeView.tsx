@@ -46,7 +46,15 @@ export default function UpgradeView() {
   const next = () => {
     playSfx('uiSelect');
     gameState().nextEpisode();
-    gameState().playCuts(stageCut(nextEp), () => gameState().setPhase('broadcast')); // 스테이지 진입 컷씬
+    // 웨이브 편성 → 스테이지 진입 컷씬 → 방송. 컷씬은 여기서 안 튼다 — 편성을 마친 뒤
+    // LineupView가 이어서 재생한다(컷씬이 곧 "이제 들어간다"는 신호라 편성보다 뒤여야 한다).
+    // 최종화만 편성을 건너뛴다: 마왕전은 소환·웨이브·도네이션이 전부 막힌 순수 실력전이라
+    // (BattleScene.isFinal) 편성할 게 없어서, 예전처럼 컷씬 → 방송으로 직행한다.
+    if (nextEp >= FINAL_EP) {
+      gameState().playCuts(stageCut(nextEp), () => gameState().setPhase('broadcast'));
+      return;
+    }
+    gameState().setPhase('lineup');
   };
 
   return (

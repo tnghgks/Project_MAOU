@@ -1,6 +1,12 @@
 import { clamp, danger, hypeTier, viewerDrift, MIN_VIEWERS, type HypeTier } from '../formulas.ts';
 import type { HeroEntity, MonsterEntity, Arrow } from './entities.ts';
-import { hasTrait, INFINITE_DANCE_RATE, INFINITE_DANCE_MAX, INFINITE_DANCE_RESET_IDLE, type TraitId } from '../data/traits.ts';
+import {
+  hasTrait,
+  INFINITE_DANCE_RATE,
+  INFINITE_DANCE_MAX,
+  INFINITE_DANCE_RESET_IDLE,
+  type TraitId,
+} from '../data/traits.ts';
 import { ATTACK_RELEASE_SEC, SARGAS_THROW_RELEASE_SEC, SARGAS_STOMP_LAND_SEC } from './anims.ts'; // 값만 가져온다 — anims의 Phaser는 type import라 런타임에 없다
 
 // "엔티티용 formulas.ts" — 전투 시뮬 결정 로직을 Phaser 없이 모은다.
@@ -10,7 +16,7 @@ import { ATTACK_RELEASE_SEC, SARGAS_THROW_RELEASE_SEC, SARGAS_STOMP_LAND_SEC } f
 // ── AI 튜닝 상수 (로직 옆에 둔다) ──
 export const SUMMON_MIN_RADIUS = 150; // 용사 반경 이 안에는 소환 금지
 export const NEAR_RADIUS = 200; // 회복(REGEN_DELAY) 판정용 "근접" 반경 — 위험도(danger)는 더 이상 이걸 안 본다
-const REGEN_RATE = 0.05; // 근접 0마리일 때 초당 회복 비율
+const REGEN_RATE = 0.1; // 0.05 → 0.1 (2026-08-10): 비전투 회복은 전투 중 재생(HeroEntity.regen)의 두 배로 벌어야 "거리를 벌어 숨 돌린다"가 선택지가 된다
 const REGEN_DELAY = 1.5; // 근접 0마리가 이 시간(초) 이상 유지돼야 회복 시작 — 스치듯 벌린 거리로는 안 참다
 const REGEN_FLAT_INTERVAL = 5; // 응급 처치(regenFlat) 고정 회복 주기(초)
 const ARROW_SPEED = 300; // 화살 속도(px/s)
@@ -28,6 +34,34 @@ const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.
 // 근접 몬스터 수 (회복 입력). update와 stepHero가 공유.
 export function countNear(monsters: readonly MonsterEntity[], hero: HeroEntity): number {
   return monsters.filter((m) => !m.dead && dist(m, hero) < NEAR_RADIUS).length;
+}
+
+// ── 역할 기믹 (monsters.ts의 armor/aura를 실제 전투에 먹이는 두 함수) ──
+
+/** armor로 다 막혀도 최소 이만큼은 들어간다. 0이면 공격력이 armor 이하인 동안 영원히 못 죽인다. */
+export const ARMOR_MIN_DMG = 1;
+export const armorReduce = (dmg: number, armor = 0) => Math.max(ARMOR_MIN_DMG, dmg - armor);
+
+/** 오라 몬스터 주변 아군의 버프 배율을 매 프레임 통째로 다시 칠한다.
+ *  누적이 아니라 재계산인 이유: 오라 몬스터가 죽거나 서로 멀어지면 버프도 즉시 풀려야 하는데
+ *  누적 방식은 해제 시점을 놓친다. 겹친 오라는 곱하지 않고 가장 센 것 하나만 먹는다 —
+ *  주술사를 여러 마리 겹쳐 세워 배율을 폭주시키는 편성을 막는다. */
+export function applyAuras(monsters: readonly MonsterEntity[]): void {
+  const sources = monsters.filter((m) => !m.dead && m.def.aura);
+  for (const m of monsters) {
+    let atk = 1;
+    let spd = 1;
+    for (const s of sources) {
+      // 자기 자신은 안 버프한다 — 주술사가 스스로 세지면 "약한데 남을 강하게 한다"는 역할이 흐려진다
+      if (s === m) continue;
+      const a = s.def.aura!;
+      if (dist(m, s) > a.radius) continue;
+      atk = Math.max(atk, a.atk);
+      spd = Math.max(spd, a.speed);
+    }
+    m.auraAtk = atk;
+    m.auraSpd = spd;
+  }
 }
 
 // ── 용사 AI ──
@@ -56,7 +90,7 @@ export function facingOf(vx: number, vy: number): Facing | null {
   return vy < 0 ? 'north' : 'south';
 }
 
-// 용사는 항상 수동 조작(방향키 이동 + 사거리·시야 안이면 자동 공격) — 자동 AI(추적·후퇴·복귀)는 없다.
+// 용사는 항상 수동 조작(WASD 이동 + 사거리·시야 안이면 자동 공격) — 자동 AI(추적·후퇴·복귀)는 없다.
 export interface HeroInput {
   dx: number;
   dy: number;
@@ -82,6 +116,10 @@ export function stepHero(
   // (이번 프레임 이동 여부는 이 함수 끝에서야 확정되므로) — 기저 스탯은 그대로 두고 매 사용처에서만 곱한다.
   const dancing = hasTrait(traits, 'infiniteDance');
   const buffMult = 1 + (dancing ? H.moveBuffStack : 0);
+
+  // 체력 재생 스탯(카드) — 적이 있든 없든 항상 돈다. 아래 비전투 회복과 별개로 더해지므로
+  // 거리를 벌면 둘이 겹쳐 훨씬 빨리 찬다.
+  if (H.regen > 0) H.hp = Math.min(H.maxHp, H.hp + H.regen * dt);
 
   if (nearCount === 0) {
     H.safeT += dt;
@@ -151,7 +189,9 @@ export function stepHero(
 // 씬이 모션을 새로 걸지 않는다 — 이미 도는 공격 애니메이션을 끊지 않으려는 것.
 export type BossPattern =
   // 사르가스 (boss_golem)
-  | 'rock' | 'stomp' | 'charge'
+  | 'rock'
+  | 'stomp'
+  | 'charge'
   // 베르하르트 (boss_knight)
   | 'swordbeam' | 'spaceSlash' | 'knightCharge'
   // 그림하르트 (boss_maou, 최종보스)
@@ -181,8 +221,16 @@ export type MonsterIntent =
   | { kind: 'bossStomp'; facing: Facing; x: number; y: number; radius: number; dmg: number } // 스톰핑 판정 프레임
   | { kind: 'bossChargeMove'; facing: Facing } // 돌진 이동 중(매 프레임)
   | { kind: 'bossChargeHit'; facing: Facing; dmg: number } // 돌진 중 용사와 충돌
+  | { kind: 'bossChargeWall'; facing: Facing; stun: number } // 돌진이 맵 끝에 처박힘 — stun초 자멸 기절
   // ── 베르하르트(기사) 전용 ──
-  | { kind: 'bossSwordbeam'; facing: Facing; x: number; y: number; beams: Array<{ tx: number; ty: number }>; dmg: number } // 검기 3개 발사
+  | {
+      kind: 'bossSwordbeam';
+      facing: Facing;
+      x: number;
+      y: number;
+      beams: Array<{ tx: number; ty: number }>;
+      dmg: number;
+    } // 검기 3개 발사
   | { kind: 'bossSpaceSlashCharge'; facing: Facing; x: number; y: number; threshold: number } // 공간 가르기 시작 (threshold: 저지에 필요한 데미지)
   | { kind: 'bossSpaceSlashFail'; facing: Facing; x: number; y: number; radius: number; dmg: number } // 공간 가르기 저지 실패 → 광역 공격
   | { kind: 'bossKnightChargeMove'; facing: Facing } // 베르하르트 돌진 이동 중
@@ -227,13 +275,16 @@ export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): Mon
     m.windupT = Math.max(0, m.windupT - dt);
     const aim = facingOf(H.x - m.x, H.y - m.y) ?? 'south';
     if (m.windupT > 0) return { kind: 'idle', facing: aim };
-    return { kind: 'arrow', facing: aim, x: m.x, y: m.y, tx: H.x, ty: H.y, dmg: m.def.dmg };
+    return { kind: 'arrow', facing: aim, x: m.x, y: m.y, tx: H.x, ty: H.y, dmg: m.def.dmg * (m.auraAtk ?? 1) };
   }
 
+  // 오라 버프(주술사)는 기저 스탯을 안 건드리고 쓰는 자리에서만 곱한다 — applyAuras가 매 프레임
+  // 다시 칠하므로 버프원이 사라지면 다음 프레임에 저절로 원래 수치로 돌아온다.
   const d = dist(m, H);
   if (d > m.def.range) {
-    const vx = ((H.x - m.x) / d) * m.def.speed;
-    const vy = ((H.y - m.y) / d) * m.def.speed;
+    const spd = m.def.speed * (m.auraSpd ?? 1);
+    const vx = ((H.x - m.x) / d) * spd;
+    const vy = ((H.y - m.y) / d) * spd;
     m.x += vx * dt;
     m.y += vy * dt;
     // 용사 쪽으로 이동 중이므로 속도가 0일 수 없다 (d > range > 0)
@@ -248,7 +299,7 @@ export function stepMonster(m: MonsterEntity, hero: HeroEntity, dt: number): Mon
       m.windupT = ATTACK_RELEASE_SEC;
       return { kind: 'draw', facing };
     }
-    return { kind: 'melee', facing, dmg: m.def.dmg, suicide: !!m.def.suicide };
+    return { kind: 'melee', facing, dmg: m.def.dmg * (m.auraAtk ?? 1), suicide: !!m.def.suicide };
   }
   return { kind: 'idle', facing };
 }
@@ -269,7 +320,7 @@ export const GOLEM_ROCK_WINDUP = SARGAS_THROW_RELEASE_SEC; // "던진다" 텔레
 export const GOLEM_ROCK_DMG = 22;
 export const GOLEM_STOMP_WINDUP = SARGAS_STOMP_LAND_SEC;
 export const GOLEM_STOMP_DMG = 26;
-export const GOLEM_STOMP_RADIUS = 170; // 150 → 170: 덩치(scale 1.35)가 커진 만큼 판정 반경도 같이
+export const GOLEM_STOMP_RADIUS = 119; // 170 → 119 (2026-08-10 너프 -30%): 덩치를 핑계로 키웠더니 스톰핑 사거리 안에선 사실상 회피가 불가능했다
 export const GOLEM_STOMP_RANGE = 220; // 이 거리 안이어야 스톰핑을 고른다 — 너무 멀면 애초에 안 닿는다
 // 2026-08-07 하향(피드백: "너무 빠르고 부딪히면 거의 죽는다·어디까지 따라오는지 모르겠다"):
 // 목표를 윈드업 "종료" 시점이 아니라 "시작" 시점에 고정하도록 바꿔서(아래 cooldown 분기) 실제
@@ -277,7 +328,12 @@ export const GOLEM_STOMP_RANGE = 220; // 이 거리 안이어야 스톰핑을 �
 export const GOLEM_CHARGE_WINDUP = 0.9; // 0.55 → 0.9: 돌 던지기와 통일, 회피 시간 증가
 export const GOLEM_CHARGE_SPEED = 260; // 420 → 260: 화살(300)보다도 느리게
 export const GOLEM_CHARGE_DMG = 24; // 34 → 24: 스톰핑(26)과 비슷한 수준으로 — 돌진만 유독 즉사급이던 것 완화
-export const GOLEM_CHARGE_MAX_T = 1.2; // 못 맞히고 이 시간 넘게 달리면 스스로 멈춘다(빗나간 돌진)
+// 2026-08-10: 돌진은 더 이상 "용사 앞에서 멈추는" 유도 공격이 아니다. 윈드업 시작 시점의 용사
+// 방향으로 GOLEM_CHARGE_DIST만큼 직진하고, 그 선 위에서 용사와 겹치면 들이받는다 — 옆으로 한 발만
+// 비켜도 보스가 뒤로 지나가 버리는 정직한 패턴이 된다. 대신 벽에 처박히면 크게 자멸한다.
+export const GOLEM_CHARGE_DIST = 340; // 돌진 사거리(px) — 목표 지점이 아니라 이 길이가 패턴을 정의한다
+export const GOLEM_CHARGE_WALL_STUN = 3; // 맵 끝에 부딪히면 이만큼 기절(초) — 최대 반격 기회
+export const GOLEM_CHARGE_MAX_T = 1.6; // 1.2 → 1.6: DIST/SPEED(≈1.31s)보다 커야 시간이 아니라 거리가 돌진을 끝낸다
 export const GOLEM_CHARGE_HIT_RADIUS = 62; // 46 → 62: 덩치(scale 1.35)에 맞춰 몸통 판정도 같이 키웠다
 export const GOLEM_RECOVER_T = 1.2; // 0.8 → 1.2: 패턴 종료 후 무방비 — 플레이어에게 반격 타이밍을 더 준다
 
@@ -306,11 +362,14 @@ export const KNIGHT_CHARGE_DMG = 28;
 export const KNIGHT_CHARGE_MAX_T = 1.3;
 export const KNIGHT_CHARGE_HIT_RADIUS = 56;
 
+// bounds를 넘기면 돌진이 맵 끝에 부딪히는 순간을 판정한다. 안 넘기면(테스트 등) 벽이 없는 셈 —
+// 씬은 arenaBounds를 그대로 넘겨준다.
 export function stepBossGolem(
   m: MonsterEntity,
   hero: HeroEntity,
   dt: number,
   rnd: () => number = Math.random,
+  bounds: { minX: number; maxX: number; minY: number; maxY: number } | null = null,
 ): MonsterIntent {
   const H = hero;
   m.atkCd = Math.max(0, m.atkCd - dt); // 보스는 안 쓰지만 다른 시스템(hitFx 등)이 필드 존재를 가정할 수 있어 맞춰둔다
@@ -347,15 +406,27 @@ export function stepBossGolem(
     }
     const d = Math.hypot(tx - m.x, ty - m.y);
     if (d < 4 || m.bossT <= 0) {
-      // 목표 지점에 도달(빗나감) 또는 최대 시간 초과 — 멈추고 무방비로
+      // 돌진 거리를 다 쓰거나 최대 시간 초과 — 멈추고 무방비로
       m.bossPhase = 'recover';
       m.bossT = GOLEM_RECOVER_T;
       return { kind: 'idle', facing: lookHero() };
     }
     const vx = ((tx - m.x) / d) * GOLEM_CHARGE_SPEED;
     const vy = ((ty - m.y) / d) * GOLEM_CHARGE_SPEED;
-    m.x += vx * dt;
-    m.y += vy * dt;
+    const nx = m.x + vx * dt;
+    const ny = m.y + vy * dt;
+    // 맵 끝에 처박힘 — 돌진 거리를 다 쓰기 전에 벽이 먼저 오면 자멸한다. 기절은 stepStunOrKb가
+    // 소비하고, 그동안 recover 타이머(bossT)는 멈춰 있다가 정신을 차린 뒤에 이어진다.
+    if (bounds && (nx < bounds.minX || nx > bounds.maxX || ny < bounds.minY || ny > bounds.maxY)) {
+      m.x = clamp(nx, bounds.minX, bounds.maxX);
+      m.y = clamp(ny, bounds.minY, bounds.maxY);
+      m.stunT = GOLEM_CHARGE_WALL_STUN;
+      m.bossPhase = 'recover';
+      m.bossT = GOLEM_RECOVER_T;
+      return { kind: 'bossChargeWall', facing: lookHero(), stun: GOLEM_CHARGE_WALL_STUN };
+    }
+    m.x = nx;
+    m.y = ny;
     return { kind: 'bossChargeMove', facing: facingOf(vx, vy) ?? lookHero() };
   }
 
@@ -390,9 +461,20 @@ export function stepBossGolem(
   m.bossT = windup;
   if (pattern === 'charge') {
     // 목표를 지금(윈드업 시작) 고정 — 윈드업 내내 이 좌표로 조준선을 그려 회피 여지를 준다.
-    m.chargeTx = H.x;
-    m.chargeTy = H.y;
-    return { kind: 'bossTelegraph', facing: lookHero(), pattern, windup, chargeTx: H.x, chargeTy: H.y };
+    // 용사 위치가 아니라 "용사 쪽으로 GOLEM_CHARGE_DIST만큼" 뻗은 끝점이다 — 앞에서 멈추지 않고
+    // 정해진 길이를 끝까지 달린다(d는 cooldown 분기에서 이미 잰 용사까지의 거리, 0일 수 없다).
+    const ux = d > 0 ? (H.x - m.x) / d : 0;
+    const uy = d > 0 ? (H.y - m.y) / d : 1;
+    m.chargeTx = m.x + ux * GOLEM_CHARGE_DIST;
+    m.chargeTy = m.y + uy * GOLEM_CHARGE_DIST;
+    return {
+      kind: 'bossTelegraph',
+      facing: lookHero(),
+      pattern,
+      windup,
+      chargeTx: m.chargeTx,
+      chargeTy: m.chargeTy,
+    };
   }
   return { kind: 'bossTelegraph', facing: lookHero(), pattern, windup };
 }
@@ -746,7 +828,8 @@ export function stepArrow(a: Arrow, hero: HeroEntity, dt: number): ArrowResult {
   // 비행 중 충돌 체크 (검기 등)
   if (a.checkMidair) {
     const heroDistance = Math.hypot(a.x - hero.x, a.y - hero.y);
-    if (heroDistance < ARROW_HERO_HIT * 1.5) { // 검기는 범위가 더 넓음
+    if (heroDistance < ARROW_HERO_HIT * 1.5) {
+      // 검기는 범위가 더 넓음
       return { hit: a.dmg };
     }
   }
