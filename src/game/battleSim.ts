@@ -588,14 +588,6 @@ export function stepBossKnight(
     return { kind: 'idle', facing: lookHero() };
   }
 
-  // 매우 가까운 거리에서는 기본 칼 휘두르기 (윈드업 없이 즉시 공격)
-  const veryClose = d <= 80;
-  if (veryClose) {
-    m.bossPhase = 'recover';
-    m.bossT = KNIGHT_RECOVER_T;
-    return { kind: 'melee', facing: lookHero(), dmg: m.def.dmg, suicide: false };
-  }
-
   // 패턴 선택
   const r = rnd();
   let pattern: BossPattern;
@@ -670,7 +662,8 @@ export const MAOU_LIGHTRAIN_SCATTER_MAX = 340;
 // 못 넣으면 회피 불가 고정 피해가 들어간다 — 자리를 옮겨서 피하는 게 아니라 화력으로 끊어야 한다.
 // 2026-08-07 상향(피드백: "실행 시간이 너무 빠르다"): 2.0초는 화면을 가로질러 떨어지는 운석 연출을
 // 담기엔 너무 촉박했다 — 공간 가르기(3.5초)에 가깝게 늘려 낙하가 실제로 무겁게 보일 시간을 준다.
-export const MAOU_METEOR_WINDUP = 3.2;
+// 2026-08-10 추가 상향: 3.2초도 여전히 짧아 저지 기회가 부족 — 5.0초로 늘려 여유 있게 저지 가능하도록.
+export const MAOU_METEOR_WINDUP = 5.0;
 export const MAOU_METEOR_THRESHOLD = 150; // 이 데미지 이상 넣어야 저지된다
 export const MAOU_METEOR_DMG = 45; // 저지 실패 시 고정 피해 — 위치 무관, 막지 못하면 그대로 맞는다
 
