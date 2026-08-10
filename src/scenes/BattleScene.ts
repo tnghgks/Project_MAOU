@@ -381,9 +381,9 @@ export default class BattleScene extends Phaser.Scene {
     // 전투 영역 chrome — 상단바(InfoLayer)·하단 소환/용사 패널(SummonPanel)·리듬레인(Rhythm) 전부 React.
   }
 
-  // 보스전 중엔 도네이션·소환·시청자 요청을 전부 막는다(2026-08-07, 피드백: "보스전엔 다른 거 다
-  // 막고 보스에만 집중하고 싶다") — 보스가 죽거나(endRun 'clear') 용사가 죽는 것 말고는 보스전을
-  // 벗어날 방법이 없어서, "잠깐 막았다가 나중에 푼다" 같은 재개 로직이 필요 없다.
+  // 보스전 중엔 소환·시청자 요청을 막는다(2026-08-07, 피드백: "보스전엔 다른 거 다 막고 보스에만 집중하고 싶다")
+  // 2026-08-10: 도네이션은 재활성화 (밸런스 완화) — 보스가 죽거나(endRun 'clear') 용사가 죽는 것 말고는
+  // 보스전을 벗어날 방법이 없어서, "잠깐 막았다가 나중에 푼다" 같은 재개 로직이 필요 없다.
   bossActive(): boolean {
     return !!this.boss && !this.boss.dead;
   }
@@ -496,7 +496,7 @@ export default class BattleScene extends Phaser.Scene {
     this.pushChat('시스템', `☠ ${MONSTERS[t].name} 등장! 용사가 쓰러뜨리면 방송 성공`, '#ff4444');
     this.pushChat(
       '시스템',
-      '⚔ 보스전 — 도네이션·시청자 요청·소환이 중단됩니다. 지금 있는 것만으로 싸워야 해요',
+      '⚔ 보스전 — 시청자 요청·소환이 중단됩니다. 도네이션으로 강화를 받으며 싸우세요!',
       '#ff8844',
     );
     // 보스 등장 컷씬 — 도네이션과 같은 방식으로 전투를 멈추고 React에 넘긴다
@@ -981,9 +981,9 @@ export default class BattleScene extends Phaser.Scene {
     this.updateCritical(dt);
     if (this.over) return;
 
-    if (!this.isFinal && !this.bossActive()) {
-      // 최종화는 도네이션 금지 (GDD 7장, 2026-07-28 정정) — 보스전도 같은 이유(2026-08-07): 보스전엔
-      // 순수 실력전이어야 하니 중간에 카드/버프가 끼어들면 안 된다.
+    if (!this.isFinal) {
+      // 최종화는 도네이션 금지 (GDD 7장, 2026-07-28 정정)
+      // 2026-08-10: 보스전 중 도네이션 재활성화 (밸런스 완화)
       this.donateT -= dt;
       if (this.donateT <= 0) {
         this.fireDonation();
