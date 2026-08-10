@@ -32,25 +32,25 @@ assert.strictEqual(hypeTier(0.1).rate, -0.003);
 assert.strictEqual(hypeTier(0.5).rate, 0.05);
 assert.strictEqual(hypeTier(0.9).rate, 0.08);
 
-// 도네 간격: 35 - 7*log10(v), [10,20] 클램프 (2026-08-10 상향)
-assert.strictEqual(donationInterval(10), 20); // 10명 = 상한
-assert.strictEqual(donationInterval(1e6), 10); // 하한
-assert.strictEqual(donationInterval(1e9), 10); // 하한
-assert.strictEqual(donationInterval(0), 20); // log10(0)=-Inf 방어
+// 도네 간격: 40 - 6*log10(v), [12,25] 클램프 (2026-08-10 재조정)
+assert.strictEqual(donationInterval(100), 25); // 100명 이하 = 상한
+assert.strictEqual(donationInterval(1e6), 12); // 하한
+assert.strictEqual(donationInterval(1e9), 12); // 하한
+assert.strictEqual(donationInterval(0), 25); // log10(0)=-Inf 방어
 // 시청자가 늘수록 짧아진다 (단조 감소)
 assert.ok(donationInterval(100) > donationInterval(1000) && donationInterval(1000) > donationInterval(5000));
 
-// 도네 금액: 12명 × rnd=0.5 → 15*12^0.6*1.1 ≈ 73G (대박 미발동, 2026-08-10 계수 10→15 상향)
+// 도네 금액: 12명 × rnd=0.5 → 12*12^0.6*1.1 ≈ 58G (대박 미발동, 2026-08-10 계수 15→12 재조정)
 const roll = rollDonation(12, () => 0.5);
 assert.strictEqual(roll.jackpot, false);
 assert.ok(roll.amount > 45 && roll.amount < 110, `amount=${roll.amount}`);
-// 대박: 두 번째 rnd가 임계 아래면 5배 + jackpot 플래그 (반올림은 곱한 뒤라 ±1 오차 허용)
+// 대박: 두 번째 rnd가 임계 아래면 5배 + jackpot 플래그 (반올림 두 번 적용으로 ±2 오차 허용)
 {
   const seq = [0.5, 0.01];
   let i = 0;
   const big = rollDonation(12, () => seq[i++]);
   assert.ok(big.jackpot);
-  assert.ok(Math.abs(big.amount - roll.amount * JACKPOT_MULT) <= 1, `big=${big.amount}`);
+  assert.ok(Math.abs(big.amount - roll.amount * JACKPOT_MULT) <= 2, `big=${big.amount}`);
 }
 
 // 도네 상하한: 현재 업그레이드 가격 범위(cheapest~priciest)의 [20%, 150%]로 클램프

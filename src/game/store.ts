@@ -114,12 +114,14 @@ const SAVE_KEY = 'maou.save';
 // GDD 3-6 1화 시작값. 확장 스탯은 전부 도네이션 카드로만 오른다 — 시작은 항상 0.
 export const BASE_HERO: HeroStats = {
   maxHp: 70,
-  atk: 10,
+  // 2026-08-10 상향(10 → 12): armor 몬스터 상대 체감 데미지 증가 (armor 5 기준 5→7 데미지, 40% 증가)
+  atk: 12,
   atkSpd: 0.7,
   // 2026-08-10 상향(+20%, 60 → 72): 웨이브가 통째로 밀려오는 구조에선 초기 기동력이 곧 생존력이다.
   // heroPower는 BASE_HERO를 분모로 쓰므로 시작 전투력 1.00 기준은 그대로다.
   speed: 72,
-  range: 60,
+  // 2026-08-10 상향(60 → 70): 원거리 몬스터와 교전 시 선공 기회 증가
+  range: 70,
   defense: 0,
   dodge: 0,
   critChance: 0,

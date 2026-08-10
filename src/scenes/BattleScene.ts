@@ -989,7 +989,9 @@ export default class BattleScene extends Phaser.Scene {
         this.fireDonation();
         // FULL 콤보 중 터진 도네이션은 다음 간격을 살짝 당겨준다 (체감 미미한 보상)
         const cut = this.combo >= COMBO_FULL ? COMBO_DONATION_CUT : 0;
-        this.donateT = donationInterval(this.viewers) - cut;
+        // 보스전 중에는 도네이션 간격을 30% 단축 (더 빈번하게 강화 기회 제공)
+        const bossCut = this.bossActive() ? donationInterval(this.viewers) * 0.3 : 0;
+        this.donateT = donationInterval(this.viewers) - cut - bossCut;
       }
     }
 
@@ -2083,9 +2085,8 @@ export default class BattleScene extends Phaser.Scene {
     this.reqT -= dt;
     if (this.reqT > 0) return;
     const boss = this.boss && !this.boss.dead ? this.boss : null;
-    // 출제 풀은 "해금된 몬스터"가 아니라 "이번 방송에 편성한 몬스터"다 — 안 데려온 몬스터를 요구하면
-    // 달성할 방법이 아예 없다(소환이 자동 웨이브가 됐으므로). 덕분에 편성이 요청 내용까지 좌우한다.
-    const def = pickRequest({ monsters: this.lineupTypes, boss: !!boss }, Math.random, this.lastReq ?? undefined);
+    // 2026-08-10: 소환 관련 요청 제거로 monsters 필드 제거 — 전투/생존/처치 중심 미션만 출제
+    const def = pickRequest({ boss: !!boss }, Math.random, this.lastReq ?? undefined);
     if (!def) return;
     // 목표치는 출제 시점의 용사 전투력으로 확정 — 용사가 셀수록 시청자 요구도 커진다
     this.req = startRequest(def, heroPower(gameState().hero), this.kills, boss?.hp ?? 0);
